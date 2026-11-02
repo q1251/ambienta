@@ -297,7 +297,7 @@ export const INITIAL_PATIENTS: Patient[] = [
 ];
 
 export const INITIAL_HOSTINGER_CONFIG: HostingerConfig = {
-  emailAccount: 'dispensary@auracarehealth.com',
+  emailAccount: 'dispensary@example.org',
   smtpHost: 'smtp.hostinger.com',
   smtpPort: 465,
   imapHost: 'imap.hostinger.com',
@@ -306,7 +306,7 @@ export const INITIAL_HOSTINGER_CONFIG: HostingerConfig = {
   isConnected: false,
   autoSyncDatabase: false,
   lastSyncedAt: 'Not connected',
-  displayName: 'AuraCare Clinical Care & Orders',
+  displayName: 'Ambients Clinical Care & Orders',
 };
 
 export const INITIAL_REMINDER_RULES: ReminderRule[] = [
@@ -316,16 +316,16 @@ export const INITIAL_REMINDER_RULES: ReminderRule[] = [
     title: '7-Day Medication Renewal Notice',
     subjectTemplate: 'Upcoming Order Renewal: {{medication}}',
     bodyTemplate:
-      'Dear {{patient_name}},\n\nYour renewal for {{medication}} is scheduled in 7 days on {{renewal_date}}.\n\nTo ensure uninterrupted medication therapy and allow for insurance processing, our clinical care team has queued your order.\n\nPlease reply or click to confirm your preferred delivery address or pickup time at AuraCare Pharmacy.\n\nWarm regards,\nClinical Care Team | AuraCare Pharmacy',
+      'Dear {{patient_name}},\n\nYour renewal for {{medication}} is scheduled in 7 days on {{renewal_date}}.\n\nTo ensure uninterrupted medication therapy and allow for insurance processing, our clinical care team has queued your order.\n\nPlease reply or click to confirm your preferred delivery address or pickup time at Ambients Pharmacy.\n\nWarm regards,\nClinical Care Team | Ambients Pharmacy',
     isActive: true,
   },
   {
     id: 'rule-2',
     daysBeforeDue: 3,
     title: '3-Day Urgent Refill Alert',
-    subjectTemplate: 'Refill Due Soon (3 Days): {{medication}} - AuraCare Care',
+    subjectTemplate: 'Refill Due Soon (3 Days): {{medication}} - Ambients Care',
     bodyTemplate:
-      'Hello {{patient_name}},\n\nThis is an advance notice that your medication supply for {{medication}} (Rx #{{rx_number}}) has 3 days remaining before depletion on {{renewal_date}}.\n\nOur dispensary team is prepared to fulfill your shipment. Please confirm your delivery instructions today.\n\nDirect Pharmacy Phone: (555) 800-AURA\nAuraCare Clinical Dispensary',
+      'Hello {{patient_name}},\n\nThis is an advance notice that your medication supply for {{medication}} (Rx #{{rx_number}}) has 3 days remaining before depletion on {{renewal_date}}.\n\nOur dispensary team is prepared to fulfill your shipment. Please confirm your delivery instructions today.\n\nDirect Pharmacy Phone: (555) 800-AURA\nAmbients Clinical Dispensary',
     isActive: true,
   },
   {
@@ -334,7 +334,7 @@ export const INITIAL_REMINDER_RULES: ReminderRule[] = [
     title: 'Day-of Due Date Notification',
     subjectTemplate: 'Refill Due Today: {{medication}}',
     bodyTemplate:
-      'Dear {{patient_name}},\n\nYour medication {{medication}} is due for fulfillment today ({{renewal_date}}).\n\nPlease let us know if you need courier delivery or if you will be visiting our pickup counter.\n\nAuraCare Staff',
+      'Dear {{patient_name}},\n\nYour medication {{medication}} is due for fulfillment today ({{renewal_date}}).\n\nPlease let us know if you need courier delivery or if you will be visiting our pickup counter.\n\nAmbients Staff',
     isActive: false,
   },
 ];
@@ -523,7 +523,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
     totalAmount: 24.0,
     orderType: 'Store Purchase',
     deliveryMethod: 'Pharmacy Pickup',
-    deliveryAddress: 'AuraCare Dispensary Desk - Counter 2',
+    deliveryAddress: 'Ambients Dispensary Desk - Counter 2',
     paymentMethod: 'Cash on Delivery / Pickup',
     paymentStatus: 'Pending Verification',
     transactionId: 'POS-COUNTER-4401',

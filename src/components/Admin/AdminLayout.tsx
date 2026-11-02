@@ -14,11 +14,11 @@ import {
   ChevronRight,
   ClipboardList,
 } from 'lucide-react';
-import { Patient, CatalogItem, HostingerConfig, EmailLog, ReminderRule, OnlineOrder, PharmacistNote } from '../../types/pharmacy';
+import { ContactLead, Patient, CatalogItem, HostingerConfig, EmailLog, ReminderRule, OnlineOrder, PharmacistNote } from '../../types/pharmacy';
 import { CrmDashboard } from '../CRM/CrmDashboard';
 import { InventoryManager } from './InventoryManager';
 import { OrdersManager } from './OrdersManager';
-import { CsvLeadUploader } from '../CRM/CsvLeadUploader';
+import { ContactLeadManager } from '../CRM/ContactLeadManager';
 import { AutomatedRemindersView } from '../CRM/AutomatedRemindersView';
 import { HostingerEmailSyncView } from '../CRM/HostingerEmailSyncView';
 import { BulkHealthCategoryCampaignView } from '../CRM/BulkHealthCategoryCampaignView';
@@ -29,8 +29,10 @@ interface AdminLayoutProps {
   onLogout: () => Promise<void>;
   patients: Patient[];
   onSelectPatient: (patient: Patient) => void;
-  onImportPatients: (patients: Partial<Patient>[]) => void;
-  onAddManualPatient: (patient: Patient) => void;
+  leads: ContactLead[];
+  leadDataError?: string;
+  dataError?: string;
+  onSaveLeads: (leads: Omit<ContactLead, 'id' | 'createdAt'>[]) => Promise<void>;
   catalogItems: CatalogItem[];
   onAddProduct: (item: CatalogItem) => void;
   onUpdateProduct: (item: CatalogItem) => void;
@@ -44,10 +46,9 @@ interface AdminLayoutProps {
   reminderRules: ReminderRule[];
   onToggleReminderRule: (ruleId: string) => void;
   orders: OnlineOrder[];
-  onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => void;
-  onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => void;
+  onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
+  onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
   onAddOrderInternalNote?: (orderId: string, note: string) => void;
-  onAddManualOrder?: (order: OnlineOrder) => void;
   selectedPatient: Patient | null;
   onClosePatientModal: () => void;
   onAddPharmacistNote: (patientId: string, note: Omit<PharmacistNote, 'id' | 'createdAt'>) => void;
@@ -68,8 +69,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onLogout,
   patients,
   onSelectPatient,
-  onImportPatients,
-  onAddManualPatient,
+  leads,
+  leadDataError,
+  dataError,
+  onSaveLeads,
   catalogItems,
   onAddProduct,
   onUpdateProduct,
@@ -86,7 +89,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onUpdateOrderStatus,
   onUpdateOrderTracking,
   onAddOrderInternalNote,
-  onAddManualOrder,
   selectedPatient,
   onClosePatientModal,
   onAddPharmacistNote,
@@ -115,13 +117,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-md bg-teal-600 flex items-center justify-center font-bold text-white shadow-xs">
-                Rx
-              </div>
+              <img src="/ambients-mark.svg" alt="" className="h-8 w-8 rounded-md shadow-xs" />
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-base tracking-tight text-white">
-                    AuraCare Clinical Admin
+                    Ambients Clinical Admin
                   </span>
                   <span className="text-[11px] font-mono bg-teal-900/80 text-teal-300 border border-teal-700/60 px-2 py-0.5 rounded">
                     /admin portal
@@ -171,8 +171,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       )}
 
       <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-950">
-        Preview mode: sample records are stored in browser memory. Do not enter real patient data until secure server storage and integrations are configured.
+        Sample clinical records remain in preview memory. Only contact leads and storefront orders are saved to the server.
       </div>
+      {dataError && <div role="alert" className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-900">{dataError}</div>}
 
       {/* Admin Subheader with Tabs */}
       <nav className="bg-white border-b border-slate-200 sticky top-16 z-30">
@@ -276,8 +277,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           <CrmDashboard
             patients={patients}
             onSelectPatient={onSelectPatient}
-            onImportPatients={onImportPatients}
-            onAddManualPatient={onAddManualPatient}
+            leads={leads}
+            leadDataError={leadDataError}
+            onSaveLeads={onSaveLeads}
             hostingerConfig={hostingerConfig}
             onUpdateHostingerConfig={onUpdateHostingerConfig}
             emailLogs={emailLogs}
@@ -306,15 +308,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             onUpdateOrderTracking={onUpdateOrderTracking}
             onAddOrderInternalNote={onAddOrderInternalNote}
             onSendEmailNotification={onSendEmail}
-            onAddManualOrder={onAddManualOrder}
             catalogItems={catalogItems}
           />
         )}
 
         {activeAdminTab === 'leads' && (
-          <CsvLeadUploader
-            onImportPatients={onImportPatients}
-            onAddManualPatient={onAddManualPatient}
+          <ContactLeadManager
+            leads={leads}
+            dataError={leadDataError}
+            onSaveLeads={onSaveLeads}
           />
         )}
 

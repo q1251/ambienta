@@ -39,19 +39,19 @@ test('interpolateEmailTemplate properly replaces dynamic variable tokens', () =>
   );
 });
 
-test('parseLeadsCsv parses valid CSV and maps health categories correctly', () => {
+test('parseLeadsCsv keeps only contact fields and ignores clinical CSV columns', () => {
   const sampleCsv = `first_name,last_name,email,phone,health_category,medication_name,rx_number,renewal_date,primary_doctor
 George,Patton,george@example.com,555-1234,Cardiology,Atorvastatin 20mg,RX-112233,2026-11-08,Dr. House
 Maya,Lin,maya@example.com,555-5678,Diabetes,Metformin 1000mg,RX-445566,2026-11-05,Dr. Smith`;
 
   const parsed = parseLeadsCsv(sampleCsv);
   assert.equal(parsed.errors.length, 0);
-  assert.equal(parsed.patients.length, 2);
-  assert.equal(parsed.patients[0].firstName, 'George');
-  assert.equal(parsed.patients[0].healthCategory, 'Cardiology / Hypertension');
-  assert.equal(parsed.patients[1].firstName, 'Maya');
-  assert.equal(parsed.patients[1].healthCategory, 'Diabetes Care');
-  assert.equal(parsed.patients[0].refillHistory?.[0].rxNumber, 'RX-112233');
+  assert.equal(parsed.leads.length, 2);
+  assert.equal(parsed.leads[0].firstName, 'George');
+  assert.equal(parsed.leads[0].email, 'george@example.com');
+  assert.equal(parsed.leads[1].firstName, 'Maya');
+  assert.equal('healthCategory' in parsed.leads[0], false);
+  assert.equal('refillHistory' in parsed.leads[0], false);
 });
 
 test('filterPatientsByHealthCategory isolates requested segments', () => {

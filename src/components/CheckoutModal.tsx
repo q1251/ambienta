@@ -25,7 +25,7 @@ interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   cartItems: CartItem[];
-  onOrderSuccess: (order: OnlineOrder) => void;
+  onOrderSuccess: (order: OnlineOrder) => Promise<OnlineOrder>;
   onClearCart: () => void;
 }
 
@@ -82,7 +82,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
-  const [orderNotes, setOrderNotes] = useState('');
 
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail'>('Express Courier');
@@ -154,7 +153,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const handleProcessCheckout = (e: React.FormEvent) => {
+  const handleProcessCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cartItems.length === 0) return;
     if (paymentMethod !== 'Cash on Delivery / Pickup') {
@@ -168,7 +167,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const orderNum = `ORD-${Date.now().toString().slice(-6)}`;
       const fullDeliveryAddress =
         deliveryMethod === 'Pharmacy Pickup'
-          ? 'AuraCare Dispensary Desk - Counter 1 (Ready in 30 mins)'
+          ? 'Ambients Dispensary Desk - Counter 1 (Ready in 30 mins)'
           : `${streetAddress}, ${city}, ${state} ${zip}`;
 
       const primaryItem = cartItems[0].item;
@@ -208,16 +207,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         paymentStatus: 'Pending Verification',
         status: 'Submitted',
         placedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-        notes: orderNotes,
         internalNotes: [
           `Payment due via ${paymentMethod}`,
-          'Order added to the local admin queue; connect a production backend for durable storage and notifications.',
+          'Order saved for administrator review.',
         ],
       };
 
-      onOrderSuccess(newOrder);
+      const savedOrder = await onOrderSuccess(newOrder);
       onClearCart();
-      setCompletedOrder(newOrder);
+      setCompletedOrder(savedOrder);
       setIsSubmitting(false);
     } catch (error) {
       setIsSubmitting(false);
@@ -534,7 +532,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <div>
                       <span className="font-bold block">Counter Pickup Location:</span>
                       <p className="text-[11px] text-teal-800">
-                        AuraCare Clinical Dispensary, 400 Central Health Boulevard, Suite 100.
+                        Ambients Clinical Dispensary, 400 Central Health Boulevard, Suite 100.
                         Bring ID or order barcode confirmation upon arrival.
                       </p>
                     </div>
@@ -912,7 +910,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span>·</span>
                   <span className="flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Order added to this session</span>
+                    <span>Order saved for admin review</span>
                   </span>
                 </div>
               </div>

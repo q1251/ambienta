@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Sparkles } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import { StoreCategory } from '../types/pharmacy';
 
 interface NavbarProps {
@@ -41,12 +41,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onNavigateHome}
               className="flex items-center gap-2.5 text-left focus:outline-none cursor-pointer"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#174c80] text-white shadow-sm">
-                <Sparkles className="w-5 h-5" />
-              </div>
+              <img src="/ambients-mark.svg" alt="" className="h-10 w-10 rounded-[14px] shadow-sm" />
               <div>
                 <span                 className="block whitespace-nowrap text-lg font-semibold leading-tight tracking-[-0.04em] text-slate-900 sm:text-xl">
-                  AuraCare Health
+                  Ambients
                 </span>
                 <span                                 className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-[#356a9e]">
                 Pharmacy &amp; wellness

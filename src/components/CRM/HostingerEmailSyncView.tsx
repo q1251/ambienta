@@ -80,17 +80,17 @@ export const HostingerEmailSyncView: React.FC<HostingerEmailSyncViewProps> = ({
     if (templateType === 'pickup_ready') {
       setSubject(`Your Medication Order is Ready for Pickup (${vars.medication})`);
       setBody(
-        `Dear ${vars.patient_name},\n\nYour order for ${vars.medication} (Rx #${vars.rx_number}) has been packaged, safety sealed, and verified by our clinical pharmacist.\n\nYou may collect it anytime at the AuraCare Pharmacy pickup desk, or reply to request express courier dispatch to your address.\n\nWarm regards,\nAuraCare Dispensary Team`
+        `Dear ${vars.patient_name},\n\nYour order for ${vars.medication} (Rx #${vars.rx_number}) has been packaged, safety sealed, and verified by our clinical pharmacist.\n\nYou may collect it anytime at the Ambients Pharmacy pickup desk, or reply to request express courier dispatch to your address.\n\nWarm regards,\nAmbients Dispensary Team`
       );
     } else if (templateType === 'consultation') {
       setSubject(`Pharmacist Consultation Follow-up: ${vars.medication}`);
       setBody(
-        `Dear ${vars.patient_name},\n\nFollowing our clinical consultation regarding your ${vars.medication} regimen, please remember to take your dose consistently as directed. If you experience any mild side effects or have questions regarding drug interactions, reply directly to this email.\n\nIn good health,\nDr. Sarah Jenkins, PharmD\nAuraCare Clinical Pharmacy`
+        `Dear ${vars.patient_name},\n\nFollowing our clinical consultation regarding your ${vars.medication} regimen, please remember to take your dose consistently as directed. If you experience any mild side effects or have questions regarding drug interactions, reply directly to this email.\n\nIn good health,\nDr. Sarah Jenkins, PharmD\nAmbients Clinical Pharmacy`
       );
     } else if (templateType === 'renewal_notice') {
       setSubject(`Refill Due Notice: ${vars.medication} (Rx #${vars.rx_number})`);
       setBody(
-        `Dear ${vars.patient_name},\n\nYour medication ${vars.medication} is scheduled for renewal on ${vars.renewal_date}.\n\nReply directly to this email to confirm your refill dispatch.\n\nAuraCare Pharmacy Team`
+        `Dear ${vars.patient_name},\n\nYour medication ${vars.medication} is scheduled for renewal on ${vars.renewal_date}.\n\nReply directly to this email to confirm your refill dispatch.\n\nAmbients Pharmacy Team`
       );
     }
   };
@@ -354,7 +354,7 @@ export const HostingerEmailSyncView: React.FC<HostingerEmailSyncViewProps> = ({
                   required
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  placeholder="e.g. Your Refill is Ready for Pickup - AuraCare Pharmacy"
+                  placeholder="e.g. Your Refill is Ready for Pickup - Ambients Pharmacy"
                   className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
                 />
               </div>

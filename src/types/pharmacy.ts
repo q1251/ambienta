@@ -61,6 +61,16 @@ export interface Patient {
   notes: PharmacistNote[];
 }
 
+export interface ContactLead {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order';
+  createdAt: string;
+}
+
 export type PaymentMethod =
   | 'Credit / Debit Card'
   | 'PayPal'

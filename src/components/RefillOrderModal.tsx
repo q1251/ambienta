@@ -64,7 +64,7 @@ export const RefillOrderModal: React.FC<RefillOrderModalProps> = ({
       id: `ord-${Date.now()}`,
       orderNumber,
       patientName: patientName || 'Client',
-      email: email || 'patient@auracare-rx.com',
+      email: email || 'patient@example.org',
       phone: phone || '+1 (555) 000-0000',
       rxNumber: rxNumber || 'RX-NEW-TRANSFER',
       medicationName: medicationName || 'Medication Order',

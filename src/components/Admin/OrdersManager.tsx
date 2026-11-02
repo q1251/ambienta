@@ -29,8 +29,8 @@ import { OnlineOrder, PaymentMethod, EmailLog, CatalogItem, StoreCategory } from
 
 interface OrdersManagerProps {
   orders: OnlineOrder[];
-  onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => void;
-  onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => void;
+  onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
+  onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
   onAddOrderInternalNote?: (orderId: string, note: string) => void;
   onSendEmailNotification?: (log: EmailLog) => void;
   onAddManualOrder?: (order: OnlineOrder) => void;
@@ -57,6 +57,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [trackingInput, setTrackingInput] = useState('');
   const [newInternalNote, setNewInternalNote] = useState('');
   const [emailSentAlert, setEmailSentAlert] = useState<string | null>(null);
+  const [orderSaveError, setOrderSaveError] = useState('');
 
   // Manual Order Modal
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -70,24 +71,24 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   // KPI Calculations
   const totalRevenue = useMemo(() => {
-    return orders.reduce((acc, o) => acc + (o.paymentStatus === 'Refunded' ? 0 : o.totalAmount), 0);
+    return orders.reduce((acc, o) => acc + (o.paymentStatus === 'Paid' ? o.totalAmount : 0), 0);
   }, [orders]);
 
   const cardRevenue = useMemo(() => {
     return orders
-      .filter((o) => o.paymentMethod === 'Credit / Debit Card')
+      .filter((o) => o.paymentMethod === 'Credit / Debit Card' && o.paymentStatus === 'Paid')
       .reduce((acc, o) => acc + o.totalAmount, 0);
   }, [orders]);
 
   const paypalRevenue = useMemo(() => {
     return orders
-      .filter((o) => o.paymentMethod === 'PayPal')
+      .filter((o) => o.paymentMethod === 'PayPal' && o.paymentStatus === 'Paid')
       .reduce((acc, o) => acc + o.totalAmount, 0);
   }, [orders]);
 
   const cryptoRevenue = useMemo(() => {
     return orders
-      .filter((o) => o.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)')
+      .filter((o) => o.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && o.paymentStatus === 'Paid')
       .reduce((acc, o) => acc + o.totalAmount, 0);
   }, [orders]);
 
@@ -128,10 +129,16 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   };
 
   // Update tracking details
-  const handleSaveTracking = () => {
+  const handleSaveTracking = async () => {
     if (!selectedOrder) return;
     if (onUpdateOrderTracking) {
-      onUpdateOrderTracking(selectedOrder.id, carrierInput, trackingInput);
+      setOrderSaveError('');
+      try {
+        await onUpdateOrderTracking(selectedOrder.id, carrierInput, trackingInput);
+      } catch (error) {
+        setOrderSaveError(error instanceof Error ? error.message : 'Order tracking could not be saved.');
+        return;
+      }
     }
     // Update local modal state
     setSelectedOrder({
@@ -139,6 +146,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       carrier: carrierInput,
       trackingNumber: trackingInput,
     });
+  };
+
+  const handleStatusChange = async (orderId: string, status: OnlineOrder['status']) => {
+    setOrderSaveError('');
+    try {
+      await onUpdateOrderStatus(orderId, status);
+    } catch (error) {
+      setOrderSaveError(error instanceof Error ? error.message : 'Order status could not be saved.');
+    }
   };
 
   // Add internal staff note
@@ -163,7 +179,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       recipientEmail: selectedOrder.email,
       recipientName: selectedOrder.patientName,
       subject: `Order Update #${selectedOrder.orderNumber}: Dispensed & Shipped`,
-      body: `Hello ${selectedOrder.patientName},\n\nYour order (${selectedOrder.orderNumber}) containing ${selectedOrder.medicationName} has been processed by our dispensary team.\nCarrier: ${carrierInput || selectedOrder.carrier || 'CareCourier'}\nTracking Number: ${trackingInput || selectedOrder.trackingNumber || 'Available upon pickup'}\n\nWarm regards,\nAuraCare Dispensary Team`,
+      body: `Hello ${selectedOrder.patientName},\n\nYour order (${selectedOrder.orderNumber}) containing ${selectedOrder.medicationName} has been processed by our dispensary team.\nCarrier: ${carrierInput || selectedOrder.carrier || 'CareCourier'}\nTracking Number: ${trackingInput || selectedOrder.trackingNumber || 'Available upon pickup'}\n\nWarm regards,\nAmbients Dispensary Team`,
       status: 'Draft',
       sentAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
       emailType: 'order_confirmation',
@@ -217,7 +233,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `auracare_orders_export_${Date.now()}.csv`);
+    link.setAttribute('download', `ambients_orders_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -233,7 +249,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       id: `ord-man-${Date.now()}`,
       orderNumber: orderNum,
       patientName: manualCustomerName || 'Walk-in Client',
-      email: manualEmail || 'desk.client@auracarehealth.com',
+      email: manualEmail || 'desk.client@example.org',
       phone: manualPhone || '+1 (555) 000-0000',
       medicationName: manualItemName,
       items: [
@@ -349,18 +365,18 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-500">
-              Orders from this browser session, with local fulfillment and payment review
+              Orders saved to the application database, with fulfillment tracking
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            {onAddManualOrder && <button
               onClick={() => setIsManualModalOpen(true)}
               className="px-3 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create Phone/Walk-in Order</span>
-            </button>
+            </button>}
 
             <button
               onClick={handleExportCsv}
@@ -371,6 +387,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
             </button>
           </div>
         </div>
+
+        {orderSaveError && <p role="alert" className="border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-900">{orderSaveError}</p>}
 
         {/* Filter & Search Bar */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-xs">
@@ -554,7 +572,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       <select
                         value={ord.status}
                         onChange={(e) =>
-                          onUpdateOrderStatus(ord.id, e.target.value as OnlineOrder['status'])
+                          void handleStatusChange(ord.id, e.target.value as OnlineOrder['status'])
                         }
                         className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
                       >
@@ -828,7 +846,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       )}
 
       {/* Manual Phone/Walk-in Order Modal */}
-      {isManualModalOpen && (
+      {isManualModalOpen && onAddManualOrder && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 space-y-4 text-xs font-sans">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">

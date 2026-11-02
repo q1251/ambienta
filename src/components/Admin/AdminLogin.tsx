@@ -59,9 +59,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#08294d]/90 via-[#0d3d6c]/30 to-[#0d3d6c]/10" />
           <div className="absolute left-9 right-9 top-9 flex items-center gap-3 text-white">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-lg font-bold text-[#174c80]">Rx</span>
+            <img src="/ambients-mark.svg" alt="" className="h-11 w-11 rounded-2xl" />
             <div>
-              <p className="text-sm font-semibold">AuraCare Health</p>
+              <p className="text-sm font-semibold">Ambients</p>
               <p className="text-[10px] uppercase tracking-[0.16em] text-blue-100">Clinical operations</p>
             </div>
           </div>
@@ -79,9 +79,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
         <div className="flex items-center justify-center px-6 py-10 sm:px-12 lg:px-11">
           <div className="w-full max-w-sm">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#174c80] text-lg font-bold text-white">Rx</span>
+              <img src="/ambients-mark.svg" alt="" className="h-11 w-11 rounded-2xl" />
               <div>
-                <p className="text-sm font-semibold text-slate-900">AuraCare Health</p>
+                <p className="text-sm font-semibold text-slate-900">Ambients</p>
                 <p className="text-[10px] uppercase tracking-[0.16em] text-[#356a9e]">Clinical operations</p>
               </div>
             </div>

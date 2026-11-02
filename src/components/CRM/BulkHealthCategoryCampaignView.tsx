@@ -25,37 +25,37 @@ const CATEGORY_TEMPLATES: Record<
   'Sleep': {
     subject: 'Restorative Sleep Care & Nighttime Wellness Advisory',
     body:
-      'Dear {{patient_name}},\n\nQuality sleep is foundational to immune resilience and daytime vitality. Our clinical pharmacy team is following up on your restorative sleep regimen with {{medication}}.\n\nReply directly to this Hostinger message if you need a refill prepared or have questions about dosage.\n\nWarm regards,\nAuraCare Sleep & Wellness Team',
+      'Dear {{patient_name}},\n\nQuality sleep is foundational to immune resilience and daytime vitality. Our clinical pharmacy team is following up on your restorative sleep regimen with {{medication}}.\n\nReply directly to this Hostinger message if you need a refill prepared or have questions about dosage.\n\nWarm regards,\nAmbients Sleep & Wellness Team',
   },
   'Weight Loss': {
     subject: 'Metabolic Vitality & Weight Balance Health Check-in',
     body:
-      'Dear {{patient_name}},\n\nConsistent metabolic support and steady hydration are essential to reaching your wellness milestones with {{medication}}.\n\nOur dispensary team is standing by to prepare your scheduled renewal or provide coaching on administration timing.\n\nIn good health,\nAuraCare Metabolic Vitality Team',
+      'Dear {{patient_name}},\n\nConsistent metabolic support and steady hydration are essential to reaching your wellness milestones with {{medication}}.\n\nOur dispensary team is standing by to prepare your scheduled renewal or provide coaching on administration timing.\n\nIn good health,\nAmbients Metabolic Vitality Team',
   },
   'Diabetes Care': {
     subject: 'Clinical Wellness Update: Continuous Glucose & Refill Care',
     body:
-      'Dear {{patient_name}},\n\nOur clinical pharmacy team is checking in on your ongoing diabetes care regimen. Regular monitoring and uninterrupted therapy with {{medication}} are critical for maintaining glycemic stability.\n\nIf you need an early refill or need a consultation on dietary adherence with {{primary_doctor}}, our pharmacists are available.\n\nWarm regards,\nAuraCare Pharmacy Clinical Diabetes Team',
+      'Dear {{patient_name}},\n\nOur clinical pharmacy team is checking in on your ongoing diabetes care regimen. Regular monitoring and uninterrupted therapy with {{medication}} are critical for maintaining glycemic stability.\n\nIf you need an early refill or need a consultation on dietary adherence with {{primary_doctor}}, our pharmacists are available.\n\nWarm regards,\nAmbients Pharmacy Clinical Diabetes Team',
   },
   'Cardiology / Hypertension': {
     subject: 'Cardiovascular Care Advisory: Blood Pressure Log & Medication Review',
     body:
-      'Dear {{patient_name}},\n\nHeart health is best protected through consistent daily medication adherence. Please continue taking your {{medication}} as directed.\n\nShould you notice any fluctuations in your morning blood pressure readings or require an updated 90-day supply, reply directly to this Hostinger message.\n\nDr. Sarah Jenkins, PharmD\nAuraCare Cardiovascular Dispensary',
+      'Dear {{patient_name}},\n\nHeart health is best protected through consistent daily medication adherence. Please continue taking your {{medication}} as directed.\n\nShould you notice any fluctuations in your morning blood pressure readings or require an updated 90-day supply, reply directly to this Hostinger message.\n\nDr. Sarah Jenkins, PharmD\nAmbients Cardiovascular Dispensary',
   },
   'Asthma & Respiratory': {
     subject: 'Respiratory Season Alert: Inhaler Supply & Seasonal Preparedness',
     body:
-      'Dear {{patient_name}},\n\nWith changes in weather and air allergens, ensure your rescue and maintenance inhalers ({{medication}}) have sufficient doses remaining.\n\nReply anytime to queue your next refill.\n\nMidwest Respiratory Care | AuraCare Pharmacy',
+      'Dear {{patient_name}},\n\nWith changes in weather and air allergens, ensure your rescue and maintenance inhalers ({{medication}}) have sufficient doses remaining.\n\nReply anytime to queue your next refill.\n\nMidwest Respiratory Care | Ambients Pharmacy',
   },
   'Senior Wellness': {
     subject: 'Comprehensive Senior Care: Medication Sync & Delivery Check',
     body:
-      'Dear {{patient_name}},\n\nOur pharmacy offers coordinated monthly blister packs and doorstep delivery for all your maintenance medications including {{medication}}.\n\nLet us know if you or your care partner would like our team to coordinate automatic renewals with {{primary_doctor}}.\n\nAuraCare Senior Clinical Care',
+      'Dear {{patient_name}},\n\nOur pharmacy offers coordinated monthly blister packs and doorstep delivery for all your maintenance medications including {{medication}}.\n\nLet us know if you or your care partner would like our team to coordinate automatic renewals with {{primary_doctor}}.\n\nAmbients Senior Clinical Care',
   },
   'Dermatology & Topicals': {
     subject: 'Topical Therapy Guidance & Refill Status',
     body:
-      'Dear {{patient_name}},\n\nWe hope your topical regimen with {{medication}} is progressing comfortably. Remember to apply sun protection as counseled.\n\nReply directly to this email if you need a refill tube prepared.\n\nAuraCare Compounding & Dermatology',
+      'Dear {{patient_name}},\n\nWe hope your topical regimen with {{medication}} is progressing comfortably. Remember to apply sun protection as counseled.\n\nReply directly to this email if you need a refill tube prepared.\n\nAmbients Compounding & Dermatology',
   },
 };
 
@@ -80,9 +80,9 @@ export const BulkHealthCategoryCampaignView: React.FC<BulkHealthCategoryCampaign
       setSubject(CATEGORY_TEMPLATES[cat].subject);
       setBody(CATEGORY_TEMPLATES[cat].body);
     } else {
-      setSubject(`Healthcare Update for AuraCare Patients`);
+      setSubject(`Healthcare Update for Ambients Patients`);
       setBody(
-        `Dear {{patient_name}},\n\nWe are pleased to provide this quarterly clinical wellness reminder regarding your medication and wellness care.\n\nAuraCare Clinical Team`
+        `Dear {{patient_name}},\n\nWe are pleased to provide this quarterly clinical wellness reminder regarding your medication and wellness care.\n\nAmbients Clinical Team`
       );
     }
   };

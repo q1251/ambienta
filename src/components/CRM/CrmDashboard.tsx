@@ -15,9 +15,9 @@ import {
   Clock,
   Pill,
 } from 'lucide-react';
-import { Patient, HostingerConfig, EmailLog, ReminderRule, HealthCategory } from '../../types/pharmacy';
+import { ContactLead, Patient, HostingerConfig, EmailLog, ReminderRule, HealthCategory } from '../../types/pharmacy';
 import { calculateDaysRemaining } from '../../utils/pharmacyLogic';
-import { CsvLeadUploader } from './CsvLeadUploader';
+import { ContactLeadManager } from './ContactLeadManager';
 import { AutomatedRemindersView } from './AutomatedRemindersView';
 import { HostingerEmailSyncView } from './HostingerEmailSyncView';
 import { BulkHealthCategoryCampaignView } from './BulkHealthCategoryCampaignView';
@@ -25,8 +25,9 @@ import { BulkHealthCategoryCampaignView } from './BulkHealthCategoryCampaignView
 interface CrmDashboardProps {
   patients: Patient[];
   onSelectPatient: (patient: Patient) => void;
-  onImportPatients: (patients: Partial<Patient>[]) => void;
-  onAddManualPatient: (patient: Patient) => void;
+  leads: ContactLead[];
+  leadDataError?: string;
+  onSaveLeads: (leads: Omit<ContactLead, 'id' | 'createdAt'>[]) => Promise<void>;
   hostingerConfig: HostingerConfig;
   onUpdateHostingerConfig: (config: HostingerConfig) => void;
   emailLogs: EmailLog[];
@@ -40,8 +41,9 @@ interface CrmDashboardProps {
 export const CrmDashboard: React.FC<CrmDashboardProps> = ({
   patients,
   onSelectPatient,
-  onImportPatients,
-  onAddManualPatient,
+  leads,
+  leadDataError,
+  onSaveLeads,
   hostingerConfig,
   onUpdateHostingerConfig,
   emailLogs,
@@ -409,9 +411,10 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
 
       {/* SUB-VIEW 2: LEAD INGESTION (CSV / MANUAL) */}
       {activeTab === 'leads' && (
-        <CsvLeadUploader
-          onImportPatients={onImportPatients}
-          onAddManualPatient={onAddManualPatient}
+        <ContactLeadManager
+          leads={leads}
+          dataError={leadDataError}
+          onSaveLeads={onSaveLeads}
         />
       )}
 

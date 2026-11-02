@@ -13,7 +13,6 @@ import { AdminLayout } from './components/Admin/AdminLayout';
 import { AdminLogin } from './components/Admin/AdminLogin';
 import {
   INITIAL_PATIENTS,
-  INITIAL_ORDERS,
   INITIAL_HOSTINGER_CONFIG,
   INITIAL_EMAIL_LOGS,
   INITIAL_REMINDER_RULES,
@@ -21,6 +20,7 @@ import {
 } from './data/seedData';
 import {
   Patient,
+  ContactLead,
   OnlineOrder,
   HostingerConfig,
   EmailLog,
@@ -49,7 +49,9 @@ export default function App() {
 
   // Master application states
   const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
-  const [orders, setOrders] = useState<OnlineOrder[]>(INITIAL_ORDERS);
+  const [orders, setOrders] = useState<OnlineOrder[]>([]);
+  const [leads, setLeads] = useState<ContactLead[]>([]);
+  const [adminDataError, setAdminDataError] = useState('');
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(INITIAL_CATALOG);
   const [hostingerConfig, setHostingerConfig] = useState<HostingerConfig>(INITIAL_HOSTINGER_CONFIG);
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>(INITIAL_EMAIL_LOGS);
@@ -118,6 +120,45 @@ export default function App() {
     };
   }, [currentPath]);
 
+  useEffect(() => {
+    if (currentPath !== '/admin' || adminAuthStatus !== 'authenticated') return;
+
+    let isCurrent = true;
+    setAdminDataError('');
+    setOrders([]);
+    setLeads([]);
+    const loadAdminData = async () => {
+      try {
+        const [ordersResponse, leadsResponse] = await Promise.all([
+          fetch('/api/data.php?resource=orders', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+          fetch('/api/data.php?resource=leads', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+        ]);
+        const [ordersResult, leadsResult] = await Promise.all([
+          ordersResponse.json() as Promise<{ orders?: OnlineOrder[]; message?: string }>,
+          leadsResponse.json() as Promise<{ leads?: ContactLead[]; message?: string }>,
+        ]);
+        if (!ordersResponse.ok || !Array.isArray(ordersResult.orders)) {
+          throw new Error(ordersResult.message || 'Could not load saved orders from the database.');
+        }
+        if (!leadsResponse.ok || !Array.isArray(leadsResult.leads)) {
+          throw new Error(leadsResult.message || 'Could not load saved contact leads from the database.');
+        }
+        if (isCurrent) {
+          setOrders(ordersResult.orders);
+          setLeads(leadsResult.leads);
+        }
+      } catch (error) {
+        if (!isCurrent) return;
+        setAdminDataError(error instanceof Error ? error.message : 'The application database could not be reached.');
+      }
+    };
+
+    void loadAdminData();
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentPath, adminAuthStatus]);
+
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path);
     const nextPath = path.startsWith('/admin') ? '/admin' : '/';
@@ -177,14 +218,35 @@ export default function App() {
     setCartItems([]);
   };
 
-  const handleOrderCreated = (order: OnlineOrder) => {
-    setOrders((prev) => [order, ...prev]);
+  const handleOrderCreated = async (order: OnlineOrder): Promise<OnlineOrder> => {
+    const response = await fetch('/api/data.php?resource=orders', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        customerName: order.patientName,
+        email: order.email,
+        phone: order.phone,
+        deliveryMethod: order.deliveryMethod,
+        deliveryAddress: order.deliveryAddress,
+        couponCode: order.couponCode || '',
+        paymentMethod: order.paymentMethod,
+        items: (order.items || []).map((item) => ({ productId: item.productId, quantity: item.quantity })),
+      }),
+    });
+    const result = await response.json() as { order?: OnlineOrder; message?: string };
+    if (!response.ok || !result.order) {
+      throw new Error(result.message || 'The order could not be saved. Please try again.');
+    }
+
+    const savedOrder = result.order;
+    setOrders((prev) => [savedOrder, ...prev]);
 
     // Decrement catalog item stock based on purchased items
-    if (order.items && order.items.length > 0) {
+    if (savedOrder.items && savedOrder.items.length > 0) {
       setCatalogItems((prevCatalog) =>
         prevCatalog.map((product) => {
-          const purchased = order.items?.find((item) => item.productId === product.id);
+          const purchased = savedOrder.items?.find((item) => item.productId === product.id);
           if (purchased) {
             const newStock = Math.max(0, product.stockCount - purchased.quantity);
             return {
@@ -197,13 +259,32 @@ export default function App() {
         })
       );
     }
-
+    return savedOrder;
   };
 
-  const handleUpdateOrderTracking = (orderId: string, carrier: string, trackingNumber: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, carrier, trackingNumber } : o))
-    );
+  const handleUpdateOrderTracking = async (orderId: string, carrier: string, trackingNumber: string) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
+    try {
+      const response = await fetch('/api/data.php?resource=orders', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id: orderId, status: order.status, carrier, trackingNumber }),
+      });
+      const result = await response.json() as { message?: string };
+      if (!response.ok) {
+        throw new Error(result.message || 'Order tracking could not be saved.');
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, carrier, trackingNumber } : o))
+      );
+      setAdminDataError('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Order tracking could not be saved.';
+      setAdminDataError(message);
+      throw new Error(message);
+    }
   };
 
   const handleAddOrderInternalNote = (orderId: string, note: string) => {
@@ -212,10 +293,6 @@ export default function App() {
         o.id === orderId ? { ...o, internalNotes: [note, ...(o.internalNotes || [])] } : o
       )
     );
-  };
-
-  const handleAddManualOrder = (order: OnlineOrder) => {
-    setOrders((prev) => [order, ...prev]);
   };
 
   // Inventory Management Handlers
@@ -308,35 +385,6 @@ export default function App() {
     }
   };
 
-  const handleImportPatients = (imported: Partial<Patient>[]) => {
-    const newPatients: Patient[] = imported.map((item, idx) => ({
-      id: `pat-import-${Date.now()}-${idx}`,
-      firstName: item.firstName || 'Imported',
-      lastName: item.lastName || `Client ${idx + 1}`,
-      email: item.email || `lead${idx + 1}@caremail.com`,
-      phone: item.phone || '+1 (555) 200-0000',
-      dateOfBirth: '1975-06-15',
-      address: 'Midwest Regional Service Corridor',
-      insuranceProvider: 'Standard Healthcare',
-      insurancePolicyNumber: `POL-${Math.floor(100000 + Math.random() * 900000)}`,
-      healthCategory: item.healthCategory || 'General Care',
-      primaryDoctor: item.primaryDoctor || 'Dr. Helen Brody, MD',
-      allergies: [],
-      activeMedicationsCount: item.refillHistory?.length || 1,
-      nextRenewalDate: item.nextRenewalDate || '2026-11-20',
-      leadSource: 'CSV Upload',
-      createdAt: '2026-11-02',
-      notes: [],
-      refillHistory: item.refillHistory || [],
-    }));
-
-    setPatients((prev) => [...newPatients, ...prev]);
-  };
-
-  const handleAddManualPatient = (patient: Patient) => {
-    setPatients((prev) => [patient, ...prev]);
-  };
-
   const handleSendSingleEmail = (log: EmailLog) => {
     setEmailLogs((prev) => [log, ...prev]);
   };
@@ -351,10 +399,47 @@ export default function App() {
     );
   };
 
-  const handleUpdateOrderStatus = (orderId: string, newStatus: OnlineOrder['status']) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-    );
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: OnlineOrder['status']) => {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
+    try {
+      const response = await fetch('/api/data.php?resource=orders', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ id: orderId, status: newStatus, carrier: order.carrier || '', trackingNumber: order.trackingNumber || '' }),
+      });
+      const result = await response.json() as { message?: string };
+      if (!response.ok) {
+        throw new Error(result.message || 'Order status could not be saved.');
+      }
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      );
+      setAdminDataError('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Order status could not be saved.';
+      setAdminDataError(message);
+      throw new Error(message);
+    }
+  };
+
+  const handleSaveLeads = async (newLeads: Omit<ContactLead, 'id' | 'createdAt'>[]) => {
+    const response = await fetch('/api/data.php?resource=leads', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ leads: newLeads }),
+    });
+    const result = await response.json() as { leads?: ContactLead[]; message?: string };
+    if (!response.ok || !Array.isArray(result.leads)) {
+      throw new Error(result.message || 'The contact leads could not be saved.');
+    }
+    setLeads((previous) => {
+      const merged = new Map(previous.map((lead) => [lead.email.toLowerCase(), lead]));
+      for (const lead of result.leads || []) merged.set(lead.email.toLowerCase(), lead);
+      return [...merged.values()].sort((a, b) => b.id - a.id);
+    });
   };
 
   const totalCartCount = cartItems.reduce((acc, ci) => acc + ci.quantity, 0);
@@ -387,8 +472,10 @@ export default function App() {
         onLogout={handleAdminLogout}
         patients={patients}
         onSelectPatient={(p) => setSelectedPatient(p)}
-        onImportPatients={handleImportPatients}
-        onAddManualPatient={handleAddManualPatient}
+        leads={leads}
+        leadDataError={adminDataError}
+        dataError={adminDataError}
+        onSaveLeads={handleSaveLeads}
         catalogItems={catalogItems}
         onAddProduct={handleAddProduct}
         onUpdateProduct={handleUpdateProduct}
@@ -405,7 +492,6 @@ export default function App() {
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onUpdateOrderTracking={handleUpdateOrderTracking}
         onAddOrderInternalNote={handleAddOrderInternalNote}
-        onAddManualOrder={handleAddManualOrder}
         selectedPatient={selectedPatient}
         onClosePatientModal={() => setSelectedPatient(null)}
         onAddPharmacistNote={handleAddPharmacistNote}
@@ -493,7 +579,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center md:text-left">
-              <span className="font-bold text-lg text-white block">AuraCare Health &amp; Wellness Store</span>
+              <span className="font-bold text-lg text-white block">Ambients Pharmacy &amp; Wellness</span>
               <p className="text-xs text-slate-400">
                 Thoughtfully selected wellness essentials · Care team support · Convenient delivery
               </p>
@@ -528,7 +614,7 @@ export default function App() {
           </div>
 
           <div className="flex flex-col items-center justify-between gap-2 border-t border-white/15 pt-6 text-[11px] text-blue-100/70 sm:flex-row">
-            <span>© 2026 AuraCare Health Store. All rights reserved.</span>
+            <span>© 2026 Ambients. All rights reserved.</span>
             <span>Preview storefront · payments and mail are not connected</span>
           </div>
         </div>
