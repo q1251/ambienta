@@ -1,10 +1,9 @@
 import React from 'react';
-import { ShoppingBag, Shield, Sparkles } from 'lucide-react';
+import { ShoppingBag, Sparkles } from 'lucide-react';
 import { StoreCategory } from '../types/pharmacy';
 
 interface NavbarProps {
   onNavigateHome: () => void;
-  onNavigateAdmin: () => void;
   openCart: () => void;
   cartCount: number;
   onSelectCategory?: (category: StoreCategory | 'All Products') => void;
@@ -13,7 +12,6 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome,
-  onNavigateAdmin,
   openCart,
   cartCount,
   onSelectCategory,
@@ -31,13 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Free express delivery over $35</span>
           </div>
 
-          <button
-            onClick={onNavigateAdmin}
-            className="flex items-center gap-1.5 font-semibold text-[#174c80] transition-colors hover:text-blue-700"
-          >
-            <Shield className="h-3 w-3 text-blue-700" />
-            <span>Staff portal</span>
-          </button>
+          <span className="hidden sm:inline">Thoughtful care for every day</span>
         </div>
       </div>
 

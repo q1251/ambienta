@@ -29,7 +29,7 @@ import {
   CartItem,
   StoreCategory,
 } from './types/pharmacy';
-import { ShieldCheck, Truck, Shield, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
+import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
 
 export default function App() {
   // Current route state: inspect window.location.pathname
@@ -332,7 +332,6 @@ export default function App() {
           setSearchQuery('');
           navigateTo('/');
         }}
-        onNavigateAdmin={() => navigateTo('/admin')}
         openCart={() => setIsCartOpen(true)}
         cartCount={totalCartCount}
         selectedCategory={selectedCategory}
@@ -432,13 +431,6 @@ export default function App() {
                 className="text-blue-200 transition-colors hover:text-white"
               >
                 View Cart ({totalCartCount})
-              </button>
-              <button
-                onClick={() => navigateTo('/admin')}
-                className="flex items-center gap-1.5 rounded-lg bg-white/15 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-white/25"
-              >
-                <Shield className="h-3.5 w-3.5 text-blue-200" />
-                <span>Staff CRM &amp; Admin (/admin)</span>
               </button>
             </div>
           </div>
