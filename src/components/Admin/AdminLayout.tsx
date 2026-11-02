@@ -26,6 +26,7 @@ import { PatientDetailModal } from '../CRM/PatientDetailModal';
 
 interface AdminLayoutProps {
   onNavigateHome: () => void;
+  onLogout: () => Promise<void>;
   patients: Patient[];
   onSelectPatient: (patient: Patient) => void;
   onImportPatients: (patients: Partial<Patient>[]) => void;
@@ -64,6 +65,7 @@ export type AdminTab =
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onNavigateHome,
+  onLogout,
   patients,
   onSelectPatient,
   onImportPatients,
@@ -91,6 +93,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onTriggerRefillDispense,
 }) => {
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('crm');
+  const [logoutError, setLogoutError] = useState('');
+
+  const handleLogout = async () => {
+    setLogoutError('');
+    try {
+      await onLogout();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : 'Unable to sign out securely.');
+    }
+  };
 
   const pendingOrdersCount = orders.filter(
     (o) => o.status === 'Submitted' || o.status === 'Pharmacist Review'
@@ -140,10 +152,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 <span>View Public Pharmacy (/)</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </button>
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Sign out</span>
+              </button>
             </div>
           </div>
         </div>
       </header>
+
+      {logoutError && (
+        <div role="alert" className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-900">
+          {logoutError}
+        </div>
+      )}
 
       <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-950">
         Preview mode: sample records are stored in browser memory. Do not enter real patient data until secure server storage and integrations are configured.

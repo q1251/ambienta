@@ -10,6 +10,7 @@ import { CategoriesAndProducts } from './components/CategoriesAndProducts';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { AdminLayout } from './components/Admin/AdminLayout';
+import { AdminLogin } from './components/Admin/AdminLogin';
 import {
   INITIAL_PATIENTS,
   INITIAL_ORDERS,
@@ -39,6 +40,12 @@ export default function App() {
     }
     return '/';
   });
+  const [adminAuthStatus, setAdminAuthStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>(
+    () => (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')
+      ? 'checking'
+      : 'unauthenticated')
+  );
+  const [adminAuthSetupMessage, setAdminAuthSetupMessage] = useState<string>();
 
   // Master application states
   const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
@@ -63,15 +70,79 @@ export default function App() {
     const handlePopState = () => {
       const path = window.location.pathname.startsWith('/admin') ? '/admin' : '/';
       setCurrentPath(path);
+      setAdminAuthStatus(path === '/admin' ? 'checking' : 'unauthenticated');
+      setAdminAuthSetupMessage(undefined);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  useEffect(() => {
+    if (currentPath !== '/admin') return;
+
+    let isCurrent = true;
+    setAdminAuthStatus('checking');
+    fetch('/api/auth.php', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const result = await response.json() as {
+          authenticated?: boolean;
+          configured?: boolean;
+          code?: string;
+          message?: string;
+        };
+        if (!isCurrent) return;
+
+        if (response.ok && result.authenticated) {
+          setAdminAuthStatus('authenticated');
+          setAdminAuthSetupMessage(undefined);
+          return;
+        }
+
+        setAdminAuthStatus('unauthenticated');
+        if (result.configured) {
+          setAdminAuthSetupMessage(undefined);
+          return;
+        }
+        setAdminAuthSetupMessage(
+          result.message || 'The secure sign-in service is unavailable. Please try again later.'
+        );
+      })
+      .catch(() => {
+        if (!isCurrent) return;
+        setAdminAuthStatus('unauthenticated');
+        setAdminAuthSetupMessage('The secure sign-in service could not be reached. Please try again later.');
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentPath]);
+
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path);
-    setCurrentPath(path.startsWith('/admin') ? '/admin' : '/');
+    const nextPath = path.startsWith('/admin') ? '/admin' : '/';
+    setCurrentPath(nextPath);
+    if (nextPath === '/admin') {
+      setAdminAuthStatus('checking');
+      setAdminAuthSetupMessage(undefined);
+    } else {
+      setAdminAuthStatus('unauthenticated');
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAdminLogout = async () => {
+    const response = await fetch('/api/auth.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    });
+    if (!response.ok) {
+      throw new Error('The secure sign-out request failed. Please try again.');
+    }
+    setAdminAuthStatus('unauthenticated');
+    navigateTo('/');
   };
 
   // Cart Handlers
@@ -289,10 +360,31 @@ export default function App() {
   const totalCartCount = cartItems.reduce((acc, ci) => acc + ci.quantity, 0);
 
   // If user is at /admin, render the dedicated Staff CRM & Dispensary Operations Portal
+  if (currentPath === '/admin' && adminAuthStatus === 'checking') {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f1f7fc]">
+        <p role="status" className="text-sm font-medium text-[#174c80]">Checking secure admin session…</p>
+      </main>
+    );
+  }
+
+  if (currentPath === '/admin' && adminAuthStatus !== 'authenticated') {
+    return (
+      <AdminLogin
+        setupMessage={adminAuthSetupMessage}
+        onAuthenticated={() => {
+          setAdminAuthSetupMessage(undefined);
+          setAdminAuthStatus('authenticated');
+        }}
+      />
+    );
+  }
+
   if (currentPath === '/admin') {
     return (
       <AdminLayout
         onNavigateHome={() => navigateTo('/')}
+        onLogout={handleAdminLogout}
         patients={patients}
         onSelectPatient={(p) => setSelectedPatient(p)}
         onImportPatients={handleImportPatients}
