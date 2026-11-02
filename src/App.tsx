@@ -127,19 +127,6 @@ export default function App() {
       );
     }
 
-    // Send order confirmation via Hostinger sync log
-    const confirmationLog: EmailLog = {
-      id: `email-confirm-${Date.now()}`,
-      recipientEmail: order.email,
-      recipientName: order.patientName,
-      subject: `Order Confirmation #${order.orderNumber}: ${order.medicationName}`,
-      body: `Thank you for your order. AuraCare Dispensary is packaging ${order.medicationName} for ${order.deliveryMethod}. Payment Method: ${order.paymentMethod || 'Online'} (Ref: ${order.transactionId || 'Confirmed'}). Total: $${order.totalAmount.toFixed(2)}.`,
-      status: 'Delivered',
-      sentAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      emailType: 'order_confirmation',
-      rxNumber: order.rxNumber,
-    };
-    setEmailLogs((prev) => [confirmationLog, ...prev]);
   };
 
   const handleUpdateOrderTracking = (orderId: string, carrier: string, trackingNumber: string) => {
@@ -337,7 +324,7 @@ export default function App() {
 
   // Otherwise, render the Customer Storefront at /
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
+    <div className="min-h-screen bg-white flex flex-col font-sans text-slate-900">
       {/* Top Store Navigation */}
       <Navbar
         onNavigateHome={() => {
@@ -373,12 +360,12 @@ export default function App() {
         />
 
         {/* Value & Delivery Banner */}
-        <section className="py-12 bg-white border-t border-slate-200">
+        <section className="border-t border-blue-100 bg-white py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="w-10 h-10 rounded-lg bg-teal-800 text-white flex items-center justify-center font-bold">
-                  <Sparkles className="w-5 h-5 text-teal-300" />
+              <div className="space-y-2 rounded-xl border border-blue-100 bg-[#f4f8fc] p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#174c80] font-bold text-white">
+                  <Sparkles className="h-5 w-5 text-blue-100" />
                 </div>
                 <h4 className="text-base font-bold text-slate-900">Targeted Wellness Formulations</h4>
                 <p className="text-xs text-slate-600 leading-relaxed">
@@ -386,9 +373,9 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="w-10 h-10 rounded-lg bg-teal-800 text-white flex items-center justify-center font-bold">
-                  <ShieldCheck className="w-5 h-5 text-teal-300" />
+              <div className="space-y-2 rounded-xl border border-blue-100 bg-[#f4f8fc] p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#174c80] font-bold text-white">
+                  <ShieldCheck className="h-5 w-5 text-blue-100" />
                 </div>
                 <h4 className="text-base font-bold text-slate-900">Licensed Clinical Oversight</h4>
                 <p className="text-xs text-slate-600 leading-relaxed">
@@ -396,13 +383,13 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="w-10 h-10 rounded-lg bg-teal-800 text-white flex items-center justify-center font-bold">
-                  <Truck className="w-5 h-5 text-teal-300" />
+              <div className="space-y-2 rounded-xl border border-blue-100 bg-[#f4f8fc] p-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#174c80] font-bold text-white">
+                  <Truck className="h-5 w-5 text-blue-100" />
                 </div>
                 <h4 className="text-base font-bold text-slate-900">Fast &amp; Discreet Courier Shipping</h4>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Discreet, temperature-guarded packaging delivered right to your home with real-time tracking updates via Hostinger notifications.
+                  Choose the delivery option that works for you. Order updates and carrier tracking require the fulfillment integrations to be configured.
                 </p>
               </div>
             </div>
@@ -411,13 +398,13 @@ export default function App() {
       </main>
 
       {/* Customer Store Footer */}
-      <footer className="bg-slate-900 text-slate-300 border-t border-slate-800 py-12">
+      <footer className="border-t border-[#0b2f52] bg-[#123b68] py-12 text-blue-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center md:text-left">
               <span className="font-bold text-lg text-white block">AuraCare Health &amp; Wellness Store</span>
               <p className="text-xs text-slate-400">
-                Licensed Dispensary #049-21841 · Clinical Consultation Desk · Direct Courier Fulfillment
+                Thoughtfully selected wellness essentials · Care team support · Convenient delivery
               </p>
             </div>
 
@@ -442,23 +429,23 @@ export default function App() {
               </button>
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="text-teal-400 hover:text-teal-300 transition-colors cursor-pointer"
+                className="text-blue-200 transition-colors hover:text-white"
               >
                 View Cart ({totalCartCount})
               </button>
               <button
                 onClick={() => navigateTo('/admin')}
-                className="px-3.5 py-2 rounded-lg bg-teal-800 hover:bg-teal-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer text-xs font-bold"
+                className="flex items-center gap-1.5 rounded-lg bg-white/15 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-white/25"
               >
-                <Shield className="w-3.5 h-3.5 text-teal-300" />
+                <Shield className="h-3.5 w-3.5 text-blue-200" />
                 <span>Staff CRM &amp; Admin (/admin)</span>
               </button>
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 gap-2">
+          <div className="flex flex-col items-center justify-between gap-2 border-t border-white/15 pt-6 text-[11px] text-blue-100/70 sm:flex-row">
             <span>© 2026 AuraCare Health Store. All rights reserved.</span>
-            <span>Hostinger Synchronized Dispatch · Clinical Verification</span>
+            <span>Preview storefront · payments and mail are not connected</span>
           </div>
         </div>
       </footer>
@@ -470,15 +457,13 @@ export default function App() {
         cartItems={cartItems}
         onUpdateQuantity={handleUpdateCartQuantity}
         onRemoveItem={handleRemoveCartItem}
-        onClearCart={handleClearCart}
-        onOrderPlaced={handleOrderCreated}
         onOpenCheckout={() => {
           setIsCartOpen(false);
           setIsCheckoutOpen(true);
         }}
       />
 
-      {/* Direct WooCommerce-Style Checkout Modal (Card, PayPal, Crypto) */}
+      {/* Checkout order capture */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}

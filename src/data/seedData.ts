@@ -1,4 +1,9 @@
 import { Patient, HostingerConfig, EmailLog, ReminderRule, OnlineOrder, CatalogItem } from '../types/pharmacy';
+import sleepWellnessImage from '../assets/images/sleep_wellness_remedy_1793623730003.jpg';
+import vitaminsImage from '../assets/images/wellness_vitamins_display_1793621456102.jpg';
+import metabolicCareImage from '../assets/images/weight_metabolic_care_1793623731156.jpg';
+import chronicCareImage from '../assets/images/medication_chronic_care_1793621456444.jpg';
+import pharmacyHeroImage from '../assets/images/hero_pharmacy_care_1793621455330.jpg';
 
 export const INITIAL_PATIENTS: Patient[] = [
   {
@@ -298,9 +303,9 @@ export const INITIAL_HOSTINGER_CONFIG: HostingerConfig = {
   imapHost: 'imap.hostinger.com',
   imapPort: 993,
   useSsl: true,
-  isConnected: true,
-  autoSyncDatabase: true,
-  lastSyncedAt: '2026-11-02 04:20 AM',
+  isConnected: false,
+  autoSyncDatabase: false,
+  lastSyncedAt: 'Not connected',
   displayName: 'AuraCare Clinical Care & Orders',
 };
 
@@ -334,44 +339,7 @@ export const INITIAL_REMINDER_RULES: ReminderRule[] = [
   },
 ];
 
-export const INITIAL_EMAIL_LOGS: EmailLog[] = [
-  {
-    id: 'log-1',
-    recipientEmail: 'eleanor.vance@wellnessmail.com',
-    recipientName: 'Eleanor Vance',
-    subject: 'Upcoming Order Renewal: Metformin Hydrochloride ER',
-    body: 'Dear Eleanor Vance, your renewal for Metformin Hydrochloride ER is scheduled on 2026-11-06. Click to confirm delivery.',
-    status: 'Delivered',
-    sentAt: '2026-10-30 08:14 AM',
-    emailType: 'automated_renewal',
-    healthCategory: 'Diabetes Care',
-    rxNumber: 'RX-884219',
-  },
-  {
-    id: 'log-2',
-    recipientEmail: 'j.crestwood@lakeviewtech.io',
-    recipientName: 'Julian Crestwood',
-    subject: 'Heart Health Review & Refill Advance Notice',
-    body: 'Dear Julian Crestwood, your Lisinopril ACE Inhibitor renewal is approaching on 2026-11-04.',
-    status: 'Delivered',
-    sentAt: '2026-10-28 09:30 AM',
-    emailType: 'automated_renewal',
-    healthCategory: 'Cardiology / Hypertension',
-    rxNumber: 'RX-991204',
-  },
-  {
-    id: 'log-3',
-    recipientEmail: 'arthur.pendelton@midwestsenior.net',
-    recipientName: 'Arthur Pendelton',
-    subject: 'Upcoming Order Renewal: Deep Sleep Formula',
-    body: 'Dear Arthur Pendelton, your medication refill is scheduled for 2026-11-03.',
-    status: 'Delivered',
-    sentAt: '2026-10-31 10:00 AM',
-    emailType: 'automated_renewal',
-    healthCategory: 'Sleep',
-    rxNumber: 'RX-441092',
-  },
-];
+export const INITIAL_EMAIL_LOGS: EmailLog[] = [];
 
 export const INITIAL_ORDERS: OnlineOrder[] = [
   {
@@ -389,7 +357,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Sleep',
         quantity: 2,
         unitPrice: 24.0,
-        image: '/src/assets/images/sleep_wellness_remedy_1793623730003.jpg',
+        image: sleepWellnessImage,
         dosage: '60 Herbal Capsules / 250mg',
         rxRequired: false,
       },
@@ -399,7 +367,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Daily Wellness',
         quantity: 1,
         unitPrice: 24.0,
-        image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+        image: vitaminsImage,
         dosage: '60 Liquid Softgels',
         rxRequired: false,
       },
@@ -440,7 +408,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Weight Loss',
         quantity: 1,
         unitPrice: 149.0,
-        image: '/src/assets/images/weight_metabolic_care_1793623731156.jpg',
+        image: metabolicCareImage,
         dosage: '0.5 mg Subcutaneous Pen Injector',
         rxRequired: true,
       },
@@ -450,7 +418,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Weight Loss',
         quantity: 1,
         unitPrice: 38.0,
-        image: '/src/assets/images/weight_metabolic_care_1793623731156.jpg',
+        image: metabolicCareImage,
         dosage: '60 Vegan Capsules',
         rxRequired: false,
       },
@@ -487,7 +455,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Sleep',
         quantity: 2,
         unitPrice: 32.0,
-        image: '/src/assets/images/sleep_wellness_remedy_1793623730003.jpg',
+        image: sleepWellnessImage,
         dosage: '500 mg / 90 Vegetarian Capsules',
         rxRequired: false,
       },
@@ -497,7 +465,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Energy & Focus',
         quantity: 1,
         unitPrice: 39.0,
-        image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+        image: vitaminsImage,
         dosage: '60 Softgels / 200mg',
         rxRequired: false,
       },
@@ -544,7 +512,7 @@ export const INITIAL_ORDERS: OnlineOrder[] = [
         category: 'Sleep',
         quantity: 1,
         unitPrice: 24.0,
-        image: '/src/assets/images/sleep_wellness_remedy_1793623730003.jpg',
+        image: sleepWellnessImage,
         dosage: '60 Herbal Capsules / 250mg',
         rxRequired: false,
       },
@@ -582,7 +550,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 180,
     minStockThreshold: 25,
     sku: 'SLP-CALM-060',
-    image: '/src/assets/images/sleep_wellness_remedy_1793623730003.jpg',
+    image: sleepWellnessImage,
     lastRestocked: '2026-10-30',
   },
   {
@@ -599,7 +567,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 95,
     minStockThreshold: 20,
     sku: 'SLP-MAG-500',
-    image: '/src/assets/images/sleep_wellness_remedy_1793623730003.jpg',
+    image: sleepWellnessImage,
     lastRestocked: '2026-10-25',
   },
   {
@@ -616,7 +584,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 64,
     minStockThreshold: 15,
     sku: 'SLP-VAL-030M',
-    image: '/src/assets/images/sleep_wellness_remedy_1793623730003.jpg',
+    image: sleepWellnessImage,
     lastRestocked: '2026-10-28',
   },
 
@@ -635,7 +603,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 140,
     minStockThreshold: 30,
     sku: 'WGT-MET-060V',
-    image: '/src/assets/images/weight_metabolic_care_1793623731156.jpg',
+    image: metabolicCareImage,
     lastRestocked: '2026-10-29',
   },
   {
@@ -653,7 +621,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     minStockThreshold: 10,
     sku: 'WGT-GLP-005',
     ndcCode: 'NDC 0169-4132-12',
-    image: '/src/assets/images/weight_metabolic_care_1793623731156.jpg',
+    image: metabolicCareImage,
     lastRestocked: '2026-10-20',
   },
   {
@@ -670,7 +638,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 88,
     minStockThreshold: 15,
     sku: 'WGT-GLC-180',
-    image: '/src/assets/images/weight_metabolic_care_1793623731156.jpg',
+    image: metabolicCareImage,
     lastRestocked: '2026-10-18',
   },
 
@@ -689,7 +657,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 110,
     minStockThreshold: 20,
     sku: 'NRG-BCOMP-60',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-15',
   },
   {
@@ -706,7 +674,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 72,
     minStockThreshold: 15,
     sku: 'NRG-UBQ-200',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-22',
   },
 
@@ -726,7 +694,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     minStockThreshold: 25,
     sku: 'HRT-LIS-020',
     ndcCode: 'NDC 68180-514-01',
-    image: '/src/assets/images/medication_chronic_care_1793621456444.jpg',
+    image: chronicCareImage,
     lastRestocked: '2026-10-22',
   },
   {
@@ -743,7 +711,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 68,
     minStockThreshold: 20,
     sku: 'HRT-OMG-1200',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-15',
   },
 
@@ -762,7 +730,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 82,
     minStockThreshold: 20,
     sku: 'DIG-PRO-050B',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-24',
   },
   {
@@ -780,7 +748,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     minStockThreshold: 15,
     sku: 'DIG-OMP-020',
     ndcCode: 'NDC 68382-012-42',
-    image: '/src/assets/images/medication_chronic_care_1793621456444.jpg',
+    image: chronicCareImage,
     lastRestocked: '2026-10-19',
   },
 
@@ -799,7 +767,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 115,
     minStockThreshold: 25,
     sku: 'WEL-LPC-1000',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-26',
   },
   {
@@ -816,7 +784,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 77,
     minStockThreshold: 15,
     sku: 'WEL-D3K2-030',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-21',
   },
 
@@ -835,7 +803,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 65,
     minStockThreshold: 15,
     sku: 'REC-CUR-500',
-    image: '/src/assets/images/wellness_vitamins_display_1793621456102.jpg',
+    image: vitaminsImage,
     lastRestocked: '2026-10-17',
   },
   {
@@ -852,7 +820,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     stockCount: 48,
     minStockThreshold: 12,
     sku: 'REC-ARN-100',
-    image: '/src/assets/images/hero_pharmacy_care_1793621455330.jpg',
+    image: pharmacyHeroImage,
     lastRestocked: '2026-10-23',
   },
 ];

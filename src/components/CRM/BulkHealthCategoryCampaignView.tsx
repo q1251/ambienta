@@ -109,8 +109,8 @@ export const BulkHealthCategoryCampaignView: React.FC<BulkHealthCategoryCampaign
           recipientName: `${p.firstName} ${p.lastName}`,
           subject: interpolateEmailTemplate(subject, vars),
           body: interpolateEmailTemplate(body, vars),
-          status: 'Delivered',
-          sentAt: '2026-11-02 04:30 AM',
+          status: 'Draft',
+          sentAt: new Date().toLocaleString(),
           emailType: 'bulk_campaign',
           healthCategory: p.healthCategory,
           rxNumber: primaryRx?.rxNumber,
@@ -119,7 +119,7 @@ export const BulkHealthCategoryCampaignView: React.FC<BulkHealthCategoryCampaign
 
       onDispatchBulkCampaign(logs);
       setCampaignResult(
-        `Bulk Campaign Dispatched: Successfully transmitted personalized emails to ${matchedPatients.length} patients in the "${selectedCategory}" segment via Hostinger SMTP (${hostingerConfig.emailAccount}).`
+        `Created ${matchedPatients.length} personalized drafts for the "${selectedCategory}" segment. Connect a secure mail backend to send them.`
       );
       setIsSending(false);
     }, 700);
@@ -138,7 +138,7 @@ export const BulkHealthCategoryCampaignView: React.FC<BulkHealthCategoryCampaign
             Bulk Email Campaigns by Health Category
           </h3>
           <p className="text-xs text-slate-500">
-            Send condition-specific educational advisories and bulk refill notices directly through Hostinger
+            Prepare condition-specific email drafts for review before a mail backend is connected
           </p>
         </div>
 
@@ -226,7 +226,7 @@ export const BulkHealthCategoryCampaignView: React.FC<BulkHealthCategoryCampaign
 
             <div className="pt-2 flex items-center justify-between border-t border-slate-100">
               <span className="text-[11px] text-slate-500 font-mono">
-                Hostinger Queue Gateway: {hostingerConfig.smtpHost}
+                Mailbox: {hostingerConfig.emailAccount} · server integration not configured
               </span>
 
               <button
@@ -237,8 +237,8 @@ export const BulkHealthCategoryCampaignView: React.FC<BulkHealthCategoryCampaign
                 <Send className="w-3.5 h-3.5" />
                 <span>
                   {isSending
-                    ? 'Transmitting via Hostinger...'
-                    : `Send to ${matchedPatients.length} Patients`}
+                    ? 'Preparing drafts...'
+                    : `Create ${matchedPatients.length} drafts`}
                 </span>
               </button>
             </div>

@@ -75,34 +75,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onClearCart,
 }) => {
   // Customer details
-  const [patientName, setPatientName] = useState('Eleanor Vance');
-  const [email, setEmail] = useState('eleanor.vance@wellnessmail.com');
-  const [phone, setPhone] = useState('+1 (555) 349-1102');
-  const [streetAddress, setStreetAddress] = useState('428 Elmwood Terrace, Suite 3B');
-  const [city, setCity] = useState('Springfield');
-  const [state, setState] = useState('IL');
-  const [zip, setZip] = useState('62704');
-  const [orderNotes, setOrderNotes] = useState('Please leave package at front door with discreet label.');
+  const [patientName, setPatientName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [streetAddress, setStreetAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zip, setZip] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
 
   // Delivery method
   const [deliveryMethod, setDeliveryMethod] = useState<'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail'>('Express Courier');
 
   // Coupon code
   const [couponInput, setCouponInput] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; freeShipping?: boolean } | null>({
-    code: 'AURA10',
-    discountPercent: 10,
-  });
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountPercent: number; freeShipping?: boolean } | null>(null);
   const [couponError, setCouponError] = useState('');
 
   // Payment tab
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Credit / Debit Card');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash on Delivery / Pickup');
+  const [paymentError, setPaymentError] = useState('');
 
   // Card form state
-  const [cardNumber, setCardNumber] = useState('4242 •••• •••• 4242');
-  const [cardHolder, setCardHolder] = useState('Eleanor Vance');
-  const [cardExpiry, setCardExpiry] = useState('08/28');
-  const [cardCvv, setCardCvv] = useState('883');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
 
   // Crypto state
   const [selectedCrypto, setSelectedCrypto] = useState<'USDC' | 'BTC' | 'ETH' | 'SOL'>('USDC');
@@ -117,10 +115,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Pricing calculations
   const subtotal = cartItems.reduce((acc, ci) => acc + ci.item.price * ci.quantity, 0);
-  const rawShipping = deliveryMethod === 'Express Courier' ? 12.0 : 0.0;
+  const rawShipping = deliveryMethod === 'Express Courier' && subtotal < 35 ? 12.0 : 0.0;
   const shippingFee = appliedCoupon?.freeShipping ? 0.0 : rawShipping;
   const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0.0;
   const totalAmount = Math.max(0, subtotal - discountAmount + shippingFee);
+
+  const handleClose = () => {
+    setCompletedOrder(null);
+    setPaymentError('');
+    onClose();
+  };
 
   // Apply Coupon
   const handleApplyCoupon = (e: React.FormEvent) => {
@@ -153,10 +157,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const handleProcessCheckout = (e: React.FormEvent) => {
     e.preventDefault();
     if (cartItems.length === 0) return;
+    if (paymentMethod !== 'Cash on Delivery / Pickup') {
+      setPaymentError('This payment method is not connected yet. No payment has been processed.');
+      return;
+    }
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       const orderNum = `ORD-${Date.now().toString().slice(-6)}`;
       const fullDeliveryAddress =
         deliveryMethod === 'Pharmacy Pickup'
@@ -180,20 +188,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         rxRequired: ci.item.rxRequired,
       }));
 
-      const activeCrypto = CRYPTO_CONFIGS[selectedCrypto];
-      const cryptoAmountStr = (totalAmount * activeCrypto.ratePerUsd).toFixed(
-        selectedCrypto === 'BTC' ? 6 : selectedCrypto === 'ETH' ? 4 : 2
-      );
-
-      const generatedTx =
-        paymentMethod === 'Credit / Debit Card'
-          ? `ch_aura_${Math.random().toString(36).substring(2, 10)}`
-          : paymentMethod === 'PayPal'
-          ? `PAYPAL-${Math.random().toString(36).substring(2, 10).toUpperCase()}`
-          : paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
-          ? cryptoTxHash || `0x${Math.random().toString(16).substring(2, 34)}`
-          : `POS-DESK-${Math.floor(1000 + Math.random() * 9000)}`;
-
       const newOrder: OnlineOrder = {
         id: `ord-${Date.now()}`,
         orderNumber: orderNum,
@@ -211,28 +205,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryMethod,
         deliveryAddress: fullDeliveryAddress,
         paymentMethod,
-        paymentStatus: paymentMethod === 'Cash on Delivery / Pickup' ? 'Pending Verification' : 'Paid',
-        transactionId: generatedTx,
-        cardLast4: paymentMethod === 'Credit / Debit Card' ? cardNumber.slice(-4) : undefined,
-        cryptoDetails:
-          paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
-            ? {
-                currency: selectedCrypto,
-                amountCrypto: `${cryptoAmountStr} ${selectedCrypto}`,
-                walletAddress: activeCrypto.address,
-                txHash: generatedTx,
-                network: activeCrypto.network,
-              }
-            : undefined,
+        paymentStatus: 'Pending Verification',
         status: 'Submitted',
         placedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-        carrier: deliveryMethod === 'Express Courier' ? 'CareCourier Express' : 'USPS Discreet Parcel',
-        trackingNumber: `TRK-${Math.floor(100000 + Math.random() * 900000)}`,
         notes: orderNotes,
         internalNotes: [
-          `Payment processed via ${paymentMethod} (${generatedTx})`,
-          'Direct order recorded into CRM dispensary queue',
-          'Hostinger notification queued for patient confirmation',
+          `Payment due via ${paymentMethod}`,
+          'Order added to the local admin queue; connect a production backend for durable storage and notifications.',
         ],
       };
 
@@ -240,7 +219,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       onClearCart();
       setCompletedOrder(newOrder);
       setIsSubmitting(false);
-    }, 800);
+    } catch (error) {
+      setIsSubmitting(false);
+      setPaymentError(error instanceof Error ? error.message : 'Unable to place your order.');
+    }
   };
 
   return (
@@ -254,19 +236,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base text-white flex items-center gap-2">
-                <span>Direct Health Checkout</span>
-                <span className="text-[11px] font-mono bg-teal-900/80 text-teal-300 border border-teal-700/60 px-2 py-0.5 rounded">
-                  256-bit SSL Encrypted
+                <span>Wellness Store Checkout</span>
+                <span className="rounded border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-slate-200">
+                  Order checkout
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Dispensary direct fulfillment · Card · PayPal · Cryptocurrency
+                Place an order for admin review
               </p>
             </div>
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
@@ -282,11 +264,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-                Order Confirmed &amp; Dispatched to CRM
+                Order received · Payment due on delivery or pickup
               </span>
               <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been logged into our clinical dispensary fulfillment queue and synchronized with our Hostinger notification server.
+                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been added to the admin order queue. No payment or email has been processed.
               </p>
             </div>
 
@@ -327,8 +309,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span className="text-slate-500 block truncate">{completedOrder.deliveryAddress}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Transaction Reference:</span>
-                  <span className="font-mono text-teal-800 break-all">{completedOrder.transactionId}</span>
+                  <span className="text-slate-500 block">Payment status:</span>
+                  <span className="font-semibold text-amber-800">{completedOrder.paymentStatus}</span>
+                  {completedOrder.transactionId && (
+                    <span className="font-mono text-teal-800 break-all">{completedOrder.transactionId}</span>
+                  )}
                   {completedOrder.trackingNumber && (
                     <span className="text-slate-500 block">
                       Tracking ID: <span className="font-mono text-slate-700">{completedOrder.trackingNumber}</span>
@@ -356,7 +341,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-bold text-slate-900 pt-2 border-t border-slate-200">
-                  <span>Total Paid:</span>
+                  <span>Total due:</span>
                   <span className="text-base font-mono text-teal-900">${completedOrder.totalAmount.toFixed(2)}</span>
                 </div>
               </div>
@@ -372,10 +357,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <span>Print Packing Slip</span>
               </button>
               <button
-                onClick={() => {
-                  setCompletedOrder(null);
-                  onClose();
-                }}
+                onClick={handleClose}
                 className="px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors"
               >
                 Return to Pharmacy Store
@@ -573,41 +555,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('Credit / Debit Card')}
-                    className={`py-2 px-2.5 rounded-lg border font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      paymentMethod === 'Credit / Debit Card'
-                        ? 'border-teal-700 bg-teal-800 text-white shadow-xs'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
+                    disabled
+                    title="Connect a secure card processor to enable card checkout"
+                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 font-semibold text-slate-400"
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Card</span>
+                    <span>Card · Setup</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('PayPal')}
-                    className={`py-2 px-2.5 rounded-lg border font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      paymentMethod === 'PayPal'
-                        ? 'border-teal-700 bg-teal-800 text-white shadow-xs'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
+                    disabled
+                    title="Connect PayPal to enable PayPal checkout"
+                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 font-semibold text-slate-400"
                   >
-                    <span className="font-bold italic text-sky-400">P</span>
-                    <span>PayPal</span>
+                    <span className="font-bold italic">P</span>
+                    <span>PayPal · Setup</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('Cryptocurrency (USDC / BTC / ETH / SOL)')}
-                    className={`py-2 px-2.5 rounded-lg border font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
-                        ? 'border-teal-700 bg-teal-800 text-white shadow-xs'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    }`}
+                    disabled
+                    title="Connect a crypto payment provider to enable cryptocurrency checkout"
+                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 font-semibold text-slate-400"
                   >
-                    <QrCode className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Crypto</span>
+                    <QrCode className="h-3.5 w-3.5" />
+                    <span>Crypto · Setup</span>
                   </button>
 
                   <button
@@ -620,9 +593,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     }`}
                   >
                     <Building className="w-3.5 h-3.5" />
-                    <span>On Pickup</span>
+                    <span>Pay on delivery/pickup</span>
                   </button>
                 </div>
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+                  Card, PayPal, and cryptocurrency payments are not connected in this build. They are disabled until secure providers are configured; this checkout does not collect card credentials or claim a payment was made.
+                </p>
+                {paymentError && <p role="alert" className="text-xs font-medium text-rose-700">{paymentError}</p>}
 
                 {/* Card Payment Panel */}
                 {paymentMethod === 'Credit / Debit Card' && (
@@ -792,7 +769,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-950 space-y-2">
                     <span className="font-bold block">Pay in Person at Counter or Upon Delivery</span>
                     <p className="text-[11px] text-amber-800 leading-relaxed">
-                      Your order will be staged and packaged immediately by our team. Pay using credit card, cash, or FSA/HSA cards directly at our pickup counter or to the courier.
+                      Your order will be added to the admin review queue. Payment and fulfillment will be confirmed by the team.
                     </p>
                   </div>
                 )}
@@ -900,8 +877,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </span>
                   </div>
                   <div className="flex justify-between text-slate-500 text-[11px]">
-                    <span>Sales Tax (Dispensary Exemption):</span>
-                    <span className="font-mono">$0.00</span>
+                    <span>Sales tax:</span>
+                    <span className="font-mono">Not calculated in preview</span>
                   </div>
                   <div className="border-t border-slate-300 pt-2 flex justify-between items-baseline text-slate-900">
                     <span className="font-bold text-sm">Grand Total Due:</span>
@@ -930,12 +907,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="flex items-center justify-center gap-4 text-[11px] text-slate-500">
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Dispensary Verified</span>
+                    <span>Admin review required</span>
                   </span>
                   <span>·</span>
                   <span className="flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Direct Hostinger Sync</span>
+                    <span>Order added to this session</span>
                   </span>
                 </div>
               </div>

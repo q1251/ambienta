@@ -155,7 +155,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     setNewInternalNote('');
   };
 
-  // Send Hostinger Tracking Email
+  // Save a tracking email draft until a mail provider is connected.
   const handleSendHostingerEmail = () => {
     if (!selectedOrder) return;
     const emailLog: EmailLog = {
@@ -164,7 +164,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       recipientName: selectedOrder.patientName,
       subject: `Order Update #${selectedOrder.orderNumber}: Dispensed & Shipped`,
       body: `Hello ${selectedOrder.patientName},\n\nYour order (${selectedOrder.orderNumber}) containing ${selectedOrder.medicationName} has been processed by our dispensary team.\nCarrier: ${carrierInput || selectedOrder.carrier || 'CareCourier'}\nTracking Number: ${trackingInput || selectedOrder.trackingNumber || 'Available upon pickup'}\n\nWarm regards,\nAuraCare Dispensary Team`,
-      status: 'Delivered',
+      status: 'Draft',
       sentAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
       emailType: 'order_confirmation',
     };
@@ -172,7 +172,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     if (onSendEmailNotification) {
       onSendEmailNotification(emailLog);
     }
-    setEmailSentAlert(`Tracking update email dispatched to ${selectedOrder.email} via Hostinger sync!`);
+    setEmailSentAlert(`Tracking email draft saved for ${selectedOrder.email}. No email was sent.`);
     setTimeout(() => setEmailSentAlert(null), 4000);
   };
 
@@ -349,7 +349,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               )}
             </div>
             <p className="text-xs text-slate-500">
-              Real-time synchronization with customer checkout, Hostinger dispatch, and clinical verification
+              Orders from this browser session, with local fulfillment and payment review
             </p>
           </div>
 
@@ -743,7 +743,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3">
                 <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
                   <Truck className="w-4 h-4 text-teal-700" />
-                  <span>Fulfillment &amp; Hostinger Notification</span>
+                  <span>Fulfillment &amp; Email Draft</span>
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -787,7 +787,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     className="px-3 py-1.5 bg-white hover:bg-slate-100 text-teal-800 border border-teal-300 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <Send className="w-3 h-3" />
-                    <span>Send Hostinger Dispatch Email</span>
+                    <span>Save Tracking Email Draft</span>
                   </button>
                 </div>
               </div>

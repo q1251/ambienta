@@ -416,7 +416,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                   <span className="font-semibold text-slate-900">{patient.firstName} {patient.lastName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">Email (Hostinger Synced)</span>
+                  <span className="text-slate-400 block">Email address</span>
                   <span className="font-mono text-slate-900">{patient.email}</span>
                 </div>
                 <div>

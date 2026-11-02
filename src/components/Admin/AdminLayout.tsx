@@ -124,10 +124,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <div className="flex items-center gap-3">
               {/* Hostinger Status Indicator */}
               <div className="hidden md:flex items-center gap-2 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-md border border-slate-700">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className={`h-2 w-2 rounded-full ${hostingerConfig.isConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
                 <span className="font-mono">{hostingerConfig.emailAccount}</span>
                 <span className="text-slate-500">·</span>
-                <span className="text-emerald-400 font-medium">Hostinger Synced</span>
+                <span className={`${hostingerConfig.isConnected ? 'text-emerald-400' : 'text-amber-300'} font-medium`}>
+                  {hostingerConfig.isConnected ? 'Mailbox connected' : 'Mailbox not connected'}
+                </span>
               </div>
 
               {/* Back to Public Site */}
@@ -142,6 +144,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           </div>
         </div>
       </header>
+
+      <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-950">
+        Preview mode: sample records are stored in browser memory. Do not enter real patient data until secure server storage and integrations are configured.
+      </div>
 
       {/* Admin Subheader with Tabs */}
       <nav className="bg-white border-b border-slate-200 sticky top-16 z-30">

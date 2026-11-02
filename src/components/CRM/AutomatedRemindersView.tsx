@@ -62,8 +62,8 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
           recipientName: `${patient.firstName} ${patient.lastName}`,
           subject,
           body,
-          status: 'Delivered',
-          sentAt: '2026-11-02 04:20 AM',
+          status: 'Draft',
+          sentAt: new Date().toLocaleString(),
           emailType: 'automated_renewal',
           healthCategory: patient.healthCategory,
           rxNumber: record.rxNumber,
@@ -72,7 +72,7 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
 
       onDispatchReminderEmails(generatedLogs);
       setLastScanResult(
-        `Automated Renewal Scan executed: Dispatched ${generatedLogs.length} renewal reminder emails through Hostinger SMTP.`
+        `Created ${generatedLogs.length} renewal reminder drafts. Connect a secure mail backend to send them.`
       );
       setIsScanning(false);
     }, 600);
@@ -104,7 +104,7 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
           className="px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-md transition-colors flex items-center gap-2 shadow-xs shrink-0"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
-          <span>{isScanning ? 'Scanning Schedules...' : 'Run Automated Scan & Dispatch'}</span>
+          <span>{isScanning ? 'Scanning schedules...' : 'Scan & create drafts'}</span>
         </button>
       </div>
 
@@ -132,7 +132,7 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
               Trigger Automation Rules ({reminderRules.length})
             </h4>
             <p className="text-xs text-slate-500">
-              Emails are automatically formatted and sent via Hostinger webmail credentials.
+              Reminder drafts can be generated here; sending requires the secure mail backend.
             </p>
 
             <div className="space-y-3 pt-2">
@@ -247,7 +247,7 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
                   <div className="flex items-center justify-between text-[11px] text-slate-500">
                     <span className="font-mono">{log.recipientEmail}</span>
                     <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.2 rounded-sm border border-emerald-200">
-                      Hostinger Delivery {log.status}
+                      Email status: {log.status}
                     </span>
                   </div>
                 </div>

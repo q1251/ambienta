@@ -51,21 +51,21 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
       case 'Heart & Circulation':
         return <Heart className="w-3.5 h-3.5 text-rose-500" />;
       default:
-        return <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />;
+        return <ShieldCheck className="w-3.5 h-3.5 text-blue-700" />;
     }
   };
 
   return (
-    <section id="store-catalog" className="py-12 bg-slate-50 min-h-screen">
+    <section id="store-catalog" className="min-h-screen bg-[#f4f8fc] py-16 sm:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header & Search */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-teal-800 uppercase tracking-wider mb-1">
-              <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-              <span>AuraCare Wellness Dispensary Catalog</span>
+            <div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#174c80]">
+              <Sparkles className="h-3.5 w-3.5 text-blue-700" />
+              <span>Small rituals. Better days.</span>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            <h2 className="text-3xl font-semibold tracking-[-0.05em] text-slate-900 sm:text-4xl">
               {selectedCategory === 'All Products'
                 ? 'All Health & Wellness Products'
                 : `${selectedCategory} Formulations`}
@@ -83,7 +83,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search products, ingredients..."
-              className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700 shadow-2xs"
+              className="w-full rounded-2xl border border-blue-100 bg-white py-3 pl-10 pr-3 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700/20"
             />
           </div>
         </div>
@@ -103,15 +103,15 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                 onClick={() => onSelectCategory(cat)}
                 className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
                   isSelected
-                    ? 'bg-teal-800 text-white shadow-sm ring-2 ring-teal-800/20'
-                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                    ? 'bg-[#174c80] text-white shadow-sm'
+                    : 'border border-blue-100 bg-white text-slate-700 hover:border-blue-300 hover:bg-[#f8fbff]'
                 }`}
               >
                 {cat !== 'All Products' && getCategoryIcon(cat)}
                 <span>{cat}</span>
                 <span
                   className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                    isSelected ? 'bg-teal-900/60 text-teal-200' : 'bg-slate-100 text-slate-500'
+                    isSelected ? 'bg-white/15 text-blue-100' : 'bg-[#edf4fb] text-slate-500'
                   }`}
                 >
                   {count}
@@ -122,7 +122,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredItems.map((item) => {
             const isOutOfStock = !item.inStock || item.stockCount <= 0;
             const isLowStock = item.stockCount <= item.minStockThreshold && !isOutOfStock;
@@ -130,20 +130,20 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
             return (
               <div
                 key={item.id}
-                className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between group"
+                className="group flex flex-col justify-between overflow-hidden rounded-[24px] border border-blue-100 bg-white shadow-[0_8px_24px_-18px_rgba(23,76,128,0.2)] transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-[0_24px_50px_-25px_rgba(23,76,128,0.25)]"
               >
                 <div>
                   {/* Product Image */}
-                  <div className="aspect-4/3 w-full bg-slate-100 overflow-hidden border-b border-slate-100 relative">
+                  <div className="relative aspect-[4/3] w-full overflow-hidden border-b border-blue-50 bg-[#edf4fb]">
                     {item.image ? (
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-300"
+                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-teal-50 text-teal-700">
+                      <div className="flex h-full w-full items-center justify-center bg-[#e8f2fb] text-blue-800">
                         {getCategoryIcon(item.category)}
                       </div>
                     )}
@@ -174,7 +174,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                   </div>
 
                   {/* Body Content */}
-                  <div className="p-4 space-y-2.5">
+                  <div className="space-y-3 p-5">
                     {/* Ratings */}
                     <div className="flex items-center gap-1 text-[11px] text-amber-500">
                       <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
@@ -182,15 +182,15 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                       <span className="text-slate-400 text-[10px]">(Verified Buyer Review)</span>
                     </div>
 
-                    <h3 className="text-sm font-bold text-slate-900 leading-snug group-hover:text-teal-800 transition-colors line-clamp-2">
+                    <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 transition-colors group-hover:text-[#174c80]">
                       {item.name}
                     </h3>
 
-                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                    <p className="line-clamp-2 text-xs leading-relaxed text-slate-500">
                       {item.description}
                     </p>
 
-                    <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500 border-t border-slate-100">
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-slate-500">
                       <span className="font-medium text-slate-600 truncate max-w-[150px]">
                         {item.dosage}
                       </span>
@@ -209,12 +209,12 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                 </div>
 
                 {/* Card Footer: Price & Add to Cart */}
-                <div className="p-4 pt-2 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <div className="flex items-center justify-between border-t border-blue-50 bg-[#f8fbff] px-5 py-4">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider block">
                       Price
                     </span>
-                    <span className="text-base font-extrabold font-mono text-slate-900">
+                    <span className="font-mono text-lg font-bold tracking-tight text-slate-900">
                       ${item.price.toFixed(2)}
                     </span>
                   </div>
@@ -222,7 +222,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                   <button
                     disabled={isOutOfStock}
                     onClick={() => onSelectItem(item)}
-                    className="px-3 py-2 text-xs font-semibold rounded-lg bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-97"
+                    className="flex items-center gap-1.5 rounded-full bg-[#174c80] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#123b68] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
                     <span>{isOutOfStock ? 'Sold Out' : 'Add to Cart'}</span>
@@ -246,7 +246,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                 setSearchQuery('');
                 onSelectCategory('All Products');
               }}
-              className="mt-4 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold cursor-pointer"
+              className="mt-4 rounded-lg bg-[#174c80] px-4 py-2 text-xs font-semibold text-white hover:bg-[#123b68]"
             >
               Reset Filters
             </button>

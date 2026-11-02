@@ -137,11 +137,14 @@ export interface EmailLog {
   recipientName: string;
   subject: string;
   body: string;
-  status: 'Sent' | 'Delivered' | 'Queued' | 'Failed';
+  status: 'Draft' | 'Queued' | 'Sent' | 'Delivered' | 'Opened' | 'Replied' | 'Failed';
   sentAt: string;
   emailType: 'automated_renewal' | 'direct_message' | 'bulk_campaign' | 'order_confirmation';
   healthCategory?: HealthCategory;
   rxNumber?: string;
+  openedAt?: string;
+  repliedAt?: string;
+  replyBody?: string;
 }
 
 export interface ReminderRule {

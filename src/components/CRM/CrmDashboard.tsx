@@ -67,6 +67,12 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
     );
   }, 0);
   const totalNotesCount = patients.reduce((acc, p) => acc + p.notes.length, 0);
+  const deliveredEmailCount = emailLogs.filter((log) =>
+    ['Delivered', 'Opened', 'Replied'].includes(log.status)
+  ).length;
+  const openedEmailCount = emailLogs.filter((log) =>
+    ['Opened', 'Replied'].includes(log.status) || Boolean(log.openedAt)
+  ).length;
 
   // Filtered patients
   const filteredPatients = patients.filter((p) => {
@@ -148,11 +154,11 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
 
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
-            <span>Hostinger Synced Emails</span>
+            <span>Email delivery / opens</span>
             <Mail className="w-4 h-4 text-teal-600" />
           </div>
-          <div className="text-2xl font-bold font-mono text-teal-800">{emailLogs.length}</div>
-          <p className="text-[11px] text-emerald-700 mt-1">100% database synchronized</p>
+          <div className="text-2xl font-bold font-mono text-teal-800">{deliveredEmailCount} / {openedEmailCount}</div>
+          <p className="text-[11px] text-slate-400 mt-1">Delivered / opened · provider not connected</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
@@ -212,7 +218,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           }`}
         >
           <Server className="w-3.5 h-3.5" />
-          <span>Hostinger Synced Mailbox</span>
+          <span>Email Workspace</span>
         </button>
 
         <button
