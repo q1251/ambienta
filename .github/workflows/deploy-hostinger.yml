@@ -36,6 +36,36 @@ jobs:
       - name: Build site
         run: npm run build
 
+      - name: Inspect Hostinger FTP root
+        env:
+          HOST: ${{ secrets.HOSTINGER_HOST }}
+          USERNAME: ${{ secrets.HOSTINGER_USERNAME }}
+          PASSWORD: ${{ secrets.HOSTINGER_PASSWORD }}
+        run: |
+          python - <<'PY'
+          import os
+          from ftplib import FTP_TLS, all_errors
+
+          ftp = FTP_TLS(timeout=20)
+          ftp.connect(os.environ["HOST"], 21)
+          ftp.login(os.environ["USERNAME"], os.environ["PASSWORD"])
+          print(f"FTP login directory: {ftp.pwd()}")
+
+          for path in (".", "public_html", "domains", "domains/ambienta.io/public_html"):
+              try:
+                  ftp.cwd("/")
+                  ftp.cwd(path)
+                  print(f"Path available: {path} (current: {ftp.pwd()})")
+                  try:
+                      print(f"index.html present at {path}: {ftp.size('index.html') is not None}")
+                  except all_errors:
+                      print(f"index.html present at {path}: False")
+              except all_errors:
+                  print(f"Path unavailable: {path}")
+
+          ftp.quit()
+          PY
+
       - name: Deploy to Hostinger over FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
