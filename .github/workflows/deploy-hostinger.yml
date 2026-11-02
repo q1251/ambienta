@@ -36,53 +36,6 @@ jobs:
       - name: Build site
         run: npm run build
 
-      - name: Inspect Hostinger FTP root
-        env:
-          HOST: ${{ secrets.HOSTINGER_HOST }}
-          USERNAME: ${{ secrets.HOSTINGER_USERNAME }}
-          PASSWORD: ${{ secrets.HOSTINGER_PASSWORD }}
-        run: |
-          python - <<'PY'
-          import os
-          from ftplib import FTP_TLS, all_errors
-
-          ftp = FTP_TLS(timeout=20)
-          ftp.connect(os.environ["HOST"], 21)
-          ftp.login(os.environ["USERNAME"], os.environ["PASSWORD"])
-          ftp.prot_p()
-          print(f"FTP login directory: {ftp.pwd()}")
-
-          paths = (
-              ".",
-              "public_html",
-              "public_html/public_html",
-              "domains/ambienta.io/public_html",
-              "domains/ambienta.io/public_html/public_html",
-          )
-          expected = {
-              "index.html",
-              "index.php",
-              ".htaccess",
-              "assets",
-              ".ftp-deploy-sync-state.json",
-          }
-          for path in paths:
-              try:
-                  ftp.cwd("/")
-                  ftp.cwd(path)
-                  print(f"Path available: {path} (current: {ftp.pwd()})")
-                  try:
-                      entries = ftp.nlst()
-                      matching = sorted(expected.intersection(name.rsplit("/", 1)[-1] for name in entries))
-                      print(f"Relevant entries at {path}: {matching}")
-                  except all_errors:
-                      print(f"Could not list relevant entries at {path}")
-              except all_errors:
-                  print(f"Path unavailable: {path}")
-
-          ftp.quit()
-          PY
-
       - name: Deploy to Hostinger over FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -90,5 +43,5 @@ jobs:
           username: ${{ secrets.HOSTINGER_USERNAME }}
           password: ${{ secrets.HOSTINGER_PASSWORD }}
           protocol: ftps
-          server-dir: ./
+          server-dir: /domains/ambienta.io/public_html/
           local-dir: ./dist/

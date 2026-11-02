@@ -13,10 +13,9 @@ Before the first run, add these repository Actions secrets under
 | `HOSTINGER_USERNAME` | FTP account username |
 | `HOSTINGER_PASSWORD` | FTP account password |
 
-The FTP account shown in hPanel is already scoped to this site's
-`/public_html` document root, so the workflow uploads to the account root
-(`./`). Use an FTP account scoped to this site. Credentials belong only in
-GitHub Actions secrets, not in this repository.
+The verified document root for `ambienta.io` is
+`/domains/ambienta.io/public_html/`. The workflow uploads there over FTPS.
+Credentials belong only in GitHub Actions secrets, not in this repository.
 
 The deployed `.htaccess` file routes unknown paths to `index.html` so the
 client-side `/admin` route continues to load when refreshed.
