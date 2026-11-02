@@ -13,9 +13,10 @@ Before the first run, add these repository Actions secrets under
 | `HOSTINGER_USERNAME` | FTP account username |
 | `HOSTINGER_PASSWORD` | FTP account password |
 
-The workflow uploads to `public_html/`, the folder shown in hPanel for this
-site. Use an FTP account scoped to this site's document root. Credentials
-belong only in GitHub Actions secrets, not in this repository.
+The FTP account shown in hPanel is already scoped to this site's
+`/public_html` document root, so the workflow uploads to the account root
+(`./`). Use an FTP account scoped to this site. Credentials belong only in
+GitHub Actions secrets, not in this repository.
 
 The deployed `.htaccess` file routes unknown paths to `index.html` so the
 client-side `/admin` route continues to load when refreshed.
