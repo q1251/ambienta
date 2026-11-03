@@ -112,11 +112,34 @@ function data_ensure_schema(PDO $db): void
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             recipient_email VARCHAR(254) NOT NULL,
             subject VARCHAR(998) NOT NULL,
+            body MEDIUMTEXT NOT NULL,
             status VARCHAR(16) NOT NULL DEFAULT 'Queued',
             sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             KEY email_activity_sent_at (sent_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS email_drafts (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            recipient_email VARCHAR(254) NOT NULL DEFAULT '',
+            subject VARCHAR(998) NOT NULL DEFAULT '',
+            body MEDIUMTEXT NOT NULL,
+            deleted_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY email_drafts_folder (deleted_at, updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
+    foreach ([
+        ['email_activity', 'body', 'MEDIUMTEXT NULL'],
+    ] as [$table, $column, $definition]) {
+        $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $columnExists->execute([$databaseName, $table, $column]);
+        if ((int) $columnExists->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+        }
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS products (
             id VARCHAR(64) NOT NULL PRIMARY KEY,
@@ -555,6 +578,43 @@ function data_mail_key(): string
     return $key;
 }
 
+function data_mail_encrypt_content(string $content): string
+{
+    $nonce = random_bytes(12);
+    $tag = '';
+    $ciphertext = openssl_encrypt($content, 'aes-256-gcm', data_mail_key(), OPENSSL_RAW_DATA, $nonce, $tag);
+    if (!is_string($ciphertext) || $tag === '') {
+        error_log('Ambients email content encryption failed.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Email content could not be secured for storage.']);
+    }
+    return 'enc:v1:' . base64_encode($nonce . $tag . $ciphertext);
+}
+
+function data_mail_decrypt_content(?string $content): string
+{
+    if ($content === null || !str_starts_with($content, 'enc:v1:')) {
+        return $content ?? '';
+    }
+    $encoded = base64_decode(substr($content, 7), true);
+    if (!is_string($encoded) || strlen($encoded) < 28) {
+        error_log('Ambients encrypted email content is malformed.');
+        data_respond(503, ['error' => 'mail_content_unavailable', 'message' => 'Saved email content could not be read.']);
+    }
+    $decrypted = openssl_decrypt(
+        substr($encoded, 28),
+        'aes-256-gcm',
+        data_mail_key(),
+        OPENSSL_RAW_DATA,
+        substr($encoded, 0, 12),
+        substr($encoded, 12, 16)
+    );
+    if (!is_string($decrypted)) {
+        error_log('Ambients encrypted email content could not be decrypted.');
+        data_respond(503, ['error' => 'mail_content_unavailable', 'message' => 'Saved email content could not be read.']);
+    }
+    return $decrypted;
+}
+
 function data_mail_settings(): array
 {
     $path = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-settings.json';
@@ -774,6 +834,267 @@ function data_mail_send(array $settings, string $recipient, string $subject, str
         } catch (Throwable $error) {
             error_log('Ambients SMTP session could not be closed cleanly after server acceptance.');
         }
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_imap_quote(string $value): string
+{
+    if (preg_match('/[\r\n\x00]/', $value) === 1) {
+        throw new RuntimeException('imap_invalid_argument');
+    }
+    return '"' . addcslashes($value, "\\\"") . '"';
+}
+
+function data_imap_command($socket, int &$commandNumber, string $command): array
+{
+    $tag = 'A' . str_pad((string) ++$commandNumber, 4, '0', STR_PAD_LEFT);
+    data_smtp_write_all($socket, $tag . ' ' . $command . "\r\n");
+    $lines = [];
+    $literals = [];
+    $complete = false;
+    for ($lineNumber = 0; $lineNumber < 300; $lineNumber++) {
+        $line = fgets($socket, 8192);
+        if ($line === false) {
+            throw new RuntimeException('imap_response_unavailable');
+        }
+        $lines[] = $line;
+        if (preg_match('/\{(\d+)\+?\}\r?\n$/', $line, $matches) === 1) {
+            $literalLength = (int) $matches[1];
+            if ($literalLength > 1048576) {
+                throw new RuntimeException('imap_literal_too_large');
+            }
+            $literal = $literalLength === 0 ? '' : stream_get_contents($socket, $literalLength);
+            if (!is_string($literal) || strlen($literal) !== $literalLength) {
+                throw new RuntimeException('imap_literal_incomplete');
+            }
+            $literals[] = $literal;
+            continue;
+        }
+        if (preg_match('/^' . preg_quote($tag, '/') . ' (OK|NO|BAD)\b/i', $line, $matches) === 1) {
+            if (strtoupper($matches[1]) !== 'OK') {
+                throw new RuntimeException('imap_command_rejected');
+            }
+            $complete = true;
+            break;
+        }
+    }
+    if (!$complete) {
+        throw new RuntimeException('imap_response_incomplete');
+    }
+    return ['lines' => $lines, 'literals' => $literals];
+}
+
+function data_imap_decode_header(string $value): string
+{
+    $decoded = function_exists('iconv_mime_decode')
+        ? iconv_mime_decode($value, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8')
+        : false;
+    return is_string($decoded) ? $decoded : trim($value);
+}
+
+function data_imap_decode_body(string $contentType, string $transferEncoding, string $rawBody): string
+{
+    if (preg_match('/^multipart\/[^;]+;\s*boundary="?([^";]+)"?/i', $contentType, $boundaryMatches) === 1) {
+        $boundary = $boundaryMatches[1];
+        foreach (explode('--' . $boundary, $rawBody) as $part) {
+            if (preg_match('/\r?\n\r?\n/', $part, $separator, PREG_OFFSET_CAPTURE) !== 1) continue;
+            $separatorOffset = $separator[0][1] + strlen($separator[0][0]);
+            $partHeaders = substr($part, 0, $separator[0][1]);
+            if (preg_match('/^Content-Type:\s*text\/plain\b[^\r\n]*/im', $partHeaders, $typeMatch) !== 1) continue;
+            preg_match('/^Content-Transfer-Encoding:\s*([^\r\n]+)/im', $partHeaders, $encodingMatch);
+            return data_imap_decode_body(
+                trim($typeMatch[0]),
+                trim($encodingMatch[1] ?? ''),
+                substr($part, $separatorOffset)
+            );
+        }
+        return '';
+    }
+
+    $body = match (strtolower(trim($transferEncoding))) {
+        'base64' => base64_decode(preg_replace('/\s+/', '', $rawBody) ?? '', true) ?: '',
+        'quoted-printable' => quoted_printable_decode($rawBody),
+        default => $rawBody,
+    };
+    if (str_starts_with(strtolower($contentType), 'text/html')) {
+        $body = html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+    return trim(substr($body, 0, 8000));
+}
+
+function data_imap_connect(array $settings)
+{
+    $context = stream_context_create([
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'peer_name' => 'imap.hostinger.com',
+            'SNI_enabled' => true,
+        ],
+    ]);
+    $socket = @stream_socket_client(
+        'ssl://imap.hostinger.com:993',
+        $errorNumber,
+        $errorMessage,
+        15,
+        STREAM_CLIENT_CONNECT,
+        $context
+    );
+    if ($socket === false) {
+        throw new RuntimeException('imap_connection_failed');
+    }
+    stream_set_timeout($socket, 15);
+    $greeting = fgets($socket, 8192);
+    if ($greeting === false || !str_starts_with($greeting, '* OK')) {
+        fclose($socket);
+        throw new RuntimeException('imap_greeting_failed');
+    }
+
+    $commandNumber = 0;
+    try {
+        data_imap_command(
+            $socket,
+            $commandNumber,
+            'LOGIN ' . data_imap_quote($settings['emailAccount']) . ' ' . data_imap_quote(data_mail_password($settings))
+        );
+    } catch (Throwable $error) {
+        fclose($socket);
+        throw $error;
+    }
+    return [$socket, $commandNumber];
+}
+
+function data_imap_folders(array $settings): array
+{
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        $result = data_imap_command($socket, $commandNumber, 'LIST "" "*"');
+        $folders = [];
+        foreach ($result['lines'] as $line) {
+            if (preg_match('/^\* LIST \([^)]*\) (?:NIL|"(?:\\\\.|[^"])*") ("(?:\\\\.|[^"])*")\r?\n$/', $line, $matches) === 1) {
+                $folder = stripcslashes(substr($matches[1], 1, -1));
+                if ($folder !== '') $folders[] = $folder;
+            }
+        }
+        data_imap_command($socket, $commandNumber, 'LOGOUT');
+        return array_values(array_unique($folders));
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_imap_resolve_folder(array $folders, string $kind): ?string
+{
+    foreach ($folders as $folder) {
+        if (!is_string($folder)) continue;
+        $normalized = strtolower(str_replace(['.', ' ', '_', '-'], '', $folder));
+        if ($kind === 'inbox' && $normalized === 'inbox') return $folder;
+        if ($kind === 'sent' && str_contains($normalized, 'sent')) return $folder;
+        if ($kind === 'trash' && (str_contains($normalized, 'trash') || str_contains($normalized, 'deleted'))) return $folder;
+    }
+    return null;
+}
+
+function data_imap_folder_messages(array $settings, string $folder, int $limit = 20): array
+{
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($folder));
+        $search = data_imap_command($socket, $commandNumber, 'UID SEARCH ALL');
+        $uidLine = '';
+        foreach ($search['lines'] as $line) {
+            if (preg_match('/^\* SEARCH(?:\s+(.*?))?\r?\n$/', $line, $matches) === 1) {
+                $uidLine = trim($matches[1] ?? '');
+                break;
+            }
+        }
+        $uids = $uidLine === '' ? [] : preg_split('/\s+/', $uidLine);
+        if (!is_array($uids)) $uids = [];
+        $uids = array_slice(array_reverse($uids), 0, max(1, min($limit, 50)));
+        $messages = [];
+
+        foreach ($uids as $uid) {
+            if (!is_string($uid) || !ctype_digit($uid)) continue;
+            $fetch = data_imap_command(
+                $socket,
+                $commandNumber,
+                'UID FETCH ' . $uid . ' (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE CONTENT-TYPE CONTENT-TRANSFER-ENCODING)] BODY.PEEK[TEXT]<0.8192>)'
+            );
+            $header = $fetch['literals'][0] ?? '';
+            $rawBody = $fetch['literals'][1] ?? '';
+            $fields = [];
+            $currentField = '';
+            foreach (preg_split('/\r?\n/', $header) ?: [] as $headerLine) {
+                if ($headerLine === '') continue;
+                if (preg_match('/^[ \t]/', $headerLine) === 1 && $currentField !== '') {
+                    $fields[$currentField] .= ' ' . trim($headerLine);
+                    continue;
+                }
+                if (preg_match('/^([A-Za-z0-9-]+):\s*(.*)$/', $headerLine, $headerMatches) === 1) {
+                    $currentField = strtolower($headerMatches[1]);
+                    $fields[$currentField] = trim($headerMatches[2]);
+                }
+            }
+            $metadata = implode('', $fetch['lines']);
+            $internalDate = '';
+            if (preg_match('/INTERNALDATE "([^"]+)"/', $metadata, $dateMatches) === 1) {
+                $internalDate = $dateMatches[1];
+            }
+            $contentType = $fields['content-type'] ?? 'text/plain';
+            $contentTransferEncoding = $fields['content-transfer-encoding'] ?? '';
+            $messages[] = [
+                'id' => $uid,
+                'folder' => $folder,
+                'from' => data_imap_decode_header($fields['from'] ?? ''),
+                'subject' => data_imap_decode_header($fields['subject'] ?? '(no subject)'),
+                'date' => $fields['date'] ?? $internalDate,
+                'body' => data_imap_decode_body($contentType, $contentTransferEncoding, $rawBody),
+                'unread' => preg_match('/\bFLAGS\s+\([^)]*\\\\Seen/', $metadata) !== 1,
+            ];
+        }
+
+        data_imap_command($socket, $commandNumber, 'LOGOUT');
+        return $messages;
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_imap_move_message(array $settings, string $uid, string $sourceKind, string $targetKind): void
+{
+    if (!ctype_digit($uid) || !in_array($sourceKind, ['inbox', 'trash'], true) || !in_array($targetKind, ['inbox', 'trash'], true)) {
+        throw new RuntimeException('imap_invalid_message_operation');
+    }
+    $folders = data_imap_folders($settings);
+    $source = data_imap_resolve_folder($folders, $sourceKind);
+    $target = data_imap_resolve_folder($folders, $targetKind);
+    if ($source === null || $target === null) {
+        throw new RuntimeException('imap_mailbox_folder_unavailable');
+    }
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($source));
+        data_imap_command($socket, $commandNumber, 'UID MOVE ' . $uid . ' ' . data_imap_quote($target));
+        data_imap_command($socket, $commandNumber, 'LOGOUT');
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_imap_delete_message(array $settings, string $uid): void
+{
+    if (!ctype_digit($uid)) throw new RuntimeException('imap_invalid_message_operation');
+    $folders = data_imap_folders($settings);
+    $trash = data_imap_resolve_folder($folders, 'trash');
+    if ($trash === null) throw new RuntimeException('imap_mailbox_folder_unavailable');
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($trash));
+        data_imap_command($socket, $commandNumber, 'UID STORE ' . $uid . ' +FLAGS.SILENT (\\Deleted)');
+        data_imap_command($socket, $commandNumber, 'UID EXPUNGE ' . $uid);
+        data_imap_command($socket, $commandNumber, 'LOGOUT');
     } finally {
         if (is_resource($socket)) fclose($socket);
     }
@@ -1050,7 +1371,7 @@ if (!is_string($resource)) {
     data_respond(400, ['error' => 'invalid_resource', 'message' => 'The requested resource is invalid.']);
 }
 
-if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-activity'], true)) {
+if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-activity', 'email-inbox', 'email-message-trash', 'email-message-restore', 'email-message-purge', 'email-drafts', 'email-draft', 'email-draft-trash', 'email-draft-restore', 'email-draft-purge', 'email-draft-remove'], true)) {
     if ($method === 'GET' && $resource === 'email-settings') {
         data_require_permission('integrations');
         $settings = data_mail_settings();
@@ -1096,13 +1417,151 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
             data_smtp_command($socket, 'QUIT', ['221']);
         } catch (Throwable $error) {
             error_log('Ambients Hostinger SMTP connection test failed: ' . $error->getMessage());
+            $settings['verified'] = false;
+            data_mail_write_settings($settings);
             data_respond(502, ['error' => 'mail_connection_failed', 'message' => 'Hostinger SMTP authentication failed. Verify the mailbox password and try again.']);
         } finally {
             if (is_resource($socket)) fclose($socket);
         }
+        $imapSocket = null;
+        try {
+            [$imapSocket, $imapCommandNumber] = data_imap_connect($settings);
+            data_imap_command($imapSocket, $imapCommandNumber, 'LOGOUT');
+        } catch (Throwable $error) {
+            error_log('Ambients Hostinger IMAP connection test failed: ' . $error->getMessage());
+            $settings['verified'] = false;
+            data_mail_write_settings($settings);
+            data_respond(502, ['error' => 'mail_connection_failed', 'message' => 'Hostinger SMTP connected, but IMAP authentication failed. Verify that IMAP is enabled for this mailbox.']);
+        } finally {
+            if (is_resource($imapSocket)) fclose($imapSocket);
+        }
         $settings['verified'] = true;
         data_mail_write_settings($settings);
-        data_respond(200, ['connected' => true, 'message' => 'Hostinger SMTP authentication succeeded.']);
+        data_respond(200, ['connected' => true, 'message' => 'Hostinger SMTP and IMAP authentication succeeded.']);
+    }
+
+    if ($method === 'GET' && $resource === 'email-inbox') {
+        data_require_permission('integrations');
+        $settings = data_mail_settings();
+        if ($settings === []) {
+            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure the Hostinger mailbox under Integrations before opening the inbox.']);
+        }
+        $folderKind = $_GET['folder'] ?? 'inbox';
+        if (!is_string($folderKind) || !in_array($folderKind, ['inbox', 'sent', 'trash'], true)) {
+            data_respond(400, ['error' => 'invalid_mail_folder', 'message' => 'The requested mailbox folder is invalid.']);
+        }
+        try {
+            $folders = data_imap_folders($settings);
+            $folder = data_imap_resolve_folder($folders, $folderKind);
+            $mailboxMessages = $folder === null ? [] : data_imap_folder_messages($settings, $folder);
+            data_respond(200, ['mailboxMessages' => $mailboxMessages, 'folderAvailable' => $folder !== null]);
+        } catch (Throwable $error) {
+            error_log('Ambients Hostinger IMAP inbox sync failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'mail_inbox_unavailable', 'message' => 'The Hostinger inbox could not be synchronized. Verify the mailbox password and IMAP service.']);
+        }
+    }
+
+    if (in_array($resource, ['email-message-trash', 'email-message-restore', 'email-message-purge'], true) && in_array($method, ['POST', 'DELETE'], true)) {
+        data_require_permission('integrations');
+        $body = data_read_json(1024);
+        $uid = $body['id'] ?? null;
+        if (!is_string($uid) || !ctype_digit($uid)) {
+            data_respond(400, ['error' => 'invalid_message_id', 'message' => 'The selected mailbox message is invalid.']);
+        }
+        $settings = data_mail_settings();
+        if ($settings === []) {
+            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure the Hostinger mailbox before changing mailbox messages.']);
+        }
+        try {
+            if ($resource === 'email-message-trash' && $method === 'POST') {
+                data_imap_move_message($settings, $uid, 'inbox', 'trash');
+            } elseif ($resource === 'email-message-restore' && $method === 'POST') {
+                data_imap_move_message($settings, $uid, 'trash', 'inbox');
+            } elseif ($resource === 'email-message-purge' && $method === 'DELETE') {
+                data_imap_delete_message($settings, $uid);
+            } else {
+                data_respond(405, ['error' => 'method_not_allowed', 'message' => 'The requested mailbox operation is not allowed.']);
+            }
+        } catch (Throwable $error) {
+            error_log('Ambients Hostinger mailbox message operation failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'mail_message_update_failed', 'message' => 'The Hostinger message could not be moved or deleted. Refresh the folder and verify that the mailbox supports this operation.']);
+        }
+        data_respond(200, ['updated' => true]);
+    }
+
+    if ($method === 'GET' && in_array($resource, ['email-drafts', 'email-draft-trash'], true)) {
+        data_require_permission('integrations');
+        $deleted = $resource === 'email-draft-trash';
+        $statement = data_db()->prepare(
+            'SELECT id, recipient_email, subject, body, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
+        );
+        $statement->execute();
+        $rows = $statement->fetchAll();
+        data_respond(200, ['drafts' => array_map(static fn (array $row): array => [
+            'id' => (string) $row['id'],
+            'recipientEmail' => $row['recipient_email'],
+            'subject' => $row['subject'],
+            'body' => data_mail_decrypt_content($row['body']),
+            'updatedAt' => $row['updated_at'],
+        ], $rows)]);
+    }
+
+    if ($method === 'POST' && $resource === 'email-draft') {
+        data_require_permission('integrations');
+        $body = data_read_json(32768);
+        $recipient = strtolower(data_string($body, 'recipientEmail', 254, false));
+        $subject = data_string($body, 'subject', 180, false);
+        $draftBody = $body['body'] ?? '';
+        if (!is_string($draftBody) || strlen($draftBody) > 24000) {
+            data_respond(400, ['error' => 'invalid_draft', 'message' => 'The draft message must be 24,000 bytes or less.']);
+        }
+        if ($recipient !== '' && !filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            data_respond(400, ['error' => 'invalid_recipient', 'message' => 'Enter a valid recipient email address.']);
+        }
+        $db = data_db();
+        $draftId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        $encryptedBody = data_mail_encrypt_content($draftBody);
+        if ($draftId !== false && $draftId !== null && $draftId > 0) {
+            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, subject = ?, body = ? WHERE id = ? AND deleted_at IS NULL');
+            $update->execute([$recipient, $subject, $encryptedBody, $draftId]);
+            if ($update->rowCount() === 0) {
+                $exists = $db->prepare('SELECT id FROM email_drafts WHERE id = ? AND deleted_at IS NULL');
+                $exists->execute([$draftId]);
+                if ($exists->fetchColumn() === false) {
+                    data_respond(404, ['error' => 'draft_not_found', 'message' => 'The draft was not found.']);
+                }
+            }
+        } else {
+            $db->prepare('INSERT INTO email_drafts (recipient_email, subject, body) VALUES (?, ?, ?)')->execute([$recipient, $subject, $encryptedBody]);
+            $draftId = (int) $db->lastInsertId();
+        }
+        data_respond(200, ['saved' => true, 'draft' => ['id' => (string) $draftId, 'recipientEmail' => $recipient, 'subject' => $subject, 'body' => $draftBody]]);
+    }
+
+    if (in_array($resource, ['email-draft-trash', 'email-draft-restore', 'email-draft-purge', 'email-draft-remove'], true) && in_array($method, ['POST', 'DELETE'], true)) {
+        data_require_permission('integrations');
+        $body = data_read_json(1024);
+        $draftId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        if ($draftId === false || $draftId < 1) {
+            data_respond(400, ['error' => 'invalid_draft_id', 'message' => 'The selected draft is invalid.']);
+        }
+        $db = data_db();
+        if ($resource === 'email-draft-trash' && $method === 'POST') {
+            $statement = $db->prepare('UPDATE email_drafts SET deleted_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL');
+        } elseif ($resource === 'email-draft-restore' && $method === 'POST') {
+            $statement = $db->prepare('UPDATE email_drafts SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL');
+        } elseif ($resource === 'email-draft-purge' && $method === 'DELETE') {
+            $statement = $db->prepare('DELETE FROM email_drafts WHERE id = ? AND deleted_at IS NOT NULL');
+        } elseif ($resource === 'email-draft-remove' && $method === 'DELETE') {
+            $statement = $db->prepare('DELETE FROM email_drafts WHERE id = ? AND deleted_at IS NULL');
+        } else {
+            data_respond(405, ['error' => 'method_not_allowed', 'message' => 'The requested draft operation is not allowed.']);
+        }
+        $statement->execute([$draftId]);
+        if ($statement->rowCount() === 0) {
+            data_respond(404, ['error' => 'draft_not_found', 'message' => 'The draft was not found in that folder.']);
+        }
+        data_respond(200, ['updated' => true]);
     }
 
     if ($method === 'POST' && $resource === 'email-send') {
@@ -1125,7 +1584,7 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
             data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
         }
         $db = data_db();
-        $db->prepare('INSERT INTO email_activity (recipient_email, subject, status) VALUES (?, ?, ?)')->execute([$recipient, $subject, 'Queued']);
+        $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status) VALUES (?, ?, ?, ?)')->execute([$recipient, $subject, data_mail_encrypt_content($message), 'Queued']);
         $activityId = $db->lastInsertId();
         try {
             data_mail_send($settings, $recipient, $subject, $message);
@@ -1160,11 +1619,12 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
 
     if ($method === 'GET' && $resource === 'email-activity') {
         data_require_permission('integrations');
-        $rows = data_db()->query('SELECT id, recipient_email, subject, status, sent_at FROM email_activity ORDER BY id DESC LIMIT 100')->fetchAll();
+        $rows = data_db()->query('SELECT id, recipient_email, subject, body, status, sent_at FROM email_activity ORDER BY id DESC LIMIT 100')->fetchAll();
         data_respond(200, ['messages' => array_map(static fn (array $row): array => [
             'id' => (string) $row['id'],
             'recipientEmail' => $row['recipient_email'],
             'subject' => $row['subject'],
+            'body' => data_mail_decrypt_content($row['body']),
             'status' => $row['status'],
             'sentAt' => $row['sent_at'],
         ], $rows)]);

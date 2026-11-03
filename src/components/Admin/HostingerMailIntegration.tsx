@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, LoaderCircle, Mail, Send, ShieldCheck } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  FileText,
+  Inbox,
+  LoaderCircle,
+  Mail,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 
 interface HostingerMailIntegrationProps {
   role: 'admin' | 'operator';
@@ -19,9 +30,30 @@ interface MailActivity {
   id: string;
   recipientEmail: string;
   subject: string;
+  body: string;
   status: 'Queued' | 'Sent' | 'Failed';
   sentAt: string;
 }
+
+interface MailDraft {
+  id: string;
+  recipientEmail: string;
+  subject: string;
+  body: string;
+  updatedAt: string;
+}
+
+interface InboxMessage {
+  id: string;
+  folder: string;
+  from: string;
+  subject: string;
+  date: string;
+  body: string;
+  unread: boolean;
+}
+
+type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash';
 
 interface ApiResponse {
   message?: string;
@@ -33,12 +65,17 @@ interface ApiResponse {
   smtpHost?: string;
   smtpPort?: number;
   messages?: MailActivity[];
+  drafts?: MailDraft[];
+  draft?: MailDraft;
+  inbox?: InboxMessage[];
+  mailboxMessages?: InboxMessage[];
+  folderAvailable?: boolean;
   connected?: boolean;
   sent?: boolean;
   logged?: boolean;
 }
 
-const requestMailApi = async (resource: string, method: 'GET' | 'POST', body?: object): Promise<ApiResponse> => {
+const requestMailApi = async (resource: string, method: 'GET' | 'POST' | 'DELETE', body?: object): Promise<ApiResponse> => {
   const response = await fetch(`/api/data.php?resource=${resource}`, {
     method,
     credentials: 'same-origin',
@@ -65,16 +102,35 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     smtpPort: 465,
   });
   const [messages, setMessages] = useState<MailActivity[]>([]);
+  const [drafts, setDrafts] = useState<MailDraft[]>([]);
+  const [trash, setTrash] = useState<MailDraft[]>([]);
+  const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
+  const [hostSentMessages, setHostSentMessages] = useState<InboxMessage[]>([]);
+  const [mailTrashMessages, setMailTrashMessages] = useState<InboxMessage[]>([]);
+  const [inboxFolderAvailable, setInboxFolderAvailable] = useState(true);
+  const [sentFolderAvailable, setSentFolderAvailable] = useState(false);
+  const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
+  const [activeFolder, setActiveFolder] = useState<MailboxFolder>('inbox');
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingInbox, setIsSyncingInbox] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    if (mode === 'mailbox' && settings.configured) {
+      if (activeFolder === 'inbox') void refreshMailboxFolder('inbox');
+      if (activeFolder === 'sent') void refreshMailboxFolder('sent');
+      if (activeFolder === 'trash') void refreshMailboxFolder('trash');
+    }
+  }, [mode, activeFolder, settings.configured]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -93,11 +149,17 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         smtpPort: settingsResult.smtpPort || 465,
       });
       if (mode === 'mailbox') {
-        const activityResult = await requestMailApi('email-activity', 'GET');
-        if (!Array.isArray(activityResult.messages)) {
-          throw new Error('The email activity response is invalid.');
+        const [activityResult, draftResult, trashResult] = await Promise.all([
+          requestMailApi('email-activity', 'GET'),
+          requestMailApi('email-drafts', 'GET'),
+          requestMailApi('email-draft-trash', 'GET'),
+        ]);
+        if (!Array.isArray(activityResult.messages) || !Array.isArray(draftResult.drafts) || !Array.isArray(trashResult.drafts)) {
+          throw new Error('The email folders returned an invalid response.');
         }
         setMessages(activityResult.messages);
+        setDrafts(draftResult.drafts);
+        setTrash(trashResult.drafts);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Hostinger email settings could not be loaded.');
@@ -139,12 +201,146 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       const result = await requestMailApi('email-test', 'POST', {});
       if (result.connected !== true) throw new Error('Hostinger SMTP authentication was not confirmed.');
       setSettings((current) => ({ ...current, verified: true }));
-      setSuccessMessage('Hostinger SMTP authentication succeeded.');
+      setSuccessMessage(result.message || 'Hostinger SMTP and IMAP authentication succeeded.');
     } catch (error) {
       setSettings((current) => ({ ...current, verified: false }));
       setErrorMessage(error instanceof Error ? error.message : 'Hostinger SMTP connection failed.');
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const refreshMailboxFolder = async (folder: 'inbox' | 'sent' | 'trash') => {
+    setErrorMessage('');
+    if (folder === 'inbox') setIsSyncingInbox(true);
+    try {
+      const result = await requestMailApi(`email-inbox&folder=${folder}`, 'GET');
+      if (!Array.isArray(result.mailboxMessages)) throw new Error('The mailbox response is invalid.');
+      if (folder === 'inbox') {
+        setInboxMessages(result.mailboxMessages);
+        setInboxFolderAvailable(result.folderAvailable !== false);
+      }
+      if (folder === 'sent') {
+        setHostSentMessages(result.mailboxMessages);
+        setSentFolderAvailable(result.folderAvailable === true);
+      }
+      if (folder === 'trash') {
+        setMailTrashMessages(result.mailboxMessages);
+        setTrashFolderAvailable(result.folderAvailable === true);
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The Hostinger mailbox folder could not be synchronized.');
+    } finally {
+      if (folder === 'inbox') setIsSyncingInbox(false);
+    }
+  };
+
+  const refreshInbox = () => refreshMailboxFolder('inbox');
+
+  const replyToInbox = (message: InboxMessage) => {
+    const address = message.from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+    if (!address) {
+      setErrorMessage('This message does not contain a reply address.');
+      return;
+    }
+    setRecipientEmail(address);
+    setSubject(message.subject.toLowerCase().startsWith('re:') ? message.subject : `Re: ${message.subject}`);
+    setMessageBody('');
+    setEditingDraftId(null);
+    setActiveFolder('compose');
+  };
+
+  const saveDraft = async () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const result = await requestMailApi('email-draft', 'POST', {
+        ...(editingDraftId ? { id: editingDraftId } : {}),
+        recipientEmail,
+        subject,
+        body: messageBody,
+      });
+      if (!result.draft) throw new Error('The saved draft was missing from the response.');
+      setDrafts((current) => [
+        result.draft!,
+        ...current.filter((draft) => draft.id !== result.draft!.id),
+      ]);
+      setEditingDraftId(result.draft.id);
+      setSuccessMessage('Draft saved.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The draft could not be saved.');
+    }
+  };
+
+  const openDraft = (draft: MailDraft) => {
+    setEditingDraftId(draft.id);
+    setRecipientEmail(draft.recipientEmail);
+    setSubject(draft.subject);
+    setMessageBody(draft.body);
+    setActiveFolder('compose');
+  };
+
+  const moveDraftToTrash = async (draft: MailDraft) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-draft-trash', 'POST', { id: draft.id });
+      setDrafts((current) => current.filter((item) => item.id !== draft.id));
+      setTrash((current) => [draft, ...current]);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The draft could not be moved to Trash.');
+    }
+  };
+
+  const restoreDraft = async (draft: MailDraft) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-draft-restore', 'POST', { id: draft.id });
+      setTrash((current) => current.filter((item) => item.id !== draft.id));
+      setDrafts((current) => [draft, ...current]);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The draft could not be restored.');
+    }
+  };
+
+  const permanentlyDeleteDraft = async (draft: MailDraft) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-draft-purge', 'DELETE', { id: draft.id });
+      setTrash((current) => current.filter((item) => item.id !== draft.id));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The draft could not be permanently deleted.');
+    }
+  };
+
+  const moveMailToTrash = async (message: InboxMessage) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-message-trash', 'POST', { id: message.id });
+      setInboxMessages((current) => current.filter((item) => item.id !== message.id));
+      setMailTrashMessages((current) => [message, ...current]);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The message could not be moved to Trash.');
+    }
+  };
+
+  const restoreMailMessage = async (message: InboxMessage) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-message-restore', 'POST', { id: message.id });
+      setMailTrashMessages((current) => current.filter((item) => item.id !== message.id));
+      setInboxMessages((current) => [message, ...current]);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The message could not be restored.');
+    }
+  };
+
+  const permanentlyDeleteMailMessage = async (message: InboxMessage) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-message-purge', 'DELETE', { id: message.id });
+      setMailTrashMessages((current) => current.filter((item) => item.id !== message.id));
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The message could not be permanently deleted.');
     }
   };
 
@@ -162,11 +358,20 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       if (result.sent !== true) throw new Error(result.message || 'Hostinger did not accept the email.');
       setSuccessMessage(result.message || 'Hostinger accepted the email for sending.');
       setSettings((current) => ({ ...current, verified: true }));
+      if (editingDraftId) {
+        try {
+          await requestMailApi('email-draft-remove', 'DELETE', { id: editingDraftId });
+          setDrafts((current) => current.filter((draft) => draft.id !== editingDraftId));
+        } catch {
+          setErrorMessage('Email sent successfully, but its saved draft could not be removed.');
+        }
+      }
+      setEditingDraftId(null);
+      setRecipientEmail('');
       setSubject('');
       setMessageBody('');
       try {
-        const activity = await requestMailApi('email-activity', 'GET');
-        setMessages(activity.messages || []);
+        await loadData();
       } catch (error) {
         const detail = error instanceof Error ? ` ${error.message}` : '';
         setErrorMessage(`Hostinger accepted the email, but the activity list could not be refreshed.${detail}`);
@@ -259,66 +464,281 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       </section>}
 
       {mode === 'mailbox' && <section className="grid gap-5 xl:grid-cols-2">
-        <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-          <div>
-            <h2 className="font-semibold text-slate-950">Compose an email</h2>
-            <p className="mt-1 text-sm text-slate-600">One-to-one customer support messages are sent through Hostinger SMTP.</p>
-          </div>
-          <div>
-            <label htmlFor="mail-recipient" className="mb-1 block text-sm font-medium text-slate-700">To</label>
-            <input id="mail-recipient" type="email" required maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-          </div>
-          <div>
-            <label htmlFor="mail-subject" className="mb-1 block text-sm font-medium text-slate-700">Subject</label>
-            <input id="mail-subject" required maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-          </div>
-          <div>
-            <label htmlFor="mail-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
-            <textarea id="mail-body" required maxLength={6000} rows={7} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-            <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
-          </div>
-          <button type="submit" disabled={!settings.configured || !settings.verified || isSending || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
-            {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {isSending ? 'Sending…' : 'Send email'}
-          </button>
-          {!settings.verified && <p className="text-xs text-slate-500">Configure and verify the mailbox under Integrations before sending.</p>}
-        </form>
+        <div className="space-y-5 xl:col-span-2">
+          {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
+          {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-slate-950">Recent email activity</h2>
-              <p className="mt-1 text-sm text-slate-600">The CRM records the recipient, subject, and time—not message content.</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-medium text-slate-500">Sent from CRM</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-950">{messages.filter((item) => item.status === 'Sent').length}</p>
             </div>
-            <button type="button" onClick={() => void loadData()} disabled={isLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-              Refresh
-            </button>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-medium text-slate-500">Delivered</p>
+              <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-medium text-slate-500">Opened</p>
+              <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-medium text-slate-500">Drafts · Trash</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-950">{drafts.length} · {trash.length}</p>
+            </div>
           </div>
-          {isLoading ? (
-            <p role="status" className="py-8 text-center text-sm text-slate-500">Loading email activity…</p>
-          ) : messages.length === 0 ? (
-            <p className="py-8 text-center text-sm text-slate-500">No email has been sent from the CRM yet.</p>
-          ) : (
-            <div className="max-h-[420px] overflow-auto">
-              <ul className="divide-y divide-slate-100">
-                {messages.map((item) => (
-                  <li key={item.id} className="py-3">
-                    <p className="truncate text-sm font-medium text-slate-900">{item.subject}</p>
-                    <p className="mt-1 truncate text-xs text-slate-600">{item.recipientEmail}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {item.status === 'Sent' ? 'Accepted by SMTP' : item.status === 'Failed' ? 'Sending failed' : 'Result unknown; verify before retrying'} · {item.sentAt}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+
+          <nav aria-label="Email folders" className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2">
+            {([
+              ['inbox', 'Inbox', Inbox],
+              ['compose', 'Compose', Mail],
+              ['sent', 'Sent', Send],
+              ['drafts', `Drafts (${drafts.length})`, FileText],
+              ['trash', `Trash (${trash.length})`, Trash2],
+            ] as const).map(([folder, label, Icon]) => (
+              <button
+                key={folder}
+                type="button"
+                onClick={() => setActiveFolder(folder)}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                  activeFolder === folder ? 'bg-violet-100 text-violet-900' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </nav>
+
+          {activeFolder === 'compose' && (
+            <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+              <div>
+                <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
+                <p className="mt-1 text-sm text-slate-600">Send through {settings.emailAccount}. Drafts are saved in the CRM.</p>
+              </div>
+              <div>
+                <label htmlFor="mail-recipient" className="mb-1 block text-sm font-medium text-slate-700">To</label>
+                <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+              </div>
+              <div>
+                <label htmlFor="mail-subject" className="mb-1 block text-sm font-medium text-slate-700">Subject</label>
+                <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+              </div>
+              <div>
+                <label htmlFor="mail-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
+                <textarea id="mail-body" maxLength={6000} rows={9} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void saveDraft()} disabled={isLoading || (!recipientEmail && !subject && !messageBody)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  <FileText className="h-4 w-4" /> Save draft
+                </button>
+                <button type="submit" disabled={!settings.configured || !settings.verified || isSending || isLoading || !recipientEmail || !subject || !messageBody} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {isSending ? 'Sending…' : 'Send email'}
+                </button>
+                {!settings.verified && <p className="self-center text-xs text-slate-500">Configure and test SMTP + IMAP under Integrations before sending.</p>}
+              </div>
+            </form>
+          )}
+
+          {activeFolder === 'inbox' && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-slate-950">Inbox</h2>
+                  <p className="mt-1 text-sm text-slate-600">Recent messages from the Hostinger INBOX mailbox.</p>
+                </div>
+                <button type="button" onClick={() => void refreshInbox()} disabled={!settings.configured || isSyncingInbox} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  <RefreshCw className={`h-4 w-4 ${isSyncingInbox ? 'animate-spin' : ''}`} /> {isSyncingInbox ? 'Syncing…' : 'Sync inbox'}
+                </button>
+              </div>
+              {!settings.configured ? (
+                <p className="py-8 text-center text-sm text-slate-500">Configure the Hostinger mailbox under Integrations to load the inbox.</p>
+              ) : !inboxFolderAvailable ? (
+                <p className="py-8 text-center text-sm text-rose-700">The Hostinger inbox folder is unavailable.</p>
+              ) : isSyncingInbox ? (
+                <p role="status" className="py-8 text-center text-sm text-slate-500">Synchronizing inbox…</p>
+              ) : inboxMessages.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-500">No inbox messages were returned. Use Sync inbox to check again.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {inboxMessages.map((item) => (
+                    <li key={item.id} className="py-3">
+                      <p className={`truncate text-sm ${item.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{item.subject}</p>
+                      <p className="mt-1 truncate text-xs text-slate-600">{item.from}</p>
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs text-slate-500">{item.date} {item.unread ? '· Unread' : ''}</p>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => replyToInbox(item)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Reply</button>
+                          <button type="button" onClick={() => void moveMailToTrash(item)} className="rounded-md border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
+                        </div>
+                      </div>
+                      {item.body && (
+                        <details className="mt-2 text-xs text-slate-600">
+                          <summary className="cursor-pointer font-medium">Read message preview</summary>
+                          <p className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3">{item.body}</p>
+                        </details>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {activeFolder === 'sent' && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-slate-950">Sent from CRM</h2>
+                  <p className="mt-1 text-sm text-slate-600">Messages submitted from this CRM.</p>
+                </div>
+                <button type="button" onClick={() => { void loadData(); void refreshMailboxFolder('sent'); }} disabled={isLoading || !settings.configured} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
+              </div>
+              {messages.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No email has been sent from the CRM yet.</p> : (
+                <ul className="divide-y divide-slate-100">
+                  {messages.map((item) => (
+                    <li key={item.id} className="py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="truncate text-sm font-semibold text-slate-900">{item.subject || '(no subject)'}</p>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status}</span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-600">{item.recipientEmail} · {item.sentAt}</p>
+                      {item.body && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-medium">View message</summary><p className="mt-2 whitespace-pre-wrap">{item.body}</p></details>}
+                      <p className="mt-1 text-xs text-slate-500">{item.status === 'Sent' ? 'Accepted by SMTP; delivery is not confirmed.' : item.status === 'Failed' ? 'Sending failed.' : 'Sending outcome unknown; check Hostinger before retrying.'}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {settings.configured && !sentFolderAvailable && <p className="mt-4 text-xs text-amber-700">The Hostinger Sent folder was not found. CRM-sent activity is shown separately above.</p>}
+              {hostSentMessages.length > 0 && (
+                <div className="mt-6 border-t border-slate-200 pt-4">
+                  <h3 className="font-semibold text-slate-900">Hostinger Sent folder</h3>
+                  <ul className="mt-2 divide-y divide-slate-100">
+                    {hostSentMessages.map((item) => (
+                      <li key={item.id} className="py-3">
+                        <p className="truncate text-sm font-medium text-slate-900">{item.subject}</p>
+                        <p className="mt-1 truncate text-xs text-slate-600">{item.from}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.date}</p>
+                        {item.body && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-medium">View message</summary><p className="mt-2 whitespace-pre-wrap">{item.body}</p></details>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
+          {activeFolder === 'drafts' && (
+            <DraftFolder drafts={drafts} onOpen={openDraft} onTrash={(draft) => void moveDraftToTrash(draft)} />
+          )}
+          {activeFolder === 'trash' && (
+            <div className="space-y-5">
+              <MailTrashFolder
+                messages={mailTrashMessages}
+                folderAvailable={trashFolderAvailable}
+                onRestore={(message) => void restoreMailMessage(message)}
+                onDelete={(message) => void permanentlyDeleteMailMessage(message)}
+              />
+              <TrashFolder drafts={trash} onRestore={(draft) => void restoreDraft(draft)} onDelete={(draft) => void permanentlyDeleteDraft(draft)} />
             </div>
           )}
-        </section>
+        </div>
       </section>}
 
       {mode === 'mailbox' && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-        SMTP can submit outgoing messages but does not confirm delivery or opens. Inbox synchronization, replies, bulk campaigns, and delivery/open tracking are not connected yet.
+        Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. SMTP does not provide delivered/opened events, so those statistics are not available.
       </p>}
     </div>
   );
 };
+
+interface DraftFolderProps {
+  drafts: MailDraft[];
+  onOpen: (draft: MailDraft) => void;
+  onTrash: (draft: MailDraft) => void;
+}
+
+const DraftFolder: React.FC<DraftFolderProps> = ({ drafts, onOpen, onTrash }) => (
+  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <h2 className="font-semibold text-slate-950">Drafts</h2>
+    <p className="mt-1 text-sm text-slate-600">Saved in the CRM and available across signed-in sessions.</p>
+    {drafts.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No drafts saved.</p> : (
+      <ul className="mt-4 divide-y divide-slate-100">
+        {drafts.map((draft) => (
+          <li key={draft.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <button type="button" onClick={() => onOpen(draft)} className="min-w-0 flex-1 text-left">
+              <p className="truncate text-sm font-semibold text-slate-900">{draft.subject || '(no subject)'}</p>
+              <p className="mt-1 truncate text-xs text-slate-600">{draft.recipientEmail || 'No recipient'} · Updated {draft.updatedAt}</p>
+              {draft.body && <p className="mt-1 truncate text-xs text-slate-500">{draft.body}</p>}
+            </button>
+            <button type="button" onClick={() => onTrash(draft)} aria-label={`Move ${draft.subject || 'draft'} to Trash`} className="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-700">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
+
+interface MailTrashFolderProps {
+  messages: InboxMessage[];
+  folderAvailable: boolean;
+  onRestore: (message: InboxMessage) => void;
+  onDelete: (message: InboxMessage) => void;
+}
+
+const MailTrashFolder: React.FC<MailTrashFolderProps> = ({ messages, folderAvailable, onRestore, onDelete }) => (
+  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <h2 className="font-semibold text-slate-950">Hostinger mailbox Trash</h2>
+    {!folderAvailable ? (
+      <p className="py-6 text-sm text-slate-500">A Hostinger Trash folder was not found for this mailbox.</p>
+    ) : messages.length === 0 ? (
+      <p className="py-6 text-sm text-slate-500">Hostinger Trash is empty.</p>
+    ) : (
+      <ul className="mt-4 divide-y divide-slate-100">
+        {messages.map((message) => (
+          <li key={message.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-900">{message.subject}</p>
+              <p className="mt-1 truncate text-xs text-slate-600">{message.from} · {message.date}</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => onRestore(message)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Restore to Inbox</button>
+              <button type="button" onClick={() => onDelete(message)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete permanently</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
+
+interface TrashFolderProps {
+  drafts: MailDraft[];
+  onRestore: (draft: MailDraft) => void;
+  onDelete: (draft: MailDraft) => void;
+}
+
+const TrashFolder: React.FC<TrashFolderProps> = ({ drafts, onRestore, onDelete }) => (
+  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <h2 className="font-semibold text-slate-950">Trash</h2>
+    <p className="mt-1 text-sm text-slate-600">Deleted CRM drafts can be restored or permanently removed.</p>
+    {drafts.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">Trash is empty.</p> : (
+      <ul className="mt-4 divide-y divide-slate-100">
+        {drafts.map((draft) => (
+          <li key={draft.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-900">{draft.subject || '(no subject)'}</p>
+              <p className="mt-1 truncate text-xs text-slate-600">{draft.recipientEmail || 'No recipient'} · {draft.updatedAt}</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => onRestore(draft)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Restore</button>
+              <button type="button" onClick={() => onDelete(draft)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete permanently</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
