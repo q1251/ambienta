@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, Copy, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
@@ -49,6 +49,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
@@ -225,6 +226,34 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const noteActivities = profile?.activities.filter((activity) => activity.type === 'note') ?? [];
 
   const phoneLink = (value: string) => value.replace(/[^\d+]/g, '');
+
+  const copyLeadValue = async (event: React.MouseEvent<HTMLButtonElement>, leadId: number, field: 'name' | 'email' | 'phone', value: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(`${leadId}-${field}`);
+      window.setTimeout(() => setCopiedField((current) => current === `${leadId}-${field}` ? '' : current), 1600);
+    } catch (error) {
+      setRequestError(error instanceof Error ? `Could not copy ${field}: ${error.message}` : `Could not copy ${field}.`);
+    }
+  };
+
+  const copyButton = (lead: ContactLead, field: 'name' | 'email' | 'phone', value: string) => {
+    const key = `${lead.id}-${field}`;
+    const copied = copiedField === key;
+    return (
+      <button
+        type="button"
+        onClick={(event) => void copyLeadValue(event, lead.id, field, value)}
+        aria-label={`${copied ? 'Copied' : 'Copy'} ${field} for ${lead.firstName} ${lead.lastName}`}
+        title={copied ? 'Copied' : `Copy ${field}`}
+        className="ml-1 inline-flex shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    );
+  };
 
   const openEmailComposer = (event: React.FormEvent, recipient: string) => {
     event.preventDefault();
@@ -544,15 +573,24 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   }}
                 >
                   <td className="px-5 py-3">
-                    <span className={onLoadLeadProfile ? 'font-semibold text-teal-800 underline-offset-2 hover:underline' : ''}>
-                      {lead.firstName} {lead.lastName}
+                    <span className="inline-flex items-center">
+                      <span className={onLoadLeadProfile ? 'font-semibold text-teal-800 underline-offset-2 hover:underline' : ''}>{lead.firstName} {lead.lastName}</span>
+                      {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
                     </span>
                   </td>
-                  <td className="py-3">{lead.email}</td>
                   <td className="py-3">
-                    {lead.phone
-                      ? <a href={`tel:${phoneLink(lead.phone)}`} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 text-teal-800 hover:underline"><Phone className="h-3.5 w-3.5" />{lead.phone}</a>
-                      : <span className="text-slate-400">Not provided</span>}
+                    <span className="inline-flex items-center">
+                      {lead.email}
+                      {copyButton(lead, 'email', lead.email)}
+                    </span>
+                  </td>
+                  <td className="py-3">
+                    <span className="inline-flex items-center">
+                      {lead.phone
+                        ? <a href={`tel:${phoneLink(lead.phone)}`} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 text-teal-800 hover:underline"><Phone className="h-3.5 w-3.5" />{lead.phone}</a>
+                        : <span className="text-slate-400">Not provided</span>}
+                      {lead.phone && copyButton(lead, 'phone', lead.phone)}
+                    </span>
                   </td>
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{lead.orderCount || 0}</td>
