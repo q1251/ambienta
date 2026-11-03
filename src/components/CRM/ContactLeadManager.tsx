@@ -37,7 +37,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [profile, setProfile] = useState<LeadProfile | null>(null);
-  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(() => {
+    const value = Number(new URLSearchParams(window.location.search).get('leadId'));
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -47,6 +50,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [emailBody, setEmailBody] = useState('');
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
   const profileRequestId = useRef(0);
+  const initialProfileLoadStarted = useRef(false);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
   const filteredLeads = leads.filter((lead) => {
     const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
@@ -119,6 +123,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const openProfile = async (lead: ContactLead) => {
     if (!onLoadLeadProfile) return;
     const requestId = ++profileRequestId.current;
+    const url = new URL(window.location.href);
+    url.searchParams.set('leadId', String(lead.id));
+    window.history.replaceState(window.history.state, '', url);
     setSelectedLeadId(lead.id);
     setProfile(null);
     setProfileError('');
@@ -142,8 +149,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }
   };
 
+  React.useEffect(() => {
+    if (initialProfileLoadStarted.current || selectedLeadId === null || profile || profileLoading || !onLoadLeadProfile) return;
+    const lead = leads.find((item) => item.id === selectedLeadId);
+    if (!lead) return;
+    initialProfileLoadStarted.current = true;
+    void openProfile(lead);
+  }, [selectedLeadId, profile, profileLoading, leads, onLoadLeadProfile]);
+
   const closeProfile = () => {
     profileRequestId.current += 1;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('leadId');
+    window.history.replaceState(window.history.state, '', url);
     setSelectedLeadId(null);
     setProfile(null);
     setProfileError('');
@@ -254,7 +272,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <>
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
               <h3 className="text-base font-bold text-slate-900">Contact details</h3>
-              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
                 <div><p className="text-xs font-medium uppercase text-slate-500">Email</p><p className="mt-1 break-all text-sm text-slate-900">{profile.lead.email}</p></div>
                 <div>
                   <p className="text-xs font-medium uppercase text-slate-500">Phone</p>
@@ -263,7 +281,13 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     : <p className="mt-1 text-sm text-slate-500">No phone number saved</p>}
                 </div>
                 <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
-                <div><p className="text-xs font-medium uppercase text-slate-500">Added</p><p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p></div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Added</p>
+                  <p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p>
+                  <button type="button" onClick={() => setEmailComposerOpen(true)} className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline">
+                    <Mail className="h-4 w-4" /> Compose email
+                  </button>
+                </div>
               </div>
               <div className="mt-5 grid items-start gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
                 <div>
@@ -331,16 +355,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <span><span className="font-medium">Explicit marketing opt-in recorded.</span> Only mark this when the contact has actually consented to marketing email.</span>
                 </label>
               </div>
-            </section>
-
-            <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5">
-              <div>
-                <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Mail className="h-4 w-4 text-teal-800" />Email this contact</h3>
-                <p className="mt-1 text-sm text-slate-600">Compose a message to {profile.lead.email}.</p>
-              </div>
-              <button type="button" onClick={() => setEmailComposerOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900">
-                <Mail className="h-4 w-4" /> Compose email
-              </button>
             </section>
 
             {emailComposerOpen && (

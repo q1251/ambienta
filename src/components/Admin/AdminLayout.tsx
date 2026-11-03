@@ -88,7 +88,9 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
 ];
 
 export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() =>
+    new URLSearchParams(window.location.search).has('leadId') ? 'leads' : 'overview'
+  );
   const [logoutError, setLogoutError] = useState('');
   const visibleNavigation = navigation.filter((item) =>
     props.role === 'admin' || (item.id !== 'staff' && item.id !== 'audit')
