@@ -61,7 +61,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPermissions, setEditPermissions] = useState<StaffPermission[]>([]);
-  const [oneTimeCredentials, setOneTimeCredentials] = useState<Array<{ displayName: string; email: string; temporaryPassword: string }>>([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -121,7 +120,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const createDemoAgents = useCallback(async () => {
     setError('');
     setMessage('');
-    setOneTimeCredentials([]);
     setSaving(true);
     try {
       const response = await fetch('/api/data.php?resource=staff', {
@@ -137,7 +135,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       if (!response.ok || !Array.isArray(result.created)) {
         throw new Error(result.message || 'Demo agent accounts could not be created.');
       }
-      setOneTimeCredentials(result.created);
       setMessage(result.message || 'Demo agent accounts are ready.');
       await loadAccounts();
     } catch (createError) {
@@ -162,9 +159,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       });
       const result = await response.json() as { message?: string; temporaryPassword?: string | null };
       if (!response.ok) throw new Error(result.message || 'The agent account could not be updated.');
-      if (result.temporaryPassword) {
-        setOneTimeCredentials([{ displayName: account.display_name, email: account.email, temporaryPassword: result.temporaryPassword }]);
-      }
       setMessage(successMessage);
       setEditingId(null);
       await loadAccounts();
@@ -280,22 +274,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
 
       {(profileAccountId === null || editingId === null) && error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
       {(profileAccountId === null || editingId === null) && message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{message}</p>}
-
-      {oneTimeCredentials.length > 0 && (
-        <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
-          <h2 className="font-semibold text-amber-950">One-time temporary credentials</h2>
-          <p className="mt-1 text-sm text-amber-900">Copy these now and deliver them securely. Passwords are never shown again and must be changed at first sign-in.</p>
-          <div className="mt-4 space-y-3">
-            {oneTimeCredentials.map((credential) => (
-              <div key={credential.email} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3 text-sm">
-                <span className="font-medium text-slate-900">{credential.displayName} · {credential.email}</span>
-                <code className="rounded bg-slate-100 px-2 py-1 text-slate-800">{credential.temporaryPassword}</code>
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={() => setOneTimeCredentials([])} className="mt-3 text-xs font-semibold text-amber-900 underline">Dismiss credentials</button>
-        </section>
-      )}
 
       {profileAccountId !== null ? (
         <section className="space-y-6">
