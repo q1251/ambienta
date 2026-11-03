@@ -70,8 +70,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     }
   }, []);
 
-  useEffect(() => { void loadAccounts(); }, [loadAccounts]);
-
   const togglePermission = (current: StaffPermission[], permission: StaffPermission, update: (next: StaffPermission[]) => void) => {
     update(current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
   };
@@ -102,7 +100,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     }
   };
 
-  const createDemoAgents = async () => {
+  const createDemoAgents = useCallback(async () => {
     setError('');
     setMessage('');
     setOneTimeCredentials([]);
@@ -129,7 +127,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     } finally {
       setSaving(false);
     }
-  };
+  }, [loadAccounts]);
+
+  useEffect(() => { void createDemoAgents(); }, [createDemoAgents]);
 
   const updateAccount = async (account: StaffAccount, changes: Record<string, unknown>, successMessage: string) => {
     setError('');
