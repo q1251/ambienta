@@ -11,7 +11,7 @@ import {
   Users,
   UserRound,
 } from 'lucide-react';
-import { CatalogItem, ContactLead, ContactLeadInput, LeadProfile, LeadStatus, OnlineOrder } from '../../types/pharmacy';
+import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadProfile, OnlineOrder } from '../../types/pharmacy';
 import type { ProductCsvItem } from '../../utils/productCsv';
 import { AuditLogView } from './AuditLogView';
 import { IntegrationStatus } from './IntegrationStatus';
@@ -47,7 +47,8 @@ interface AdminLayoutProps {
   dataError?: string;
   onSaveLeads: (leads: ContactLeadInput[]) => Promise<void>;
   onLoadLeadProfile: (leadId: number) => Promise<LeadProfile>;
-  onUpdateLead: (leadId: number, update: { status?: LeadStatus; marketingConsent?: boolean }) => Promise<ContactLead>;
+  onUpdateLead: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
+  onAddLeadActivity: (leadId: number, activity: LeadActivityInput) => Promise<LeadActivity>;
   categories: string[];
   catalogItems: CatalogItem[];
   catalogError?: string;
@@ -184,7 +185,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           {activeTab === 'inventory' && (
             <InventoryManager categories={props.categories} catalogItems={props.catalogItems} catalogError={props.catalogError} onAddCategory={props.onAddCategory} onBulkAddProducts={props.onBulkAddProducts} onAddProduct={props.onAddProduct} onUpdateProduct={props.onUpdateProduct} onDeleteProduct={props.onDeleteProduct} onBulkPriceAdjust={props.onBulkPriceAdjust} />
           )}
-          {activeTab === 'leads' && <ContactLeadManager leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} />}
+          {activeTab === 'leads' && <ContactLeadManager leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />}
           {activeTab === 'integrations' && <IntegrationStatus />}
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
           {activeTab === 'staff' && props.role === 'admin' && <StaffManager />}

@@ -15,8 +15,10 @@ import { CATALOG_ITEMS as INITIAL_CATALOG } from './data/seedData';
 import {
   ContactLead,
   ContactLeadInput,
+  ContactLeadUpdate,
+  LeadActivity,
+  LeadActivityInput,
   LeadProfile,
-  LeadStatus,
   OnlineOrder,
   CatalogItem,
   CartItem,
@@ -546,14 +548,14 @@ export default function App() {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
     });
-    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; message?: string };
-    if (!response.ok || !result.lead || !Array.isArray(result.orders)) {
+    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; activities?: LeadActivity[]; message?: string };
+    if (!response.ok || !result.lead || !Array.isArray(result.orders) || !Array.isArray(result.activities)) {
       throw new Error(result.message || 'The contact profile could not be loaded.');
     }
-    return { lead: result.lead, orders: result.orders };
+    return { lead: result.lead, orders: result.orders, activities: result.activities };
   };
 
-  const handleUpdateLead = async (leadId: number, update: { status?: LeadStatus; marketingConsent?: boolean }) => {
+  const handleUpdateLead = async (leadId: number, update: ContactLeadUpdate) => {
     const response = await fetch('/api/data.php?resource=leads', {
       method: 'PATCH',
       credentials: 'same-origin',
@@ -567,6 +569,20 @@ export default function App() {
     const updatedLead = result.lead;
     setLeads((previous) => previous.map((lead) => lead.id === leadId ? updatedLead : lead));
     return updatedLead;
+  };
+
+  const handleAddLeadActivity = async (leadId: number, activity: LeadActivityInput) => {
+    const response = await fetch('/api/data.php?resource=lead-activities', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ leadId, ...activity }),
+    });
+    const result = await response.json() as { activity?: LeadActivity; message?: string };
+    if (!response.ok || !result.activity) {
+      throw new Error(result.message || 'The lead activity could not be saved.');
+    }
+    return result.activity;
   };
 
   const handleCreateManualOrder = async (data: {
@@ -650,6 +666,7 @@ export default function App() {
         onSaveLeads={handleSaveLeads}
         onLoadLeadProfile={handleLoadLeadProfile}
         onUpdateLead={handleUpdateLead}
+        onAddLeadActivity={handleAddLeadActivity}
         categories={categories}
         catalogItems={catalogItems}
         catalogError={catalogError}

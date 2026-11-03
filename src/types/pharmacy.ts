@@ -83,9 +83,46 @@ export type ContactLeadInput = Pick<
 
 export type LeadStatus = 'Cold' | 'Contacted' | 'Qualified' | 'Customer' | 'Inactive';
 
+export type LeadCallOutcome =
+  | 'Connected'
+  | 'No answer'
+  | 'Voicemail left'
+  | 'Busy'
+  | 'Wrong number'
+  | 'Callback requested'
+  | 'Not interested';
+
+export interface LeadActivity {
+  id: string;
+  type: 'status_change' | 'phone_updated' | 'note' | 'call';
+  note?: string;
+  fromStatus?: LeadStatus;
+  toStatus?: LeadStatus;
+  outcome?: LeadCallOutcome;
+  followUpDate?: string | null;
+  actorName: string;
+  actorEmail: string;
+  createdAt: string;
+}
+
+export interface LeadActivityInput {
+  type: 'note' | 'call';
+  note: string;
+  outcome?: LeadCallOutcome;
+  followUpDate?: string;
+}
+
+export interface ContactLeadUpdate {
+  status?: LeadStatus;
+  statusNote?: string;
+  marketingConsent?: boolean;
+  phone?: string;
+}
+
 export interface LeadProfile {
   lead: ContactLead;
   orders: OnlineOrder[];
+  activities: LeadActivity[];
 }
 
 export type PaymentMethod =

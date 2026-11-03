@@ -93,6 +93,21 @@ function data_ensure_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
+        "CREATE TABLE IF NOT EXISTS lead_activities (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            activity_type VARCHAR(16) NOT NULL,
+            note TEXT NULL,
+            call_outcome VARCHAR(32) NULL,
+            follow_up_date DATE NULL,
+            author_email VARCHAR(254) NOT NULL,
+            author_name VARCHAR(120) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY lead_activities_history (lead_id, id),
+            CONSTRAINT lead_activities_lead_fk FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
         "CREATE TABLE IF NOT EXISTS products (
             id VARCHAR(64) NOT NULL PRIMARY KEY,
             name VARCHAR(180) NOT NULL,
@@ -423,6 +438,56 @@ function data_lead_row(array $row): array
     return $lead;
 }
 
+function data_lead_activities(PDO $db, int $leadId): array
+{
+    $activities = [];
+    $audit = $db->prepare(
+        "SELECT id, actor_email, action, details, created_at
+         FROM admin_audit_log
+         WHERE entity_type = 'lead' AND entity_id = ? AND action IN ('lead.stage_changed', 'lead.phone_updated')
+         ORDER BY id DESC LIMIT 200"
+    );
+    $audit->execute([(string) $leadId]);
+    foreach ($audit->fetchAll() as $row) {
+        $details = is_array($row['details']) ? $row['details'] : json_decode((string) ($row['details'] ?? ''), true);
+        if (!is_array($details)) $details = [];
+        $isStageChange = $row['action'] === 'lead.stage_changed';
+        $activities[] = [
+            'id' => 'audit-' . (string) $row['id'],
+            'type' => $isStageChange ? 'status_change' : 'phone_updated',
+            'note' => isset($details['note']) && is_string($details['note']) ? $details['note'] : '',
+            'fromStatus' => isset($details['from']) && is_string($details['from']) ? $details['from'] : null,
+            'toStatus' => isset($details['to']) && is_string($details['to']) ? $details['to'] : null,
+            'actorName' => isset($details['actorName']) && is_string($details['actorName']) && $details['actorName'] !== ''
+                ? $details['actorName']
+                : (string) $row['actor_email'],
+            'actorEmail' => (string) $row['actor_email'],
+            'createdAt' => (string) $row['created_at'],
+        ];
+    }
+
+    $query = $db->prepare(
+        'SELECT id, activity_type, note, call_outcome, follow_up_date, author_email, author_name, created_at
+         FROM lead_activities WHERE lead_id = ? ORDER BY id DESC LIMIT 200'
+    );
+    $query->execute([$leadId]);
+    foreach ($query->fetchAll() as $row) {
+        $activities[] = [
+            'id' => 'activity-' . (string) $row['id'],
+            'type' => $row['activity_type'],
+            'note' => $row['note'] ?? '',
+            'outcome' => $row['call_outcome'],
+            'followUpDate' => $row['follow_up_date'],
+            'actorName' => (string) $row['author_name'],
+            'actorEmail' => (string) $row['author_email'],
+            'createdAt' => (string) $row['created_at'],
+        ];
+    }
+
+    usort($activities, static fn (array $a, array $b): int => strcmp($b['createdAt'], $a['createdAt']));
+    return array_slice($activities, 0, 200);
+}
+
 function data_product_row(array $row): array
 {
     $stock = (int) $row['stock_count'];
@@ -601,7 +666,11 @@ if ($method === 'GET') {
             $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
             $orderQuery->execute([$lead['email']]);
             $orders = array_map(static fn (array $row): array => data_order_row($db, $row), $orderQuery->fetchAll());
-            data_respond(200, ['lead' => data_lead_row($lead), 'orders' => $orders]);
+            data_respond(200, [
+                'lead' => data_lead_row($lead),
+                'orders' => $orders,
+                'activities' => data_lead_activities($db, (int) $id),
+            ]);
         }
         $rows = $db->query(
             'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
@@ -1212,19 +1281,23 @@ if ($method === 'PATCH' && $resource === 'leads') {
     }
     $status = $body['status'] ?? null;
     $marketingConsent = $body['marketingConsent'] ?? null;
+    $statusNote = array_key_exists('statusNote', $body) ? data_string($body, 'statusNote', 2000, false) : null;
+    $phoneProvided = array_key_exists('phone', $body);
+    $phone = $phoneProvided ? data_string($body, 'phone', 40, false) : null;
     $validStatuses = ['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
     if (
-        ($status === null && $marketingConsent === null)
+        ($status === null && $marketingConsent === null && !$phoneProvided)
         || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))
         || ($marketingConsent !== null && !is_bool($marketingConsent))
+        || ($statusNote !== null && $status === null)
     ) {
-        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Choose a valid lead stage or marketing consent value.']);
+        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, phone number, or marketing consent value.']);
     }
 
     $db = data_db();
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT id, email, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
+        $find = $db->prepare('SELECT id, email, phone, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
@@ -1236,7 +1309,20 @@ if ($method === 'PATCH' && $resource === 'leads') {
         if ($status !== null && $status !== $current['status']) {
             $updates[] = 'status = ?';
             $parameters[] = $status;
-            data_audit($db, 'lead.stage_changed', 'lead', (string) $id, ['from' => $current['status'], 'to' => $status]);
+            $details = [
+                'from' => $current['status'],
+                'to' => $status,
+                'actorName' => (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Staff'),
+            ];
+            if ($statusNote !== null && $statusNote !== '') $details['note'] = $statusNote;
+            data_audit($db, 'lead.stage_changed', 'lead', (string) $id, $details);
+        }
+        if ($phoneProvided && $phone !== $current['phone']) {
+            $updates[] = 'phone = ?';
+            $parameters[] = $phone;
+            data_audit($db, 'lead.phone_updated', 'lead', (string) $id, [
+                'actorName' => (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Staff'),
+            ]);
         }
         if ($marketingConsent !== null && (bool) $marketingConsent !== (bool) $current['marketing_consent']) {
             $updates[] = 'marketing_consent = ?';
@@ -1263,6 +1349,82 @@ if ($method === 'PATCH' && $resource === 'leads') {
     );
     $find->execute([$id]);
     data_respond(200, ['lead' => data_lead_row($find->fetch())]);
+}
+
+if ($method === 'POST' && $resource === 'lead-activities') {
+    data_require_admin();
+    $body = data_read_json();
+    $leadId = filter_var($body['leadId'] ?? null, FILTER_VALIDATE_INT);
+    if ($leadId === false || $leadId < 1) {
+        data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
+    }
+
+    $type = data_string($body, 'type', 8);
+    $note = data_string($body, 'note', 2000, false);
+    $outcome = data_string($body, 'outcome', 32, false);
+    $followUpDate = data_string($body, 'followUpDate', 10, false);
+    $validOutcomes = ['Connected', 'No answer', 'Voicemail left', 'Busy', 'Wrong number', 'Callback requested', 'Not interested'];
+    if (
+        !in_array($type, ['note', 'call'], true)
+        || ($type === 'note' && $note === '')
+        || ($type === 'call' && !in_array($outcome, $validOutcomes, true))
+        || ($type === 'note' && $outcome !== '')
+        || ($followUpDate !== '' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $followUpDate)
+            || !checkdate((int) substr($followUpDate, 5, 2), (int) substr($followUpDate, 8, 2), (int) substr($followUpDate, 0, 4))))
+    ) {
+        data_respond(400, ['error' => 'invalid_lead_activity', 'message' => 'Enter a comment or a valid call outcome and follow-up date.']);
+    }
+
+    $db = data_db();
+    $exists = $db->prepare('SELECT id FROM leads WHERE id = ?');
+    $exists->execute([$leadId]);
+    if (!$exists->fetch()) {
+        data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+    }
+
+    $authorEmail = (string) ($_SESSION['admin_email'] ?? 'unknown');
+    $authorName = trim((string) ($_SESSION['admin_display_name'] ?? ''));
+    if ($authorName === '') $authorName = $authorEmail;
+    $db->beginTransaction();
+    try {
+        $insert = $db->prepare(
+            'INSERT INTO lead_activities (lead_id, activity_type, note, call_outcome, follow_up_date, author_email, author_name)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        $insert->execute([
+            $leadId,
+            $type,
+            $note === '' ? null : $note,
+            $type === 'call' ? $outcome : null,
+            $followUpDate === '' ? null : $followUpDate,
+            $authorEmail,
+            $authorName,
+        ]);
+        $activityId = (int) $db->lastInsertId();
+        $auditDetails = ['type' => $type];
+        if ($type === 'call') $auditDetails['outcome'] = $outcome;
+        if ($followUpDate !== '') $auditDetails['followUpDate'] = $followUpDate;
+        data_audit($db, $type === 'call' ? 'lead.call_logged' : 'lead.note_added', 'lead', (string) $leadId, $auditDetails);
+        $created = $db->prepare('SELECT created_at FROM lead_activities WHERE id = ?');
+        $created->execute([$activityId]);
+        $createdAt = (string) $created->fetchColumn();
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients lead activity save failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'lead_activity_failed', 'message' => 'The lead activity could not be saved.']);
+    }
+
+    data_respond(201, ['activity' => [
+        'id' => 'activity-' . (string) $activityId,
+        'type' => $type,
+        'note' => $note,
+        'outcome' => $type === 'call' ? $outcome : null,
+        'followUpDate' => $followUpDate === '' ? null : $followUpDate,
+        'actorName' => $authorName,
+        'actorEmail' => $authorEmail,
+        'createdAt' => $createdAt,
+    ]]);
 }
 
 if ($method === 'POST' && $resource === 'order-notes') {
