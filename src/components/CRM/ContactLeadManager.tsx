@@ -42,6 +42,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [profileCountry, setProfileCountry] = useState('');
+  const [editingLead, setEditingLead] = useState<ContactLead | null>(null);
+  const [editLeadError, setEditLeadError] = useState('');
+  const [editLeadSaving, setEditLeadSaving] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
@@ -72,6 +75,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, saving]);
+  useEffect(() => {
+    if (!editingLead) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !editLeadSaving) setEditingLead(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingLead, editLeadSaving]);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
   const isUncalledRepeatBuyer = (lead: ContactLead) => (lead.callCount ?? 0) === 0 && (lead.activeOrderCount ?? 0) >= 2;
   const uncalledRepeatBuyers = leads.filter(isUncalledRepeatBuyer);
@@ -275,6 +286,38 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }).then((saved) => {
       if (saved) setContactDetailsEditing(false);
     });
+  };
+
+  const openLeadEditor = (lead: ContactLead) => {
+    setEditingLead(lead);
+    setProfileFirstName(lead.firstName);
+    setProfileLastName(lead.lastName);
+    setProfileEmail(lead.email);
+    setProfilePhone(lead.phone);
+    setProfileCountry(lead.country || getLeadCountry(lead.phone));
+    setEditLeadError('');
+  };
+
+  const saveLeadFromTable = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingLead || !onUpdateLead) return;
+    setEditLeadSaving(true);
+    setEditLeadError('');
+    try {
+      await onUpdateLead(editingLead.id, {
+        firstName: profileFirstName.trim(),
+        lastName: profileLastName.trim(),
+        email: profileEmail.trim(),
+        phone: profilePhone.trim(),
+        country: profileCountry.trim(),
+      });
+      setEditingLead(null);
+      setSuccess('Lead contact details saved.');
+    } catch (error) {
+      setEditLeadError(error instanceof Error ? error.message : 'The contact details could not be saved.');
+    } finally {
+      setEditLeadSaving(false);
+    }
   };
 
   const cancelContactDetailsEdit = () => {
@@ -588,7 +631,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       {dataError && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
       {requestError && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
       {success && <p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{success}</p>}
-      {!isSuperadmin && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Existing lead contact details are read-only for your role. A superadmin can edit them from this table or the lead profile.</p>}
+      {!isSuperadmin && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Existing lead contact details are read-only for your role. A superadmin can edit them from the table or lead profile.</p>}
 
       {mode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => {
@@ -655,6 +698,41 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
       )}
 
+      {editingLead && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !editLeadSaving) setEditingLead(null);
+          }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="edit-lead-title" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+            <header className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 id="edit-lead-title" className="text-lg font-bold text-slate-900">Edit lead contact</h3>
+                <p className="mt-1 text-sm text-slate-500">Update contact details for {editingLead.firstName} {editingLead.lastName}.</p>
+              </div>
+              <button type="button" disabled={editLeadSaving} onClick={() => setEditingLead(null)} aria-label="Close edit lead dialog" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50">
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            {editLeadError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{editLeadError}</p>}
+            <form onSubmit={saveLeadFromTable} className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Email<input required type="email" maxLength={254} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} defaultCountryName={profileCountry} disabled={editLeadSaving} /></span></label>
+              <label className="block text-sm font-medium text-slate-700">Country<span className="mt-1 block"><CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={editLeadSaving} /></span></label>
+              <div className="flex items-end justify-end gap-2 sm:col-span-2">
+                <button type="button" disabled={editLeadSaving} onClick={() => setEditingLead(null)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={editLeadSaving || !onUpdateLead} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  {editLeadSaving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 pt-4" role="group" aria-label="Lead groups">
           <button
@@ -706,31 +784,30 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name / Edit</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3 pr-3">Source</th></tr></thead>
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th><th className="py-3 pr-5 text-right">Actions</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
                 <tr
                   key={lead.id}
-                  className="border-t border-slate-100 hover:bg-slate-50"
+                  className={`border-t border-slate-100 hover:bg-slate-50 ${onLoadLeadProfile ? 'cursor-pointer focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-teal-700' : ''}`}
+                  tabIndex={onLoadLeadProfile ? 0 : undefined}
+                  aria-label={onLoadLeadProfile ? `Open profile for ${lead.firstName} ${lead.lastName}` : undefined}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+                    void openProfile(lead);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      void openProfile(lead);
+                    }
+                  }}
                 >
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center">
-                      {onLoadLeadProfile
-                        ? <button type="button" onClick={() => void openProfile(lead)} className="font-semibold text-teal-800 underline-offset-2 hover:underline">{lead.firstName} {lead.lastName}</button>
-                        : <span>{lead.firstName} {lead.lastName}</span>}
+                      <span className={onLoadLeadProfile ? 'font-semibold text-teal-800' : ''}>{lead.firstName} {lead.lastName}</span>
                       {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
-                      {onLoadLeadProfile && (
-                        <button
-                          type="button"
-                          disabled={!isSuperadmin}
-                          title={isSuperadmin ? `Edit ${lead.firstName} ${lead.lastName}` : 'Only a superadmin can edit contact details.'}
-                          onClick={() => void openProfile(lead, true)}
-                          className="ml-2 inline-flex items-center gap-1 rounded-md border border-teal-700 px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-500 disabled:hover:bg-white"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          {isSuperadmin ? 'Edit' : 'Admin only'}
-                        </button>
-                      )}
                     </span>
                   </td>
                   <td className="py-3">
@@ -751,9 +828,23 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>
+                  <td className="py-3 pr-5 text-right">
+                    <button
+                      type="button"
+                      disabled={!isSuperadmin}
+                      title={isSuperadmin ? `Edit ${lead.firstName} ${lead.lastName}` : 'Only a superadmin can edit contact details.'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (isSuperadmin) openLeadEditor(lead);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-teal-700 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-500 disabled:hover:bg-white"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                  </td>
                 </tr>
               ))}
-              {!filteredLeads.length && <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
+              {!filteredLeads.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
             </tbody>
           </table>
         </div>
