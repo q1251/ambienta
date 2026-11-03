@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertCircle, Download, FileSpreadsheet, Mail, Package, Search, Upload, UserPlus, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, Package, Search, Upload, UserPlus } from 'lucide-react';
 import { ContactLead, ContactLeadInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
@@ -35,7 +35,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [profile, setProfile] = useState<LeadProfile | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -112,7 +112,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const openProfile = async (lead: ContactLead) => {
     if (!onLoadLeadProfile) return;
     const requestId = ++profileRequestId.current;
-    setProfileOpen(true);
+    setSelectedLeadId(lead.id);
     setProfile(null);
     setProfileError('');
     setProfileLoading(true);
@@ -130,7 +130,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
   const closeProfile = () => {
     profileRequestId.current += 1;
-    setProfileOpen(false);
+    setSelectedLeadId(null);
     setProfile(null);
     setProfileError('');
     setProfileLoading(false);
@@ -149,6 +149,98 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setProfileSaving(false);
     }
   };
+
+  if (selectedLeadId !== null) {
+    const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+    return (
+      <section className="space-y-6">
+        <button
+          type="button"
+          onClick={closeProfile}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to contact leads
+        </button>
+
+        <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Lead profile</p>
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-950">
+                {profile ? `${profile.lead.firstName} ${profile.lead.lastName}` : selectedLead ? `${selectedLead.firstName} ${selectedLead.lastName}` : 'Lead profile'}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {profile?.lead.email || selectedLead?.email}
+                {(profile?.lead.phone || selectedLead?.phone) && ` · ${profile?.lead.phone || selectedLead?.phone}`}
+              </p>
+            </div>
+            {profile && <span className="rounded-full bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-900">{profile.lead.status}</span>}
+          </div>
+        </header>
+
+        {profileLoading && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Loading contact profile and order history…</p>}
+        {profileError && (
+          <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+            <p>{profileError}</p>
+            {selectedLead && <button type="button" onClick={() => void openProfile(selectedLead)} className="mt-2 font-semibold underline">Try again</button>}
+          </div>
+        )}
+
+        {profile && (
+          <>
+            <section className="rounded-2xl border border-slate-200 bg-white p-6">
+              <h3 className="text-base font-bold text-slate-900">Contact details</h3>
+              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div><p className="text-xs font-medium uppercase text-slate-500">Email</p><p className="mt-1 break-all text-sm text-slate-900">{profile.lead.email}</p></div>
+                <div><p className="text-xs font-medium uppercase text-slate-500">Phone</p><p className="mt-1 text-sm text-slate-900">{profile.lead.phone || 'Not provided'}</p></div>
+                <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
+                <div><p className="text-xs font-medium uppercase text-slate-500">Added</p><p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p></div>
+              </div>
+              <div className="mt-5 grid gap-5 border-t border-slate-100 pt-5 sm:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">Pipeline stage
+                  <select disabled={profileSaving || !onUpdateLead} value={profile.lead.status} onChange={(event) => void updateProfile({ status: event.target.value as LeadStatus })} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2">
+                    {(['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+                  <input type="checkbox" disabled={profileSaving || !onUpdateLead} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} />
+                  Explicit marketing opt-in recorded
+                </label>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Package className="h-4 w-4 text-teal-800" />Orders and tracking</h3>
+                  <p className="mt-1 text-sm text-slate-600">{profile.lead.orderCount || 0} order{profile.lead.orderCount === 1 ? '' : 's'} linked to this email</p>
+                </div>
+                {profile.lead.lastOrderAt && <p className="text-xs text-slate-500">Last order {new Date(profile.lead.lastOrderAt).toLocaleDateString()}</p>}
+              </div>
+              {profile.orders.length ? (
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2">Order</th><th className="px-3 py-2">Placed</th><th className="px-3 py-2">Items</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Tracking</th></tr></thead>
+                    <tbody>{profile.orders.map((order) => (
+                      <tr key={order.id} className="border-t border-slate-100">
+                        <td className="px-3 py-3 font-medium">{order.orderNumber}</td>
+                        <td className="px-3 py-3">{new Date(order.placedAt).toLocaleDateString()}</td>
+                        <td className="px-3 py-3">{order.medicationName}</td>
+                        <td className="px-3 py-3">${order.totalAmount.toFixed(2)}</td>
+                        <td className="px-3 py-3">{order.status}</td>
+                        <td className="px-3 py-3">{order.trackingNumber ? `${order.carrier || 'Carrier'} · ${order.trackingNumber}` : 'Not available'}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No orders are associated with this email address yet.</p>}
+              {(profile.lead.orderCount || 0) > profile.orders.length && <p className="mt-2 text-xs text-slate-500">Showing the 100 most recent orders.</p>}
+            </section>
+          </>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-5">
@@ -281,61 +373,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
       </div>
 
-      {profileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-label="Lead profile">
-          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-slate-200 p-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Lead profile</p>
-                <h3 className="mt-1 text-xl font-bold text-slate-900">{profile ? `${profile.lead.firstName} ${profile.lead.lastName}` : 'Loading contact…'}</h3>
-                {profile && <p className="mt-1 text-sm text-slate-600">{profile.lead.email}{profile.lead.phone ? ` · ${profile.lead.phone}` : ''}</p>}
-              </div>
-              <button type="button" onClick={closeProfile} aria-label="Close lead profile" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="space-y-5 p-5">
-              {profileLoading && <p role="status" className="text-sm text-slate-600">Loading contact and order history…</p>}
-              {profileError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{profileError}</p>}
-              {profile && (
-                <>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-sm font-medium text-slate-700">Pipeline stage
-                      <select disabled={profileSaving} value={profile.lead.status} onChange={(event) => void updateProfile({ status: event.target.value as LeadStatus })} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2">
-                        {(['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status}>{status}</option>)}
-                      </select>
-                    </label>
-                    <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
-                      <input type="checkbox" disabled={profileSaving} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} />
-                      Explicit marketing opt-in recorded
-                    </label>
-                    <div className="text-sm text-slate-600"><span className="font-medium text-slate-800">Source:</span> {profile.lead.leadSource}<br /><span className="font-medium text-slate-800">Added:</span> {new Date(profile.lead.createdAt).toLocaleDateString()}</div>
-                    <div className="text-sm text-slate-600"><span className="font-medium text-slate-800">Orders:</span> {profile.lead.orderCount || 0}<br /><span className="font-medium text-slate-800">Last order:</span> {profile.lead.lastOrderAt ? new Date(profile.lead.lastOrderAt).toLocaleDateString() : 'No orders'}</div>
-                  </div>
-                  <section>
-                    <h4 className="mb-3 flex items-center gap-2 font-semibold text-slate-900"><Package className="h-4 w-4 text-teal-800" />Order and tracking history</h4>
-                    {profile.orders.length ? (
-                      <div className="overflow-x-auto rounded-lg border border-slate-200">
-                        <table className="w-full text-left text-sm">
-                          <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2">Order</th><th className="px-3 py-2">Placed</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Tracking</th></tr></thead>
-                          <tbody>{profile.orders.map((order) => (
-                            <tr key={order.id} className="border-t border-slate-100">
-                              <td className="px-3 py-2 font-medium">{order.orderNumber}</td>
-                              <td className="px-3 py-2">{new Date(order.placedAt).toLocaleDateString()}</td>
-                              <td className="px-3 py-2">${order.totalAmount.toFixed(2)}</td>
-                              <td className="px-3 py-2">{order.status}</td>
-                              <td className="px-3 py-2">{order.trackingNumber ? `${order.carrier || 'Carrier'} · ${order.trackingNumber}` : 'Not available'}</td>
-                            </tr>
-                          ))}</tbody>
-                        </table>
-                      </div>
-                    ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No orders are associated with this email address yet.</p>}
-                    {(profile.lead.orderCount || 0) > profile.orders.length && <p className="mt-2 text-xs text-slate-500">Showing the 100 most recent orders.</p>}
-                  </section>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 };
