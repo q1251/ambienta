@@ -130,6 +130,42 @@ function data_ensure_schema(PDO $db): void
             KEY email_drafts_folder (deleted_at, updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaigns (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(160) NOT NULL,
+            subject VARCHAR(180) NOT NULL,
+            body MEDIUMTEXT NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'draft',
+            scheduled_at DATETIME NULL,
+            recipient_count INT UNSIGNED NOT NULL DEFAULT 0,
+            sent_count INT UNSIGNED NOT NULL DEFAULT 0,
+            failed_count INT UNSIGNED NOT NULL DEFAULT 0,
+            unsubscribed_count INT UNSIGNED NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            completed_at DATETIME NULL,
+            KEY email_campaigns_status_schedule (status, scheduled_at, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS email_campaign_recipients (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            campaign_id BIGINT UNSIGNED NOT NULL,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            recipient_email VARCHAR(254) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'queued',
+            unsubscribe_token_hash CHAR(64) NOT NULL,
+            unsubscribe_token MEDIUMTEXT NOT NULL,
+            claimed_at DATETIME NULL,
+            sent_at DATETIME NULL,
+            KEY email_campaign_recipients_queue (campaign_id, status, id),
+            KEY email_campaign_recipients_lead (lead_id, status),
+            KEY email_campaign_recipients_email (recipient_email, status),
+            UNIQUE KEY email_campaign_recipient_token (unsubscribe_token_hash),
+            CONSTRAINT email_campaign_recipients_campaign_fk FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
     foreach ([
         ['email_activity', 'body', 'MEDIUMTEXT NULL'],
@@ -637,6 +673,7 @@ function data_mail_settings(): array
         || strlen((string) base64_decode($settings['nonce'], true)) !== 12
         || strlen((string) base64_decode($settings['tag'], true)) !== 16
         || (isset($settings['verified']) && !is_bool($settings['verified']))
+        || (isset($settings['campaignWorkerTokenHash']) && (!is_string($settings['campaignWorkerTokenHash']) || preg_match('/^[a-f0-9]{64}$/', $settings['campaignWorkerTokenHash']) !== 1))
     ) {
         error_log('Ambients private mail settings are invalid.');
         data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Saved mail settings could not be loaded. Contact the administrator.']);
@@ -722,6 +759,9 @@ function data_mail_save_settings(string $email, string $displayName, string $pas
         ];
     }
 
+    if (isset($existing['campaignWorkerTokenHash'])) {
+        $settings['campaignWorkerTokenHash'] = $existing['campaignWorkerTokenHash'];
+    }
     data_mail_write_settings($settings);
 }
 
@@ -808,7 +848,7 @@ function data_smtp_connect(array $settings)
     return $socket;
 }
 
-function data_mail_send(array $settings, string $recipient, string $subject, string $body): void
+function data_mail_send(array $settings, string $recipient, string $subject, string $body, ?string $unsubscribeUrl = null): void
 {
     $socket = data_smtp_connect($settings);
     try {
@@ -817,7 +857,7 @@ function data_mail_send(array $settings, string $recipient, string $subject, str
         data_smtp_command($socket, 'DATA', ['354']);
         $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $encodedName = '=?UTF-8?B?' . base64_encode($settings['displayName']) . '?=';
-        $message = implode("\r\n", [
+        $headers = [
             'From: ' . $encodedName . ' <' . $settings['emailAccount'] . '>',
             'To: <' . $recipient . '>',
             'Subject: ' . $encodedSubject,
@@ -826,7 +866,13 @@ function data_mail_send(array $settings, string $recipient, string $subject, str
             'MIME-Version: 1.0',
             'Content-Type: text/plain; charset=UTF-8',
             'Content-Transfer-Encoding: base64',
-        ]) . "\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n";
+        ];
+        if ($unsubscribeUrl !== null) {
+            $headers[] = 'List-Unsubscribe: <' . $unsubscribeUrl . '>';
+            $headers[] = 'List-Unsubscribe-Post: List-Unsubscribe=One-Click';
+            $body .= "\n\n---\nTo stop receiving marketing emails, unsubscribe here:\n" . $unsubscribeUrl;
+        }
+        $message = implode("\r\n", $headers) . "\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n";
         data_smtp_write_all($socket, $message);
         data_smtp_read_response($socket, ['250']);
         try {
@@ -837,6 +883,205 @@ function data_mail_send(array $settings, string $recipient, string $subject, str
     } finally {
         if (is_resource($socket)) fclose($socket);
     }
+}
+
+function data_campaign_recipient_snapshot(PDO $db): array
+{
+    $rows = $db->query(
+        "SELECT MIN(id) AS lead_id, LOWER(TRIM(email)) AS recipient_email
+         FROM leads
+         WHERE marketing_consent = 1 AND TRIM(email) <> ''
+         GROUP BY LOWER(TRIM(email))
+         ORDER BY MIN(id)
+         LIMIT 5001"
+    )->fetchAll();
+    if (count($rows) > 5000) {
+        return array_slice($rows, 0, 5001);
+    }
+    $recipients = array_values(array_filter($rows, static fn (array $row): bool =>
+        filter_var($row['recipient_email'] ?? null, FILTER_VALIDATE_EMAIL) !== false
+    ));
+    return $recipients;
+}
+
+function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $scheduledAt): int
+{
+    if (!in_array($status, ['sending', 'scheduled'], true)) {
+        throw new RuntimeException('invalid_campaign_status');
+    }
+
+    $recipients = data_campaign_recipient_snapshot($db);
+    if ($recipients === []) {
+        throw new RuntimeException('campaign_audience_empty');
+    }
+    if (count($recipients) > 5000) {
+        throw new RuntimeException('campaign_audience_too_large');
+    }
+
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare("SELECT status FROM email_campaigns WHERE id = ? FOR UPDATE");
+        $find->execute([$campaignId]);
+        if ($find->fetchColumn() !== 'draft') {
+            throw new RuntimeException('campaign_not_editable');
+        }
+        $db->prepare('DELETE FROM email_campaign_recipients WHERE campaign_id = ?')->execute([$campaignId]);
+        $insert = $db->prepare(
+            'INSERT INTO email_campaign_recipients (campaign_id, lead_id, recipient_email, status, unsubscribe_token_hash, unsubscribe_token)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        foreach ($recipients as $recipient) {
+            $token = bin2hex(random_bytes(32));
+            $insert->execute([
+                $campaignId,
+                (int) $recipient['lead_id'],
+                (string) $recipient['recipient_email'],
+                'queued',
+                hash('sha256', $token),
+                data_mail_encrypt_content($token),
+            ]);
+        }
+        $db->prepare(
+            'UPDATE email_campaigns SET status = ?, scheduled_at = ?, recipient_count = ?, sent_count = 0, failed_count = 0, unsubscribed_count = 0, completed_at = NULL WHERE id = ?'
+        )->execute([$status, $scheduledAt, count($recipients), $campaignId]);
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $error;
+    }
+
+    return count($recipients);
+}
+
+function data_campaign_process_batch(array $settings, int $limit = 5): array
+{
+    $db = data_db();
+    $db->exec(
+        "UPDATE email_campaign_recipients
+         SET status = 'failed'
+         WHERE status = 'sending' AND claimed_at < UTC_TIMESTAMP() - INTERVAL 10 MINUTE"
+    );
+    $processed = 0;
+    $sent = 0;
+    $failed = 0;
+    $unsubscribed = 0;
+
+    for ($index = 0; $index < max(1, min($limit, 10)); $index++) {
+        $db->beginTransaction();
+        try {
+            $statement = $db->query(
+                "SELECT r.id, r.campaign_id, r.lead_id, r.recipient_email, r.unsubscribe_token,
+                        c.subject, c.body, c.status AS campaign_status
+                 FROM email_campaign_recipients r
+                 INNER JOIN email_campaigns c ON c.id = r.campaign_id
+                 WHERE r.status = 'queued'
+                   AND (c.status = 'sending' OR (c.status = 'scheduled' AND c.scheduled_at <= UTC_TIMESTAMP()))
+                 ORDER BY COALESCE(c.scheduled_at, c.created_at), r.id
+                 LIMIT 1
+                 FOR UPDATE"
+            );
+            $recipient = $statement->fetch();
+            if (!is_array($recipient)) {
+                $db->commit();
+                break;
+            }
+            if ($recipient['campaign_status'] === 'scheduled') {
+                $db->prepare("UPDATE email_campaigns SET status = 'sending' WHERE id = ? AND status = 'scheduled'")
+                    ->execute([(int) $recipient['campaign_id']]);
+            }
+            $claim = $db->prepare("UPDATE email_campaign_recipients SET status = 'sending', claimed_at = UTC_TIMESTAMP() WHERE id = ? AND status = 'queued'");
+            $claim->execute([(int) $recipient['id']]);
+            if ($claim->rowCount() !== 1) {
+                $db->commit();
+                continue;
+            }
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $error;
+        }
+
+        $processed++;
+        $consent = $db->prepare('SELECT marketing_consent FROM leads WHERE id = ? AND LOWER(TRIM(email)) = LOWER(?)');
+        $consent->execute([(int) $recipient['lead_id'], (string) $recipient['recipient_email']]);
+        if ((int) $consent->fetchColumn() !== 1) {
+            $db->prepare("UPDATE email_campaign_recipients SET status = 'unsubscribed' WHERE id = ?")->execute([(int) $recipient['id']]);
+            $unsubscribed++;
+            continue;
+        }
+
+        $token = data_mail_decrypt_content((string) $recipient['unsubscribe_token']);
+        $unsubscribeUrl = 'https://ambienta.io/api/data.php?resource=email-unsubscribe&token=' . rawurlencode($token);
+        $message = data_mail_decrypt_content((string) $recipient['body']);
+        $activityId = null;
+        try {
+            $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status) VALUES (?, ?, ?, ?)')->execute([
+                (string) $recipient['recipient_email'],
+                (string) $recipient['subject'],
+                data_mail_encrypt_content($message . "\n\n---\nTo stop receiving marketing emails, unsubscribe here:\n" . $unsubscribeUrl),
+                'Queued',
+            ]);
+            $activityId = $db->lastInsertId();
+            data_mail_send($settings, (string) $recipient['recipient_email'], (string) $recipient['subject'], $message, $unsubscribeUrl);
+            $db->prepare("UPDATE email_campaign_recipients SET status = 'sent', sent_at = UTC_TIMESTAMP() WHERE id = ?")->execute([(int) $recipient['id']]);
+            $db->prepare("UPDATE email_activity SET status = 'Sent' WHERE id = ?")->execute([$activityId]);
+            $sent++;
+        } catch (Throwable $error) {
+            $db->prepare("UPDATE email_campaign_recipients SET status = 'failed' WHERE id = ?")->execute([(int) $recipient['id']]);
+            if ($activityId !== null) {
+                $db->prepare("UPDATE email_activity SET status = 'Failed' WHERE id = ?")->execute([$activityId]);
+            }
+            error_log('Ambients email campaign recipient send failed: ' . $error->getMessage());
+            $failed++;
+        }
+    }
+
+    $db->exec(
+        "        UPDATE email_campaigns AS c
+        SET sent_count = (
+                SELECT COUNT(*) FROM email_campaign_recipients r
+                WHERE r.campaign_id = c.id AND r.status = 'sent'
+             ),
+            failed_count = (
+                SELECT COUNT(*) FROM email_campaign_recipients r
+                WHERE r.campaign_id = c.id AND r.status = 'failed'
+             ),
+            unsubscribed_count = (
+               SELECT COUNT(*) FROM email_campaign_recipients r
+               WHERE r.campaign_id = c.id AND r.status = 'unsubscribed'
+            ),
+            completed_at = CASE
+               WHEN NOT EXISTS (
+                   SELECT 1 FROM email_campaign_recipients r
+                   WHERE r.campaign_id = c.id AND r.status IN ('queued', 'sending')
+               ) AND c.completed_at IS NULL THEN UTC_TIMESTAMP()
+               ELSE c.completed_at
+            END,
+            status = CASE
+               WHEN NOT EXISTS (
+                   SELECT 1 FROM email_campaign_recipients r
+                   WHERE r.campaign_id = c.id AND r.status IN ('queued', 'sending')
+               ) AND c.status IN ('sending', 'scheduled') THEN
+                   CASE
+                       WHEN NOT EXISTS (
+                           SELECT 1 FROM email_campaign_recipients r
+                           WHERE r.campaign_id = c.id AND r.status = 'sent'
+                       ) AND EXISTS (
+                           SELECT 1 FROM email_campaign_recipients r
+                           WHERE r.campaign_id = c.id AND r.status = 'failed'
+                       ) THEN 'failed'
+                       WHEN EXISTS (
+                           SELECT 1 FROM email_campaign_recipients r
+                           WHERE r.campaign_id = c.id AND r.status = 'failed'
+                       ) THEN 'partial'
+                       ELSE 'sent'
+                   END
+               ELSE c.status
+            END,
+         WHERE c.status IN ('sending', 'scheduled')"
+    );
+
+    return ['processed' => $processed, 'sent' => $sent, 'failed' => $failed, 'unsubscribed' => $unsubscribed];
 }
 
 function data_imap_quote(string $value): string
@@ -1371,7 +1616,89 @@ if (!is_string($resource)) {
     data_respond(400, ['error' => 'invalid_resource', 'message' => 'The requested resource is invalid.']);
 }
 
-if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-activity', 'email-inbox', 'email-message-trash', 'email-message-restore', 'email-message-purge', 'email-drafts', 'email-draft', 'email-draft-trash', 'email-draft-restore', 'email-draft-purge', 'email-draft-remove'], true)) {
+if ($resource === 'email-unsubscribe') {
+    $token = $_GET['token'] ?? ($_POST['token'] ?? '');
+    if ($method === 'POST' && $token === '') {
+        parse_str((string) file_get_contents('php://input'), $postBody);
+        $token = is_array($postBody) ? ($postBody['token'] ?? '') : '';
+    }
+    if (!is_string($token) || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) {
+        data_respond(400, ['error' => 'invalid_unsubscribe_token', 'message' => 'This unsubscribe link is invalid or expired.']);
+    }
+
+    $db = data_db();
+    $lookup = $db->prepare('SELECT id, lead_id, recipient_email FROM email_campaign_recipients WHERE unsubscribe_token_hash = ? LIMIT 1');
+    $lookup->execute([hash('sha256', $token)]);
+    $recipient = $lookup->fetch();
+    if (!is_array($recipient)) {
+        data_respond(404, ['error' => 'unsubscribe_link_not_found', 'message' => 'This unsubscribe link is invalid or expired.']);
+    }
+
+    if ($method === 'GET') {
+        header('Content-Type: text/html; charset=utf-8');
+        header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'");
+        echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Email preferences</title><body style="font:16px system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:24px;color:#172033"><h1>Unsubscribe from marketing emails</h1><p>Confirm to stop receiving marketing emails from Ambienta.</p><form method="post"><input type="hidden" name="token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '"><button style="background:#5b21b6;color:white;border:0;border-radius:8px;padding:12px 18px;font:inherit;cursor:pointer" type="submit">Unsubscribe</button></form></body></html>';
+        exit;
+    }
+
+    if ($method === 'POST') {
+        parse_str((string) file_get_contents('php://input'), $postBody);
+        $oneClick = is_array($postBody) && ($postBody['List-Unsubscribe'] ?? '') === 'One-Click';
+        $manualConfirm = isset($_POST['token']) && hash_equals($token, (string) $_POST['token']);
+        if (!$oneClick && !$manualConfirm) {
+            data_respond(400, ['error' => 'unsubscribe_confirmation_required', 'message' => 'Confirm your unsubscribe request and try again.']);
+        }
+        $db->beginTransaction();
+        try {
+            $db->prepare('UPDATE leads SET marketing_consent = 0, marketing_consent_at = NULL WHERE email = ?')
+                ->execute([(string) $recipient['recipient_email']]);
+            $db->prepare("UPDATE email_campaign_recipients SET status = 'unsubscribed' WHERE recipient_email = ? AND status = 'queued'")
+                ->execute([(string) $recipient['recipient_email']]);
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('Ambients email unsubscribe could not be saved: ' . $error->getMessage());
+            data_respond(503, ['error' => 'unsubscribe_unavailable', 'message' => 'Your preferences could not be updated. Please try again later.']);
+        }
+        header('Content-Type: text/html; charset=utf-8');
+        header("Content-Security-Policy: default-src 'none'; base-uri 'none'");
+        echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Email preferences updated</title><body style="font:16px system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:24px;color:#172033"><h1>You are unsubscribed</h1><p>You will no longer receive marketing emails from Ambienta.</p></body></html>';
+        exit;
+    }
+    data_respond(405, ['error' => 'method_not_allowed', 'message' => 'Use the unsubscribe confirmation form.']);
+}
+
+if ($resource === 'email-campaign-process') {
+    if ($method !== 'POST') {
+        data_respond(405, ['error' => 'method_not_allowed', 'message' => 'The campaign worker accepts POST requests only.']);
+    }
+    $settings = data_mail_settings();
+    $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+    if (preg_match('/^Bearer ([a-f0-9]{64})$/', $authorization, $matches) !== 1
+        || !isset($settings['campaignWorkerTokenHash'])
+        || !is_string($settings['campaignWorkerTokenHash'])
+        || !hash_equals($settings['campaignWorkerTokenHash'], hash('sha256', $matches[1]))) {
+        data_respond(401, ['error' => 'campaign_worker_unauthorized', 'message' => 'The campaign worker token is invalid.']);
+    }
+    if (empty($settings['verified'])) {
+        data_respond(409, ['error' => 'mail_not_verified', 'message' => 'Verify Hostinger SMTP under Integrations before processing campaigns.']);
+    }
+    try {
+        data_respond(200, data_campaign_process_batch($settings));
+    } catch (Throwable $error) {
+        error_log('Ambients email campaign worker failed: ' . $error->getMessage());
+        data_respond(503, ['error' => 'campaign_worker_failed', 'message' => 'The campaign batch could not be processed. Check the server logs and try again.']);
+    }
+}
+
+if (in_array($resource, [
+    'email-settings', 'email-test', 'email-send', 'email-activity', 'email-inbox',
+    'email-message-trash', 'email-message-restore', 'email-message-purge',
+    'email-drafts', 'email-draft', 'email-draft-trash', 'email-draft-restore',
+    'email-draft-purge', 'email-draft-remove', 'email-campaigns',
+    'email-campaign-audience', 'email-campaign-save', 'email-campaign-launch',
+    'email-campaign-schedule', 'email-campaign-cancel', 'email-campaign-worker-token',
+], true)) {
     if ($method === 'GET' && $resource === 'email-settings') {
         data_require_permission('integrations');
         $settings = data_mail_settings();
@@ -1628,6 +1955,172 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
             'status' => $row['status'],
             'sentAt' => $row['sent_at'],
         ], $rows)]);
+    }
+
+    if ($resource === 'email-campaign-worker-token' && $method === 'POST') {
+        data_require_admin('admin');
+        $settings = data_mail_settings();
+        if ($settings === []) {
+            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure Hostinger email before enabling scheduled campaigns.']);
+        }
+        $token = bin2hex(random_bytes(32));
+        $settings['campaignWorkerTokenHash'] = hash('sha256', $token);
+        data_mail_write_settings($settings);
+        data_respond(200, [
+            'workerToken' => $token,
+            'command' => 'curl --silent --show-error --fail --request POST --header "Authorization: Bearer ' . $token . '" "https://ambienta.io/api/data.php?resource=email-campaign-process"',
+        ]);
+    }
+
+    if ($method === 'GET' && $resource === 'email-campaign-audience') {
+        data_require_admin('admin');
+        $recipients = data_campaign_recipient_snapshot(data_db());
+        data_respond(200, ['audienceCount' => count($recipients), 'audienceLimit' => 5000]);
+    }
+
+    if ($method === 'GET' && $resource === 'email-campaigns') {
+        data_require_admin('admin');
+        $rows = data_db()->query(
+            'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, created_at, completed_at
+             FROM email_campaigns ORDER BY id DESC LIMIT 100'
+        )->fetchAll();
+        data_respond(200, ['campaigns' => array_map(static fn (array $row): array => [
+            'id' => (string) $row['id'],
+            'name' => $row['name'],
+            'subject' => $row['subject'],
+            'body' => data_mail_decrypt_content($row['body']),
+            'status' => $row['status'],
+            'scheduledAt' => $row['scheduled_at'],
+            'recipientCount' => (int) $row['recipient_count'],
+            'sentCount' => (int) $row['sent_count'],
+            'failedCount' => (int) $row['failed_count'],
+            'unsubscribedCount' => (int) $row['unsubscribed_count'],
+            'createdAt' => $row['created_at'],
+            'completedAt' => $row['completed_at'],
+        ], $rows)]);
+    }
+
+    if ($method === 'POST' && $resource === 'email-campaign-save') {
+        data_require_admin('admin');
+        $body = data_read_json(32768);
+        $name = trim(data_string($body, 'name', 160));
+        $subject = trim(data_string($body, 'subject', 180));
+        $message = $body['body'] ?? null;
+        if ($name === '' || $subject === '' || !is_string($message) || trim($message) === '' || strlen($message) > 20000) {
+            data_respond(400, ['error' => 'invalid_campaign', 'message' => 'Enter a campaign name, subject, and message up to 20,000 bytes.']);
+        }
+        if (preg_match('/[\r\n\x00]/', $name . $subject) === 1 || preg_match('/\x00/', $message) === 1) {
+            data_respond(400, ['error' => 'invalid_campaign', 'message' => 'The campaign contains unsupported control characters.']);
+        }
+        $db = data_db();
+        $campaignId = $body['id'] ?? null;
+        if ($campaignId === null) {
+            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status) VALUES (?, ?, ?, ?)')->execute([
+                $name,
+                $subject,
+                data_mail_encrypt_content($message),
+                'draft',
+            ]);
+            $campaignId = (string) $db->lastInsertId();
+        } else {
+            $campaignId = filter_var($campaignId, FILTER_VALIDATE_INT);
+            if ($campaignId === false || $campaignId < 1) {
+                data_respond(400, ['error' => 'invalid_campaign_id', 'message' => 'The selected campaign is invalid.']);
+            }
+            $db->prepare("UPDATE email_campaigns SET name = ?, subject = ?, body = ? WHERE id = ? AND status = 'draft'")->execute([
+                $name,
+                $subject,
+                data_mail_encrypt_content($message),
+                $campaignId,
+            ]);
+            $exists = $db->prepare("SELECT COUNT(*) FROM email_campaigns WHERE id = ? AND status = 'draft'");
+            $exists->execute([$campaignId]);
+            if ((int) $exists->fetchColumn() !== 1) {
+                data_respond(409, ['error' => 'campaign_not_editable', 'message' => 'Only draft campaigns can be edited.']);
+            }
+        }
+        data_respond(200, ['saved' => true, 'campaignId' => (string) $campaignId]);
+    }
+
+    if (in_array($resource, ['email-campaign-launch', 'email-campaign-schedule', 'email-campaign-cancel'], true) && $method === 'POST') {
+        data_require_admin('admin');
+        $body = data_read_json(2048);
+        $campaignId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+        if ($campaignId === false || $campaignId < 1) {
+            data_respond(400, ['error' => 'invalid_campaign_id', 'message' => 'The selected campaign is invalid.']);
+        }
+        $db = data_db();
+
+        if ($resource === 'email-campaign-cancel') {
+            $db->beginTransaction();
+            try {
+                $find = $db->prepare('SELECT status FROM email_campaigns WHERE id = ? FOR UPDATE');
+                $find->execute([$campaignId]);
+                if ($find->fetchColumn() !== 'scheduled') {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'campaign_not_scheduled', 'message' => 'Only scheduled campaigns can be cancelled.']);
+                }
+                $db->prepare('DELETE FROM email_campaign_recipients WHERE campaign_id = ?')->execute([$campaignId]);
+                $db->prepare("UPDATE email_campaigns SET status = 'draft', scheduled_at = NULL, recipient_count = 0, sent_count = 0, failed_count = 0, unsubscribed_count = 0 WHERE id = ?")->execute([$campaignId]);
+                $db->commit();
+                data_respond(200, ['cancelled' => true]);
+            } catch (Throwable $error) {
+                if ($db->inTransaction()) $db->rollBack();
+                throw $error;
+            }
+        }
+
+        $settings = data_mail_settings();
+        if ($settings === [] || empty($settings['verified'])) {
+            data_respond(409, ['error' => 'mail_not_verified', 'message' => 'Verify Hostinger SMTP and IMAP under Integrations before scheduling or sending a campaign.']);
+        }
+        $status = 'sending';
+        $scheduledAt = null;
+        if ($resource === 'email-campaign-schedule') {
+            $requestedTime = $body['scheduledAt'] ?? null;
+            if (!is_string($requestedTime)) {
+                data_respond(400, ['error' => 'invalid_schedule_time', 'message' => 'Choose a valid date and time for this campaign.']);
+            }
+            try {
+                $scheduledTime = new DateTimeImmutable($requestedTime);
+            } catch (Throwable $error) {
+                data_respond(400, ['error' => 'invalid_schedule_time', 'message' => 'Choose a valid date and time for this campaign.']);
+            }
+            if ($scheduledTime->getTimestamp() < time() + 300) {
+                data_respond(400, ['error' => 'schedule_too_soon', 'message' => 'Schedule the campaign at least five minutes from now.']);
+            }
+            $status = 'scheduled';
+            $scheduledAt = $scheduledTime->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+        }
+        try {
+            $recipientCount = data_campaign_queue($db, $campaignId, $status, $scheduledAt);
+        } catch (Throwable $error) {
+            $message = match ($error->getMessage()) {
+                'campaign_audience_empty' => 'There are no opted-in leads with valid email addresses for this campaign.',
+                'campaign_audience_too_large' => 'Campaigns are limited to 5,000 opted-in recipients.',
+                'campaign_not_editable' => 'Only draft campaigns can be sent or scheduled.',
+                default => null,
+            };
+            if ($message !== null) {
+                data_respond(409, ['error' => $error->getMessage(), 'message' => $message]);
+            }
+            throw $error;
+        }
+
+        if ($status === 'scheduled') {
+            data_respond(200, ['scheduled' => true, 'recipientCount' => $recipientCount, 'scheduledAt' => $scheduledAt]);
+        }
+        $batch = data_campaign_process_batch($settings, 5);
+        data_respond(200, [
+            'queued' => true,
+            'recipientCount' => $recipientCount,
+            'processed' => $batch['processed'],
+            'sent' => $batch['sent'],
+            'failed' => $batch['failed'],
+            'status' => $batch['processed'] < $recipientCount
+                ? 'sending'
+                : ($batch['failed'] === 0 ? 'sent' : ($batch['sent'] === 0 ? 'failed' : 'partial')),
+        ]);
     }
 
     data_respond(405, ['error' => 'method_not_allowed', 'message' => 'The requested mail operation is not allowed.']);
