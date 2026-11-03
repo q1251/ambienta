@@ -136,10 +136,13 @@ and contact leads; only the primary administrator can manage staff accounts or
 view the audit log. Deactivated operator accounts are denied access on their
 next protected API request.
 
-Mail is not connected: the application does not send messages or track delivery,
-opens, or replies. Card and PayPal processing are disabled, and cryptocurrency
-remains disabled. The audit log is available only through the authenticated
-admin API.
+Mail is not connected: lead profiles can compose a message and hand it off to
+the staff member's default email application, but the CRM does not send
+messages or track delivery, opens, or replies. Staff must verify that a message
+is lawful to send; do not use the composer for promotional outreach without
+recorded marketing opt-in. Card and PayPal processing are disabled, and
+cryptocurrency remains disabled. The audit log is available only through the
+authenticated admin API.
 
 Storefront checkout currently accepts cash on delivery/pickup only. Card,
 PayPal, and cryptocurrency processing are disabled until a server-side payment

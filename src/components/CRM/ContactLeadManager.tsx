@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Upload, UserPlus } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
@@ -43,6 +43,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileSaving, setProfileSaving] = useState(false);
   const [activityNote, setActivityNote] = useState('');
   const [activitySaving, setActivitySaving] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
   const profileRequestId = useRef(0);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
   const filteredLeads = leads.filter((lead) => {
@@ -122,6 +124,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileSaving(false);
     setActivitySaving(false);
     setActivityNote('');
+    setEmailSubject('');
+    setEmailBody('');
     setProfileLoading(true);
     try {
       const loadedProfile = await onLoadLeadProfile(lead.id);
@@ -202,6 +206,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const noteActivities = profile?.activities.filter((activity) => activity.type === 'note') ?? [];
 
   const phoneLink = (value: string) => value.replace(/[^\d+]/g, '');
+
+  const openEmailComposer = (event: React.FormEvent, recipient: string) => {
+    event.preventDefault();
+    const mailto = `mailto:${recipient}?subject=${encodeURIComponent(emailSubject.trim())}&body=${encodeURIComponent(emailBody.trim())}`;
+    window.location.href = mailto;
+  };
 
   if (selectedLeadId !== null) {
     const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
@@ -319,6 +329,32 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <span><span className="font-medium">Explicit marketing opt-in recorded.</span> Only mark this when the contact has actually consented to marketing email.</span>
                 </label>
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-6">
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Mail className="h-4 w-4 text-teal-800" />Email this contact</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Compose a message to {profile.lead.email}. This opens your device’s default email app; sending, delivery status, replies, and tracking are not connected to the CRM.
+              </p>
+              <form onSubmit={(event) => openEmailComposer(event, profile.lead.email)} className="mt-4 space-y-4">
+                <label className="block text-sm font-medium text-slate-700">To
+                  <input type="email" readOnly value={profile.lead.email} className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-slate-600" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Subject
+                  <input required maxLength={200} value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Message
+                  <textarea required maxLength={10000} rows={5} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                </label>
+                {!profile.lead.marketingConsent && (
+                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    This contact has not opted in to marketing. Do not use this composer for promotional outreach unless valid consent is recorded.
+                  </p>
+                )}
+                <button type="submit" disabled={!emailSubject.trim() || !emailBody.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  <Send className="h-4 w-4" /> Open email app
+                </button>
+              </form>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
