@@ -238,7 +238,24 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     setEditName(account.display_name);
     setEditEmail(account.email);
     setEditPermissions(account.permissions);
+    setError('');
+    setMessage('');
   };
+
+  const closeEditModal = () => {
+    if (saving) return;
+    setEditingId(null);
+    setError('');
+  };
+
+  useEffect(() => {
+    if (editingId === null) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) closeEditModal();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingId, saving]);
 
   return (
     <div className="space-y-6">
@@ -255,8 +272,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         )}
       </header>
 
-      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
-      {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{message}</p>}
+      {(profileAccountId === null || editingId === null) && error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
+      {(profileAccountId === null || editingId === null) && message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{message}</p>}
 
       {oneTimeCredentials.length > 0 && (
         <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
@@ -296,31 +313,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 </div>
               </header>
 
-              {editingId === selectedProfile.id ? (
-                <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                  <h3 className="font-semibold text-slate-900">Edit agent account</h3>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="text-sm font-medium text-slate-700">Display name<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-                    <label className="text-sm font-medium text-slate-700">Sign-in email<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} maxLength={254} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
-                  </div>
-                  <fieldset>
-                    <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
-                    <div className="mt-2 flex flex-wrap gap-4">
-                      {availablePermissions.map((permission) => (
-                        <label key={permission.id} className="inline-flex items-center gap-2 text-sm text-slate-700">
-                          <input type="checkbox" checked={editPermissions.includes(permission.id)} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} />
-                          {permission.label}
-                        </label>
-                      ))}
-                    </div>
-                  </fieldset>
-                  <div className="flex gap-2">
-                    <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { displayName: editName, email: editEmail, permissions: editPermissions }, 'Agent account details and permissions updated.')} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button>
-                    <button type="button" disabled={saving} onClick={() => setEditingId(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
-                  </div>
-                </section>
-              ) : (
-                <>
+              <>
                   <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
                     <div>
                       <h3 className="font-semibold text-slate-900">Account details & access</h3>
@@ -359,7 +352,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                     </section>
                   </div>
                 </>
-              )}
             </>
           )}
         </section>
@@ -427,6 +419,65 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </div>
       </section>
       </>
+      )}
+      {editingId !== null && selectedProfile && editingId === selectedProfile.id && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeEditModal();
+          }}
+        >
+          <section
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-agent-profile-title"
+          >
+            <header className="border-b border-slate-200 px-5 py-4 sm:px-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent account</p>
+              <h2 id="edit-agent-profile-title" className="mt-1 text-xl font-semibold text-slate-950">Edit profile</h2>
+              <p className="mt-1 text-sm text-slate-600">Update the agent’s name, sign-in email, and operational permissions.</p>
+            </header>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void updateAccount(
+                  selectedProfile,
+                  { displayName: editName, email: editEmail, permissions: editPermissions },
+                  'Agent profile updated.'
+                );
+              }}
+              className="space-y-5 p-5 sm:p-6"
+            >
+              {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-700">Display name
+                  <input required autoFocus maxLength={120} value={editName} onChange={(event) => setEditName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Sign-in email
+                  <input required type="email" autoComplete="email" maxLength={254} value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                </label>
+              </div>
+              <fieldset>
+                <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
+                <p className="mt-1 text-xs text-slate-500">Staff administration and audit access remain superadmin-only.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {availablePermissions.map((permission) => (
+                    <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
+                      <input type="checkbox" checked={editPermissions.includes(permission.id)} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-teal-800" />
+                      {permission.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button type="button" disabled={saving} onClick={closeEditModal} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={saving || !editName.trim() || !editEmail.trim()} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
+              </footer>
+            </form>
+          </section>
+        </div>
       )}
     </div>
   );
