@@ -463,8 +463,54 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="grid gap-5 xl:grid-cols-2">
-        <div className="space-y-5 xl:col-span-2">
+      {mode === 'mailbox' && <section className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-3 lg:sticky lg:top-4">
+          <button
+            type="button"
+            onClick={() => setActiveFolder('compose')}
+            className={`mb-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm transition-colors ${
+              activeFolder === 'compose'
+                ? 'bg-violet-800 text-white'
+                : 'bg-violet-700 text-white hover:bg-violet-800'
+            }`}
+          >
+            <Mail className="h-4 w-4" /> Compose
+          </button>
+          <nav aria-label="Email folders" className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:flex lg:flex-col">
+            {([
+              ['inbox', 'Inbox', Inbox, ''],
+              ['sent', 'Sent', Send, ''],
+              ['drafts', 'Drafts', FileText, drafts.length ? String(drafts.length) : ''],
+              ['trash', 'Trash', Trash2, trash.length + mailTrashMessages.length ? String(trash.length + mailTrashMessages.length) : ''],
+            ] as const).map(([folder, label, Icon, count]) => (
+              <button
+                key={folder}
+                type="button"
+                aria-current={activeFolder === folder ? 'page' : undefined}
+                onClick={() => setActiveFolder(folder)}
+                className={`flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  activeFolder === folder
+                    ? 'bg-violet-50 text-violet-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {count && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{count}</span>}
+              </button>
+            ))}
+          </nav>
+          <div className="mt-4 hidden border-t border-slate-100 px-2 pt-4 lg:block">
+            <p className="text-xs font-medium text-slate-500">Mailbox</p>
+            <p className="mt-1 truncate text-sm font-medium text-slate-800">{settings.emailAccount}</p>
+            <p className={`mt-2 inline-flex items-center gap-1.5 text-xs ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${settings.verified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+              {settings.verified ? 'Connected' : 'Connection not verified'}
+            </p>
+          </div>
+        </aside>
+
+        <div className="min-w-0 space-y-5">
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
@@ -486,27 +532,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <p className="mt-1 text-2xl font-semibold text-slate-950">{drafts.length} · {trash.length}</p>
             </div>
           </div>
-
-          <nav aria-label="Email folders" className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2">
-            {([
-              ['inbox', 'Inbox', Inbox],
-              ['compose', 'Compose', Mail],
-              ['sent', 'Sent', Send],
-              ['drafts', `Drafts (${drafts.length})`, FileText],
-              ['trash', `Trash (${trash.length})`, Trash2],
-            ] as const).map(([folder, label, Icon]) => (
-              <button
-                key={folder}
-                type="button"
-                onClick={() => setActiveFolder(folder)}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
-                  activeFolder === folder ? 'bg-violet-100 text-violet-900' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Icon className="h-4 w-4" /> {label}
-              </button>
-            ))}
-          </nav>
 
           {activeFolder === 'compose' && (
             <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
