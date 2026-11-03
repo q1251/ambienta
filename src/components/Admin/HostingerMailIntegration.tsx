@@ -913,7 +913,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </div>
                   <div>
                     <label htmlFor="campaign-schedule" className="mb-1 block text-sm font-medium text-slate-700">Schedule for</label>
-                    <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:max-w-sm" />
+                    <div className="flex flex-wrap items-end gap-3">
+                      <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:w-auto" />
+                      <button type="button" onClick={() => void scheduleCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50">
+                        {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Schedule campaign
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label htmlFor="campaign-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
@@ -924,9 +929,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {isCampaignSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
                       {isCampaignSaving ? 'Saving…' : 'Save draft'}
-                    </button>
-                    <button type="button" onClick={() => void scheduleCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50">
-                      {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Schedule campaign
                     </button>
                     <button type="button" onClick={() => void launchCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
                       {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Send now
