@@ -184,7 +184,7 @@ export interface OnlineOrder {
   cryptoDetails?: CryptoPaymentDetails;
   cardLast4?: string;
   totalAmount: number;
-  status: 'Submitted' | 'Pharmacist Review' | 'Dispensing' | 'Ready for Pickup' | 'Shipped' | 'Completed' | 'Cancelled';
+  status: 'Pending' | 'Submitted' | 'Pharmacist Review' | 'Dispensing' | 'Ready for Pickup' | 'Shipped' | 'Delivered' | 'Completed' | 'Cancelled';
   placedAt: string;
   carrier?: string;
   trackingNumber?: string;

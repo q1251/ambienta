@@ -33,11 +33,13 @@ interface OrdersManagerProps {
 }
 
 const allowedStatusTransitions: Record<OnlineOrder['status'], OnlineOrder['status'][]> = {
+  Pending: ['Pharmacist Review', 'Dispensing', 'Cancelled'],
   Submitted: ['Pharmacist Review', 'Dispensing', 'Cancelled'],
   'Pharmacist Review': ['Dispensing', 'Cancelled'],
   Dispensing: ['Ready for Pickup', 'Shipped', 'Cancelled'],
-  'Ready for Pickup': ['Completed', 'Cancelled'],
-  Shipped: ['Completed'],
+  'Ready for Pickup': ['Delivered', 'Cancelled'],
+  Shipped: ['Delivered'],
+  Delivered: ['Completed'],
   Completed: [],
   Cancelled: [],
 };
@@ -360,11 +362,13 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 className="bg-transparent text-slate-800 font-medium focus:outline-none text-xs cursor-pointer"
               >
                 <option value="All">All Statuses</option>
+                <option value="Pending">Pending</option>
                 <option value="Submitted">Submitted</option>
                 <option value="Pharmacist Review">Pharmacist Review</option>
                 <option value="Dispensing">Dispensing</option>
                 <option value="Ready for Pickup">Ready for Pickup</option>
                 <option value="Shipped">Shipped</option>
+                <option value="Delivered">Delivered</option>
                 <option value="Completed">Completed</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
@@ -468,7 +472,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     <td className="py-3.5 px-4">
                       <span
                         className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                          ord.status === 'Submitted'
+                          ord.status === 'Pending' || ord.status === 'Submitted'
                             ? 'bg-amber-50 text-amber-800 border-amber-300'
                             : ord.status === 'Pharmacist Review'
                             ? 'bg-sky-50 text-sky-800 border-sky-300'
@@ -476,7 +480,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                             ? 'bg-purple-50 text-purple-800 border-purple-300'
                             : ord.status === 'Ready for Pickup'
                             ? 'bg-blue-50 text-blue-800 border-blue-300'
-                            : ord.status === 'Shipped' || ord.status === 'Completed'
+                            : ord.status === 'Shipped' || ord.status === 'Delivered' || ord.status === 'Completed'
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                             : 'bg-rose-50 text-rose-800 border-rose-300'
                         }`}

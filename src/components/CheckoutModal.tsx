@@ -205,7 +205,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryAddress: fullDeliveryAddress,
         paymentMethod,
         paymentStatus: 'Pending Verification',
-        status: 'Submitted',
+        status: 'Pending',
         placedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
         internalNotes: [
           `Payment due via ${paymentMethod}`,

@@ -42,7 +42,9 @@ export const OperationsOverview: React.FC<OperationsOverviewProps> = ({ onNaviga
 
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
-  const needsReview = (data?.orders.byStatus.Submitted || 0) + (data?.orders.byStatus['Pharmacist Review'] || 0);
+  const needsReview = (data?.orders.byStatus.Pending || 0)
+    + (data?.orders.byStatus.Submitted || 0)
+    + (data?.orders.byStatus['Pharmacist Review'] || 0);
 
   return (
     <div className="space-y-6">

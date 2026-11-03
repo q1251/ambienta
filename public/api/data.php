@@ -1559,7 +1559,7 @@ if ($method === 'POST' && $resource === 'manual-orders') {
         )->execute([
             $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod,
             $deliveryMethod === 'Pharmacy Pickup' ? 'Pharmacy Pickup' : $deliveryAddress,
-            $subtotal, $shippingFee, $total, 'Cash on Delivery / Pickup', 'Pending Verification', 'Submitted', $placedAt,
+            $subtotal, $shippingFee, $total, 'Cash on Delivery / Pickup', 'Pending Verification', 'Pending', $placedAt,
         ]);
         $db->prepare(
             'INSERT INTO order_items (order_id, product_id, product_name, category, quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)'
@@ -1668,7 +1668,7 @@ if ($method === 'POST' && $resource === 'orders') {
         )->execute([
             $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod, $deliveryAddress,
             $subtotal, $shippingFee, $discountAmount, $couponCode === '' ? null : $couponCode,
-            $totalAmount, 'Cash on Delivery / Pickup', 'Pending Verification', 'Submitted', $placedAt,
+            $totalAmount, 'Cash on Delivery / Pickup', 'Pending Verification', 'Pending', $placedAt,
         ]);
 
         $insertItem = $db->prepare(
@@ -2069,7 +2069,7 @@ if ($method === 'PATCH' && $resource === 'orders') {
     $body = data_read_json();
     $id = data_string($body, 'id', 64);
     $status = data_string($body, 'status', 32);
-    $allowedStatuses = ['Submitted', 'Pharmacist Review', 'Dispensing', 'Ready for Pickup', 'Shipped', 'Completed', 'Cancelled'];
+    $allowedStatuses = ['Pending', 'Submitted', 'Pharmacist Review', 'Dispensing', 'Ready for Pickup', 'Shipped', 'Delivered', 'Completed', 'Cancelled'];
     if (!in_array($status, $allowedStatuses, true)) {
         data_respond(400, ['error' => 'invalid_status', 'message' => 'The order status is invalid.']);
     }
@@ -2086,11 +2086,13 @@ if ($method === 'PATCH' && $resource === 'orders') {
             data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
         }
         $allowedTransitions = [
+            'Pending' => ['Pending', 'Pharmacist Review', 'Dispensing', 'Cancelled'],
             'Submitted' => ['Submitted', 'Pharmacist Review', 'Dispensing', 'Cancelled'],
             'Pharmacist Review' => ['Pharmacist Review', 'Dispensing', 'Cancelled'],
             'Dispensing' => ['Dispensing', 'Ready for Pickup', 'Shipped', 'Cancelled'],
-            'Ready for Pickup' => ['Ready for Pickup', 'Completed', 'Cancelled'],
-            'Shipped' => ['Shipped', 'Completed'],
+            'Ready for Pickup' => ['Ready for Pickup', 'Delivered', 'Cancelled'],
+            'Shipped' => ['Shipped', 'Delivered'],
+            'Delivered' => ['Delivered', 'Completed'],
             'Completed' => ['Completed'],
             'Cancelled' => ['Cancelled'],
         ];

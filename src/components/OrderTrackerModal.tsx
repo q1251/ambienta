@@ -35,8 +35,19 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   };
 
   const getStepStatus = (currentStatus: OnlineOrder['status'], stepIdx: number) => {
-    const statuses = ['Submitted', 'Pharmacist Review', 'Dispensing', 'Ready for Pickup', 'Shipped'];
-    const currentIdx = statuses.indexOf(currentStatus);
+    if (currentStatus === 'Cancelled') return 'pending';
+    const statusRank: Record<OnlineOrder['status'], number> = {
+      Pending: 0,
+      Submitted: 0,
+      'Pharmacist Review': 1,
+      Dispensing: 2,
+      'Ready for Pickup': 3,
+      Shipped: 3,
+      Delivered: 4,
+      Completed: 5,
+      Cancelled: -1,
+    };
+    const currentIdx = statusRank[currentStatus];
     if (currentIdx > stepIdx) return 'completed';
     if (currentIdx === stepIdx) return 'active';
     return 'pending';
@@ -145,12 +156,17 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                   Live Preparation Timeline
                 </h5>
 
-                <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-3 lg:grid-cols-6">
                   {[
-                    { label: 'Submitted', desc: 'Order Received' },
-                    { label: 'PharmD Review', desc: 'Safety Screening' },
-                    { label: 'Dispensing', desc: 'Seal & Verification' },
-                    { label: 'Ready / Shipped', desc: 'Courier Transit' },
+                    { label: 'Pending', desc: 'Order received' },
+                    { label: 'Pharmacist Review', desc: 'Safety screening' },
+                    { label: 'Dispensing', desc: 'Preparation' },
+                    {
+                      label: selectedOrder.deliveryMethod === 'Pharmacy Pickup' ? 'Ready for Pickup' : 'Shipped',
+                      desc: selectedOrder.deliveryMethod === 'Pharmacy Pickup' ? 'Awaiting collection' : 'In transit',
+                    },
+                    { label: 'Delivered', desc: 'Order received' },
+                    { label: 'Completed', desc: 'Order closed' },
                   ].map((step, idx) => {
                     const status = getStepStatus(selectedOrder.status, idx);
                     return (
