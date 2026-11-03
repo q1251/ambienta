@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, CalendarClock, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, PhoneCall, Search, Upload, UserPlus } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Upload, UserPlus } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
@@ -44,10 +44,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profilePhone, setProfilePhone] = useState('');
   const [statusDraft, setStatusDraft] = useState<LeadStatus>('Cold');
   const [statusChangeNote, setStatusChangeNote] = useState('');
-  const [activityType, setActivityType] = useState<'note' | 'call'>('call');
   const [activityNote, setActivityNote] = useState('');
-  const [callOutcome, setCallOutcome] = useState<LeadActivityInput['outcome']>('Connected');
-  const [followUpDate, setFollowUpDate] = useState('');
   const [activitySaving, setActivitySaving] = useState(false);
   const profileRequestId = useRef(0);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
@@ -131,7 +128,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileSaving(false);
     setActivitySaving(false);
     setActivityNote('');
-    setFollowUpDate('');
     setProfileLoading(true);
     try {
       const loadedProfile = await onLoadLeadProfile(lead.id);
@@ -201,15 +197,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileError('');
     try {
       const saved = await onAddLeadActivity(leadId, {
-        type: activityType,
+        type: 'note',
         note: activityNote.trim(),
-        ...(activityType === 'call' ? { outcome: callOutcome } : {}),
-        ...(followUpDate ? { followUpDate } : {}),
       });
       if (requestId !== profileRequestId.current) return;
       setProfile((current) => current?.lead.id === leadId ? { ...current, activities: [saved, ...current.activities] } : current);
       setActivityNote('');
-      setFollowUpDate('');
     } catch (error) {
       if (requestId !== profileRequestId.current) return;
       setProfileError(error instanceof Error ? error.message : 'The activity could not be saved.');
@@ -302,58 +295,37 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><PhoneCall className="h-4 w-4 text-teal-800" />Call and comment log</h3>
-              <form onSubmit={(event) => void saveActivity(event)} className="mt-4 grid gap-4 rounded-xl bg-slate-50 p-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-slate-700">Activity type
-                  <select value={activityType} onChange={(event) => setActivityType(event.target.value as 'note' | 'call')} className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2">
-                    <option value="call">Call attempt / result</option>
-                    <option value="note">Internal comment</option>
-                  </select>
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><MessageSquare className="h-4 w-4 text-teal-800" />Comments</h3>
+              <form onSubmit={(event) => void saveActivity(event)} className="mt-4 space-y-3 rounded-xl bg-slate-50 p-4">
+                <label className="block text-sm font-medium text-slate-700">Add an internal comment
+                  <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} placeholder="Add an internal comment. Do not enter health, prescription, payment, or other sensitive information." className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2" />
                 </label>
-                {activityType === 'call' && (
-                  <label className="text-sm font-medium text-slate-700">Call outcome
-                    <select required value={callOutcome} onChange={(event) => setCallOutcome(event.target.value as LeadActivityInput['outcome'])} className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2">
-                      {(['Connected', 'No answer', 'Voicemail left', 'Busy', 'Wrong number', 'Callback requested', 'Not interested'] as const).map((outcome) => <option key={outcome}>{outcome}</option>)}
-                    </select>
-                  </label>
-                )}
-                <label className={`text-sm font-medium text-slate-700 ${activityType === 'note' ? 'md:col-span-2' : ''}`}>Comment / call notes
-                  <textarea required={activityType === 'note'} maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} placeholder={activityType === 'call' ? 'Optional call summary. Do not enter health, prescription, payment, or other sensitive information.' : 'Add an internal comment. Do not enter health, prescription, payment, or other sensitive information.'} className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2" />
-                </label>
-                <label className="text-sm font-medium text-slate-700">Follow-up date (optional)
-                  <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2" />
-                </label>
-                <div className="flex items-end">
-                  <button type="submit" disabled={activitySaving || !onAddLeadActivity || (activityType === 'note' && !activityNote.trim())} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    {activityType === 'call' ? <PhoneCall className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
-                    {activitySaving ? 'Saving…' : activityType === 'call' ? 'Log call' : 'Add comment'}
-                  </button>
-                </div>
+                <button type="submit" disabled={activitySaving || !onAddLeadActivity || !activityNote.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  <MessageSquare className="h-4 w-4" />
+                  {activitySaving ? 'Saving…' : 'Add comment'}
+                </button>
               </form>
-              <p className="mt-2 text-xs text-slate-500">Call outcomes and notes are manually logged; this does not place or record calls.</p>
 
               <div className="mt-6">
-                <h4 className="mb-3 text-sm font-bold text-slate-900">Activity history</h4>
-                {profile.activities.length ? (
+                <h4 className="mb-3 text-sm font-bold text-slate-900">Comment and status history</h4>
+                {profile.activities.some((activity) => activity.type !== 'call') ? (
                   <ol className="space-y-3">
-                    {profile.activities.map((activity) => (
+                    {profile.activities.filter((activity) => activity.type !== 'call').map((activity) => (
                       <li key={activity.id} className="border-l-2 border-teal-200 pl-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-slate-900">
                             {activity.type === 'status_change' ? `Stage changed: ${activity.fromStatus || 'Unknown'} → ${activity.toStatus || 'Unknown'}`
                               : activity.type === 'phone_updated' ? 'Phone number updated'
-                                : activity.type === 'call' ? `Call logged${activity.outcome ? ` · ${activity.outcome}` : ''}`
-                                  : 'Comment added'}
+                                : 'Comment added'}
                           </p>
                           <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
                         </div>
                         <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
                         {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
-                        {activity.followUpDate && <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900"><CalendarClock className="h-3.5 w-3.5" />Follow up {new Date(`${activity.followUpDate}T00:00:00`).toLocaleDateString()}</p>}
                       </li>
                     ))}
                   </ol>
-                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No call or comment activity has been recorded yet.</p>}
+                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No comments or status changes have been recorded yet.</p>}
               </div>
             </section>
 
