@@ -253,8 +253,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
                 <div><p className="text-xs font-medium uppercase text-slate-500">Added</p><p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p></div>
               </div>
-              <div className="mt-5 grid gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
-                <form onSubmit={(event) => void saveActivity(event)} className="space-y-3">
+              <div className="mt-5 grid items-start gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
+                <div>
+                  <form onSubmit={(event) => void saveActivity(event)} className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Add an internal comment
                     <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} placeholder="Add an internal comment. Do not enter health, prescription, payment, or other sensitive information." className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
                   </label>
@@ -262,7 +263,25 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     <MessageSquare className="h-4 w-4" />
                     {activitySaving ? 'Saving…' : 'Add comment'}
                   </button>
-                </form>
+                  </form>
+                  <div className="mt-6">
+                    <h4 className="mb-3 text-sm font-bold text-slate-900">Comment history</h4>
+                    {noteActivities.length ? (
+                      <ol className="space-y-3">
+                        {noteActivities.map((activity) => (
+                          <li key={activity.id} className="border-l-2 border-slate-200 pl-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-slate-900">Comment added</p>
+                              <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
+                            {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No comments have been recorded yet.</p>}
+                  </div>
+                </div>
 
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Pipeline stage
@@ -276,49 +295,29 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     </select>
                   </label>
                   <p aria-live="polite" className="text-xs text-slate-500">{profileSaving ? 'Saving stage…' : 'Stage changes save immediately and are added to the staff history below.'}</p>
+                  <div className="pt-3">
+                    <h4 className="mb-3 text-sm font-bold text-slate-900">Status history</h4>
+                    {statusActivities.length ? (
+                      <ol className="space-y-3">
+                        {statusActivities.map((activity) => (
+                          <li key={activity.id} className="border-l-2 border-teal-200 pl-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-slate-900">Stage changed: {activity.fromStatus || 'Unknown'} → {activity.toStatus || 'Unknown'}</p>
+                              <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
+                            {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No stage changes have been recorded yet.</p>}
+                  </div>
                 </div>
 
                 <label className="flex items-start gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700 lg:col-span-2">
                   <input type="checkbox" disabled={profileSaving || !onUpdateLead} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} className="mt-1" />
                   <span><span className="font-medium">Explicit marketing opt-in recorded.</span> Only mark this when the contact has actually consented to marketing email.</span>
                 </label>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><MessageSquare className="h-4 w-4 text-teal-800" />Lead history</h3>
-              <div className="mt-4">
-                <h4 className="mb-3 text-sm font-bold text-slate-900">Status history</h4>
-                {statusActivities.length ? (
-                  <ol className="space-y-3">
-                    {statusActivities.map((activity) => (
-                      <li key={activity.id} className="border-l-2 border-teal-200 pl-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900">Stage changed: {activity.fromStatus || 'Unknown'} → {activity.toStatus || 'Unknown'}</p>
-                          <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
-                        {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
-                      </li>
-                    ))}
-                  </ol>
-                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No stage changes have been recorded yet.</p>}
-
-                <h4 className="mb-3 mt-6 text-sm font-bold text-slate-900">Comment history</h4>
-                {noteActivities.length ? (
-                  <ol className="space-y-3">
-                    {noteActivities.map((activity) => (
-                      <li key={activity.id} className="border-l-2 border-slate-200 pl-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900">Comment added</p>
-                          <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
-                        {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
-                      </li>
-                    ))}
-                  </ol>
-                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No comments have been recorded yet.</p>}
               </div>
             </section>
 
