@@ -172,8 +172,27 @@ function data_ensure_schema(PDO $db): void
             KEY audit_entity (entity_type, entity_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS staff_users (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(254) NOT NULL UNIQUE,
+            password_hash VARCHAR(255) NOT NULL,
+            role VARCHAR(24) NOT NULL DEFAULT 'operator',
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+            created_by VARCHAR(254) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY staff_active_role (is_active, role)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
 
     $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
+    $staffPasswordChangeColumn = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', 'must_change_password']);
+    if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
+        $db->exec('ALTER TABLE staff_users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1 AFTER is_active');
+    }
     $legacyColumns = [
         'category' => "VARCHAR(32) NOT NULL DEFAULT 'Daily Wellness'",
         'description' => 'TEXT NULL',
@@ -232,7 +251,7 @@ function data_ensure_schema(PDO $db): void
     }
 }
 
-function data_require_admin(): void
+function data_require_admin(string $requiredRole = 'operator'): void
 {
     $secure = (
         isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && strtolower((string) $_SERVER['HTTPS']) !== 'off'
@@ -255,10 +274,32 @@ function data_require_admin(): void
     if (
         !isset($_SESSION['admin_email'])
         || !is_string($_SESSION['admin_email'])
+        || !isset($_SESSION['admin_role'])
+        || !in_array($_SESSION['admin_role'], ['admin', 'operator'], true)
         || !is_int($lastActivity)
         || $lastActivity < time() - 28800
     ) {
         data_respond(401, ['error' => 'unauthorized', 'message' => 'Sign in to access this resource.']);
+    }
+    if ($_SESSION['admin_role'] === 'operator') {
+        if ((bool) ($_SESSION['must_change_password'] ?? false)) {
+            data_respond(403, ['error' => 'password_change_required', 'message' => 'Change the temporary password before using the workspace.']);
+        }
+        $check = data_db()->prepare('SELECT is_active, must_change_password FROM staff_users WHERE email = ? AND role = ?');
+        $check->execute([$_SESSION['admin_email'], 'operator']);
+        $staff = $check->fetch();
+        if (!is_array($staff) || (int) $staff['is_active'] !== 1) {
+            $_SESSION = [];
+            session_destroy();
+            data_respond(401, ['error' => 'account_disabled', 'message' => 'This staff account is inactive. Contact an administrator.']);
+        }
+        if ((int) $staff['must_change_password'] === 1) {
+            $_SESSION['must_change_password'] = true;
+            data_respond(403, ['error' => 'password_change_required', 'message' => 'Change the temporary password before using the workspace.']);
+        }
+    }
+    if ($requiredRole === 'admin' && $_SESSION['admin_role'] !== 'admin') {
+        data_respond(403, ['error' => 'admin_required', 'message' => 'Administrator access is required for this action.']);
     }
     $_SESSION['last_activity'] = time();
 }
@@ -480,8 +521,8 @@ if ($method === 'GET') {
             $parameters[] = $statusFilter;
         }
         if ($query !== '') {
-            $where[] = '(order_number LIKE ? OR customer_name LIKE ? OR email LIKE ?)';
-            array_push($parameters, '%' . $query . '%', '%' . $query . '%', '%' . $query . '%');
+            $where[] = '(order_number LIKE ? OR customer_name LIKE ? OR email LIKE ? OR EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.product_name LIKE ?))';
+            array_push($parameters, '%' . $query . '%', '%' . $query . '%', '%' . $query . '%', '%' . $query . '%');
         }
         $whereSql = $where === [] ? '' : ' WHERE ' . implode(' AND ', $where);
         $countQuery = $db->prepare('SELECT COUNT(*) FROM orders' . $whereSql);
@@ -501,12 +542,51 @@ if ($method === 'GET') {
         ]);
     }
     if ($resource === 'audit') {
+        data_require_admin('admin');
         $rows = $db->query('SELECT id, actor_email, action, entity_type, entity_id, details, created_at FROM admin_audit_log ORDER BY id DESC LIMIT 200')->fetchAll();
         foreach ($rows as &$row) {
             $row['details'] = $row['details'] === null ? null : json_decode($row['details'], true);
         }
         unset($row);
         data_respond(200, ['entries' => $rows]);
+    }
+    if ($resource === 'staff') {
+        data_require_admin('admin');
+        $rows = $db->query('SELECT id, email, role, is_active, created_by, created_at, updated_at FROM staff_users ORDER BY email')->fetchAll();
+        foreach ($rows as &$row) {
+            $row['id'] = (int) $row['id'];
+            $row['is_active'] = (bool) $row['is_active'];
+        }
+        unset($row);
+        data_respond(200, ['staff' => $rows]);
+    }
+    if ($resource === 'overview') {
+        $orderCounts = $db->query('SELECT status, COUNT(*) AS count FROM orders GROUP BY status')->fetchAll();
+        $counts = [];
+        foreach ($orderCounts as $row) {
+            $counts[$row['status']] = (int) $row['count'];
+        }
+        $lowStock = $db->query(
+            'SELECT id, name, sku, stock_count, min_stock_threshold FROM products WHERE is_active = 1 AND stock_count <= min_stock_threshold ORDER BY stock_count ASC, name ASC LIMIT 8'
+        )->fetchAll();
+        $lowStockCount = (int) $db->query(
+            'SELECT COUNT(*) FROM products WHERE is_active = 1 AND stock_count <= min_stock_threshold'
+        )->fetchColumn();
+        $recent = $db->query('SELECT * FROM orders ORDER BY placed_at DESC LIMIT 8')->fetchAll();
+        data_respond(200, [
+            'orders' => ['total' => (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn(), 'byStatus' => $counts],
+            'leads' => (int) $db->query('SELECT COUNT(*) FROM leads')->fetchColumn(),
+            'products' => (int) $db->query('SELECT COUNT(*) FROM products WHERE is_active = 1')->fetchColumn(),
+            'lowStockCount' => $lowStockCount,
+            'lowStock' => array_map(static fn (array $row): array => [
+                'id' => $row['id'],
+                'name' => $row['name'],
+                'sku' => $row['sku'],
+                'stockCount' => (int) $row['stock_count'],
+                'minStockThreshold' => (int) $row['min_stock_threshold'],
+            ], $lowStock),
+            'recentOrders' => array_map(static fn (array $row): array => data_order_row($db, $row), $recent),
+        ]);
     }
     data_respond(404, ['error' => 'not_found', 'message' => 'The requested resource was not found.']);
 }
@@ -540,6 +620,69 @@ if ($method === 'POST' && $resource === 'products') {
     $find = $db->prepare('SELECT * FROM products WHERE id = ?');
     $find->execute([$product['id']]);
     data_respond(201, ['product' => data_product_row($find->fetch())]);
+}
+
+if ($method === 'POST' && $resource === 'staff') {
+    data_require_admin('admin');
+    $body = data_read_json();
+    $email = strtolower(data_string($body, 'email', 254));
+    $password = $body['temporaryPassword'] ?? null;
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !is_string($password) || strlen($password) < 12 || strlen($password) > 1024) {
+        data_respond(400, ['error' => 'invalid_staff_account', 'message' => 'Enter a valid email and a temporary password of at least 12 characters.']);
+    }
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    if (!is_string($hash)) {
+        error_log('Ambients staff password hashing failed.');
+        data_respond(500, ['error' => 'staff_create_failed', 'message' => 'The staff account could not be created.']);
+    }
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $db->prepare('INSERT INTO staff_users (email, password_hash, role, is_active, created_by) VALUES (?, ?, ?, 1, ?)')
+            ->execute([$email, $hash, 'operator', $_SESSION['admin_email']]);
+        $staffId = (string) $db->lastInsertId();
+        data_audit($db, 'staff.created', 'staff', $staffId, ['email' => $email, 'role' => 'operator']);
+        $db->commit();
+        data_respond(201, ['created' => true]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        if ($error instanceof PDOException && (string) $error->getCode() === '23000') {
+            data_respond(409, ['error' => 'staff_conflict', 'message' => 'A staff account with that email already exists.']);
+        }
+        error_log('Ambients staff account creation failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'staff_create_failed', 'message' => 'The staff account could not be created.']);
+    }
+}
+
+if ($method === 'PATCH' && $resource === 'staff') {
+    data_require_admin('admin');
+    $body = data_read_json();
+    $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+    if ($id === false || $id < 1 || !is_bool($body['isActive'] ?? null)) {
+        data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'The staff account update is invalid.']);
+    }
+    $db = data_db();
+    $find = $db->prepare('SELECT id, email, is_active FROM staff_users WHERE id = ?');
+    $find->execute([$id]);
+    $staff = $find->fetch();
+    if (!$staff) {
+        data_respond(404, ['error' => 'staff_not_found', 'message' => 'The staff account was not found.']);
+    }
+    if ($staff['email'] === $_SESSION['admin_email']) {
+        data_respond(409, ['error' => 'primary_admin_protected', 'message' => 'The primary administrator account cannot be changed here.']);
+    }
+    $db->beginTransaction();
+    try {
+        $db->prepare('UPDATE staff_users SET is_active = ? WHERE id = ?')
+            ->execute([(int) $body['isActive'], $id]);
+        data_audit($db, $body['isActive'] ? 'staff.activated' : 'staff.deactivated', 'staff', (string) $id, ['email' => $staff['email']]);
+        $db->commit();
+        data_respond(200, ['updated' => true]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients staff account update failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'staff_update_failed', 'message' => 'The staff account could not be updated.']);
+    }
 }
 
 if ($method === 'PATCH' && $resource === 'products') {
@@ -629,6 +772,72 @@ if ($method === 'DELETE' && $resource === 'products') {
         data_respond(500, ['error' => 'product_archive_failed', 'message' => 'The product could not be archived.']);
     }
     data_respond(200, ['archived' => true]);
+}
+
+if ($method === 'POST' && $resource === 'manual-orders') {
+    data_require_admin();
+    $body = data_read_json();
+    $customerName = data_string($body, 'customerName', 160);
+    $email = strtolower(data_string($body, 'email', 254));
+    $phone = data_string($body, 'phone', 40, false);
+    $deliveryMethod = data_string($body, 'deliveryMethod', 32);
+    $deliveryAddress = data_string($body, 'deliveryAddress', 500, false);
+    $productId = data_string($body, 'productId', 64);
+    $quantity = $body['quantity'] ?? null;
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !is_int($quantity) || $quantity < 1 || $quantity > 50) {
+        data_respond(400, ['error' => 'invalid_manual_order', 'message' => 'Enter valid customer contact details and quantity.']);
+    }
+    if (!in_array($deliveryMethod, ['Express Courier', 'Pharmacy Pickup', 'Discreet Mail'], true)) {
+        data_respond(400, ['error' => 'invalid_delivery', 'message' => 'Select a valid delivery method.']);
+    }
+    if ($deliveryMethod !== 'Pharmacy Pickup' && $deliveryAddress === '') {
+        data_respond(400, ['error' => 'invalid_delivery_address', 'message' => 'Enter a delivery address for shipped orders.']);
+    }
+
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $productQuery = $db->prepare('SELECT id, name, category, price, stock_count FROM products WHERE id = ? AND is_active = 1 FOR UPDATE');
+        $productQuery->execute([$productId]);
+        $product = $productQuery->fetch();
+        if (!$product || (int) $product['stock_count'] < $quantity) {
+            $db->rollBack();
+            data_respond(409, ['error' => 'unavailable_item', 'message' => 'The selected product is unavailable or has insufficient stock.']);
+        }
+        $unitPrice = (float) $product['price'];
+        $subtotal = round($unitPrice * $quantity, 2);
+        $shippingFee = $deliveryMethod === 'Express Courier' && $subtotal < 35 ? 12.00 : 0.00;
+        $total = round($subtotal + $shippingFee, 2);
+        $orderId = bin2hex(random_bytes(16));
+        $orderNumber = 'ORD-' . gmdate('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+        $placedAt = gmdate('Y-m-d H:i:s');
+        $db->prepare(
+            'INSERT INTO orders (id, order_number, customer_name, email, phone, delivery_method, delivery_address, subtotal, shipping_fee, discount_amount, total_amount, payment_method, payment_status, status, placed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)'
+        )->execute([
+            $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod,
+            $deliveryMethod === 'Pharmacy Pickup' ? 'Pharmacy Pickup' : $deliveryAddress,
+            $subtotal, $shippingFee, $total, 'Cash on Delivery / Pickup', 'Pending Verification', 'Submitted', $placedAt,
+        ]);
+        $db->prepare(
+            'INSERT INTO order_items (order_id, product_id, product_name, category, quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)'
+        )->execute([$orderId, $product['id'], $product['name'], $product['category'], $quantity, $unitPrice]);
+        $db->prepare('UPDATE products SET stock_count = stock_count - ? WHERE id = ?')->execute([$quantity, $productId]);
+        $nameParts = preg_split('/\s+/', $customerName, 2) ?: [$customerName];
+        $db->prepare(
+            "INSERT INTO leads (first_name, last_name, email, phone, lead_source) VALUES (?, ?, ?, ?, 'Online Order')
+             ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone)"
+        )->execute([$nameParts[0], $nameParts[1] ?? '', $email, $phone]);
+        data_audit($db, 'order.created_manually', 'order', $orderId, ['orderNumber' => $orderNumber, 'total' => $total]);
+        $db->commit();
+        $find = $db->prepare('SELECT * FROM orders WHERE id = ?');
+        $find->execute([$orderId]);
+        data_respond(201, ['order' => data_order_row($db, $find->fetch())]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients manual order creation failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'manual_order_failed', 'message' => 'The order could not be saved.']);
+    }
 }
 
 if ($method === 'POST' && $resource === 'orders') {

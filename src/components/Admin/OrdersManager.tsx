@@ -1,62 +1,68 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  ClipboardList,
   Search,
-  Filter,
-  CreditCard,
-  QrCode,
   Truck,
-  Building,
-  Mail,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  ExternalLink,
   Printer,
   Download,
   Plus,
-  ChevronDown,
-  ArrowUpDown,
-  Send,
   Eye,
   X,
-  FileText,
-  DollarSign,
-  TrendingUp,
-  Package,
 } from 'lucide-react';
-import { OnlineOrder, PaymentMethod, EmailLog, CatalogItem, StoreCategory } from '../../types/pharmacy';
+import { OnlineOrder, CatalogItem } from '../../types/pharmacy';
+import type { OrderPagination, OrderSearch } from './AdminLayout';
 
 interface OrdersManagerProps {
   orders: OnlineOrder[];
+  pagination: OrderPagination;
+  isLoading: boolean;
+  onLoadOrders: (search: OrderSearch) => void;
   onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
-  onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
-  onAddOrderInternalNote?: (orderId: string, note: string) => Promise<string>;
-  onSendEmailNotification?: (log: EmailLog) => void;
-  onAddManualOrder?: (order: OnlineOrder) => void;
+  onUpdateOrderTracking: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
+  onAddOrderInternalNote: (orderId: string, note: string) => Promise<string>;
+  onCreateManualOrder: (data: {
+    customerName: string;
+    email: string;
+    phone: string;
+    deliveryMethod: OnlineOrder['deliveryMethod'];
+    deliveryAddress: string;
+    productId: string;
+    quantity: number;
+  }) => Promise<OnlineOrder>;
   catalogItems?: CatalogItem[];
 }
 
+const allowedStatusTransitions: Record<OnlineOrder['status'], OnlineOrder['status'][]> = {
+  Submitted: ['Pharmacist Review', 'Dispensing', 'Cancelled'],
+  'Pharmacist Review': ['Dispensing', 'Cancelled'],
+  Dispensing: ['Ready for Pickup', 'Shipped', 'Cancelled'],
+  'Ready for Pickup': ['Completed', 'Cancelled'],
+  Shipped: ['Completed'],
+  Completed: [],
+  Cancelled: [],
+};
+
 export const OrdersManager: React.FC<OrdersManagerProps> = ({
   orders,
+  pagination,
+  isLoading,
+  onLoadOrders,
   onUpdateOrderStatus,
   onUpdateOrderTracking,
   onAddOrderInternalNote,
-  onSendEmailNotification,
-  onAddManualOrder,
+  onCreateManualOrder,
   catalogItems = [],
 }) => {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [paymentFilter, setPaymentFilter] = useState<string>('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [reloadCounter, setReloadCounter] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState<OnlineOrder | null>(null);
 
   // Tracking form inside drawer
   const [carrierInput, setCarrierInput] = useState('');
   const [trackingInput, setTrackingInput] = useState('');
   const [newInternalNote, setNewInternalNote] = useState('');
-  const [emailSentAlert, setEmailSentAlert] = useState<string | null>(null);
   const [orderSaveError, setOrderSaveError] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
 
@@ -65,81 +71,39 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [manualCustomerName, setManualCustomerName] = useState('');
   const [manualEmail, setManualEmail] = useState('');
   const [manualPhone, setManualPhone] = useState('');
-  const [manualItemName, setManualItemName] = useState('Deep Sleep Botanical Night Calm Formula');
-  const [manualAmount, setManualAmount] = useState('24.00');
-  const [manualPaymentMethod, setManualPaymentMethod] = useState<PaymentMethod>('Credit / Debit Card');
+  const [manualProductId, setManualProductId] = useState('');
+  const [manualQuantity, setManualQuantity] = useState('1');
+  const [manualOrderError, setManualOrderError] = useState('');
+  const [isSavingManualOrder, setIsSavingManualOrder] = useState(false);
   const [manualDelivery, setManualDelivery] = useState<'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail'>('Pharmacy Pickup');
+  const [manualAddress, setManualAddress] = useState('');
 
-  // KPI Calculations
-  const totalRevenue = useMemo(() => {
-    return orders.reduce((acc, o) => acc + (o.paymentStatus === 'Paid' ? o.totalAmount : 0), 0);
-  }, [orders]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      onLoadOrders({ query: searchQuery.trim(), status: statusFilter, page: currentPage });
+    }, searchQuery ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery, statusFilter, currentPage, reloadCounter, onLoadOrders]);
 
-  const cardRevenue = useMemo(() => {
-    return orders
-      .filter((o) => o.paymentMethod === 'Credit / Debit Card' && o.paymentStatus === 'Paid')
-      .reduce((acc, o) => acc + o.totalAmount, 0);
-  }, [orders]);
-
-  const paypalRevenue = useMemo(() => {
-    return orders
-      .filter((o) => o.paymentMethod === 'PayPal' && o.paymentStatus === 'Paid')
-      .reduce((acc, o) => acc + o.totalAmount, 0);
-  }, [orders]);
-
-  const cryptoRevenue = useMemo(() => {
-    return orders
-      .filter((o) => o.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && o.paymentStatus === 'Paid')
-      .reduce((acc, o) => acc + o.totalAmount, 0);
-  }, [orders]);
-
-  const pendingReviewCount = useMemo(() => {
-    return orders.filter((o) => o.status === 'Submitted' || o.status === 'Pharmacist Review').length;
-  }, [orders]);
-
-  // Filtered Orders
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      const matchesSearch =
-        o.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        o.medicationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (o.transactionId && o.transactionId.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (o.cryptoDetails?.txHash && o.cryptoDetails.txHash.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesStatus = statusFilter === 'All' || o.status === statusFilter;
-      const matchesPayment =
-        paymentFilter === 'All' ||
-        (paymentFilter === 'Card' && o.paymentMethod === 'Credit / Debit Card') ||
-        (paymentFilter === 'PayPal' && o.paymentMethod === 'PayPal') ||
-        (paymentFilter === 'Crypto' && o.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)') ||
-        (paymentFilter === 'Pickup' && o.paymentMethod === 'Cash on Delivery / Pickup');
-
-      return matchesSearch && matchesStatus && matchesPayment;
-    });
-  }, [orders, searchQuery, statusFilter, paymentFilter]);
+  const filteredOrders = orders;
 
   // Open detail drawer and sync inputs
   const handleOpenDetail = (order: OnlineOrder) => {
     setSelectedOrder(order);
-    setCarrierInput(order.carrier || 'CareCourier Express');
+    setCarrierInput(order.carrier || '');
     setTrackingInput(order.trackingNumber || '');
     setNewInternalNote('');
-    setEmailSentAlert(null);
   };
 
   // Update tracking details
   const handleSaveTracking = async () => {
     if (!selectedOrder) return;
-    if (onUpdateOrderTracking) {
-      setOrderSaveError('');
-      try {
-        await onUpdateOrderTracking(selectedOrder.id, carrierInput, trackingInput);
-      } catch (error) {
-        setOrderSaveError(error instanceof Error ? error.message : 'Order tracking could not be saved.');
-        return;
-      }
+    setOrderSaveError('');
+    try {
+      await onUpdateOrderTracking(selectedOrder.id, carrierInput, trackingInput);
+    } catch (error) {
+      setOrderSaveError(error instanceof Error ? error.message : 'Order tracking could not be saved.');
+      return;
     }
     // Update local modal state
     setSelectedOrder({
@@ -153,6 +117,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     setOrderSaveError('');
     try {
       await onUpdateOrderStatus(orderId, status);
+      setReloadCounter((counter) => counter + 1);
     } catch (error) {
       setOrderSaveError(error instanceof Error ? error.message : 'Order status could not be saved.');
     }
@@ -161,7 +126,6 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   // Add internal staff note
   const handleAddNote = async () => {
     if (!selectedOrder || !newInternalNote.trim()) return;
-    if (!onAddOrderInternalNote) return;
     setOrderSaveError('');
     setIsSavingNote(true);
     try {
@@ -176,27 +140,6 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     } finally {
       setIsSavingNote(false);
     }
-  };
-
-  // Save a tracking email draft until a mail provider is connected.
-  const handleSendHostingerEmail = () => {
-    if (!selectedOrder) return;
-    const emailLog: EmailLog = {
-      id: `mail-${Date.now()}`,
-      recipientEmail: selectedOrder.email,
-      recipientName: selectedOrder.patientName,
-      subject: `Order Update #${selectedOrder.orderNumber}: Dispensed & Shipped`,
-      body: `Hello ${selectedOrder.patientName},\n\nYour order (${selectedOrder.orderNumber}) containing ${selectedOrder.medicationName} has been processed by our dispensary team.\nCarrier: ${carrierInput || selectedOrder.carrier || 'CareCourier'}\nTracking Number: ${trackingInput || selectedOrder.trackingNumber || 'Available upon pickup'}\n\nWarm regards,\nAmbients Dispensary Team`,
-      status: 'Draft',
-      sentAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      emailType: 'order_confirmation',
-    };
-
-    if (onSendEmailNotification) {
-      onSendEmailNotification(emailLog);
-    }
-    setEmailSentAlert(`Tracking email draft saved for ${selectedOrder.email}. No email was sent.`);
-    setTimeout(() => setEmailSentAlert(null), 4000);
   };
 
   // Export to CSV
@@ -226,8 +169,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       `"${o.phone}"`,
       `"${o.medicationName}"`,
       o.totalAmount.toFixed(2),
-      `"${o.paymentMethod || 'Card'}"`,
-      `"${o.paymentStatus || 'Paid'}"`,
+      `"${o.paymentMethod || 'Not specified'}"`,
+      `"${o.paymentStatus || 'Unknown'}"`,
       `"${o.transactionId || ''}"`,
       `"${o.deliveryMethod}"`,
       `"${o.status}"`,
@@ -247,115 +190,44 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   };
 
   // Submit manual phone/walk-in order
-  const handleCreateManualOrder = (e: React.FormEvent) => {
+  const handleCreateManualOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const orderNum = `ORD-MAN-${Date.now().toString().slice(-5)}`;
-    const parsedAmount = parseFloat(manualAmount) || 24.0;
-
-    const newOrder: OnlineOrder = {
-      id: `ord-man-${Date.now()}`,
-      orderNumber: orderNum,
-      patientName: manualCustomerName || 'Walk-in Client',
-      email: manualEmail || 'desk.client@example.org',
-      phone: manualPhone || '+1 (555) 000-0000',
-      medicationName: manualItemName,
-      items: [
-        {
-          productId: 'custom-manual',
-          name: manualItemName,
-          category: 'Daily Wellness',
-          quantity: 1,
-          unitPrice: parsedAmount,
-        },
-      ],
-      subtotal: parsedAmount,
-      shippingFee: 0.0,
-      discountAmount: 0.0,
-      totalAmount: parsedAmount,
-      orderType: 'Store Purchase',
-      deliveryMethod: manualDelivery,
-      deliveryAddress: manualDelivery === 'Pharmacy Pickup' ? 'Dispensary Counter 1' : 'Local Address on File',
-      paymentMethod: manualPaymentMethod,
-      paymentStatus: 'Paid',
-      transactionId: `MAN-${Date.now().toString().slice(-6)}`,
-      status: 'Submitted',
-      placedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      carrier: manualDelivery === 'Pharmacy Pickup' ? 'Counter Pickup' : 'CareCourier Express',
-      trackingNumber: `DESK-${Math.floor(1000 + Math.random() * 9000)}`,
-      notes: 'Manually logged by dispensary staff',
-      internalNotes: ['Created manually via Admin CRM Desk'],
-    };
-
-    if (onAddManualOrder) {
-      onAddManualOrder(newOrder);
+    setManualOrderError('');
+    const quantity = Number(manualQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 50 || !manualProductId) {
+      setManualOrderError('Select a product and enter a whole-number quantity from 1 to 50.');
+      return;
     }
-    setIsManualModalOpen(false);
-    setManualCustomerName('');
-    setManualEmail('');
-    setManualPhone('');
+    setIsSavingManualOrder(true);
+    try {
+      await onCreateManualOrder({
+        customerName: manualCustomerName.trim(),
+        email: manualEmail.trim(),
+        phone: manualPhone.trim(),
+        deliveryMethod: manualDelivery,
+        deliveryAddress: manualDelivery === 'Pharmacy Pickup' ? '' : manualAddress.trim(),
+        productId: manualProductId,
+        quantity,
+      });
+      setIsManualModalOpen(false);
+      setManualCustomerName('');
+      setManualEmail('');
+      setManualPhone('');
+      setManualAddress('');
+      setManualQuantity('1');
+      setManualProductId('');
+      setStatusFilter('All');
+      setCurrentPage(1);
+      setReloadCounter((counter) => counter + 1);
+    } catch (createError) {
+      setManualOrderError(createError instanceof Error ? createError.message : 'The order could not be saved.');
+    } finally {
+      setIsSavingManualOrder(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & KPI Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Total Gross Revenue */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Total Gross Revenue</span>
-            <DollarSign className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900">${totalRevenue.toFixed(2)}</div>
-          <p className="text-[11px] text-slate-400">All settled channels</p>
-        </div>
-
-        {/* Total Orders */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Total Orders Placed</span>
-            <ClipboardList className="w-4 h-4 text-teal-600" />
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900">{orders.length}</div>
-          <p className="text-[11px] text-slate-400">Dispensary queue &amp; archive</p>
-        </div>
-
-        {/* Card Payments */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Credit / Debit Cards</span>
-            <CreditCard className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900">${cardRevenue.toFixed(2)}</div>
-          <p className="text-[11px] text-slate-400">
-            {orders.filter((o) => o.paymentMethod === 'Credit / Debit Card').length} card transactions
-          </p>
-        </div>
-
-        {/* PayPal Payments */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>PayPal Gateway</span>
-            <span className="font-bold text-sky-600 text-xs">PP</span>
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900">${paypalRevenue.toFixed(2)}</div>
-          <p className="text-[11px] text-slate-400">
-            {orders.filter((o) => o.paymentMethod === 'PayPal').length} PayPal transactions
-          </p>
-        </div>
-
-        {/* Crypto Payments */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <div className="flex items-center justify-between text-slate-500 text-xs">
-            <span>Crypto (USDC/BTC)</span>
-            <QrCode className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="text-xl font-bold font-mono text-slate-900">${cryptoRevenue.toFixed(2)}</div>
-          <p className="text-[11px] text-slate-400">
-            {orders.filter((o) => o.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)').length} on-chain orders
-          </p>
-        </div>
-      </div>
-
       {/* Main Order Workspace */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         {/* Workspace Toolbar */}
@@ -363,34 +235,33 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold text-slate-900">
-                Dispensary &amp; Store Orders Management
+                Order management
               </h3>
-              {pendingReviewCount > 0 && (
-                <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {pendingReviewCount} require review
-                </span>
-              )}
             </div>
             <p className="text-xs text-slate-500">
-              Orders saved to the application database, with fulfillment tracking
+              Search and filter saved orders across all pages. Payment remains unverified until a real provider is connected.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {onAddManualOrder && <button
-              onClick={() => setIsManualModalOpen(true)}
+            <button
+              onClick={() => {
+                setManualProductId(catalogItems[0]?.id || '');
+                setManualOrderError('');
+                setIsManualModalOpen(true);
+              }}
               className="px-3 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Create Phone/Walk-in Order</span>
-            </button>}
+              <span>Create order</span>
+            </button>
 
             <button
               onClick={handleExportCsv}
               className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-300"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Export CSV</span>
+              <span>Export this page</span>
             </button>
           </div>
         </div>
@@ -405,8 +276,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by order #, customer, email, product, or tx hash..."
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Search order number, customer, email, or product..."
               className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-700"
             />
           </div>
@@ -418,7 +292,10 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               <span className="text-slate-400 text-[11px] font-semibold">Status:</span>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="bg-transparent text-slate-800 font-medium focus:outline-none text-xs cursor-pointer"
               >
                 <option value="All">All Statuses</option>
@@ -432,24 +309,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </select>
             </div>
 
-            {/* Payment Filter */}
-            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1">
-              <span className="text-slate-400 text-[11px] font-semibold">Payment:</span>
-              <select
-                value={paymentFilter}
-                onChange={(e) => setPaymentFilter(e.target.value)}
-                className="bg-transparent text-slate-800 font-medium focus:outline-none text-xs cursor-pointer"
-              >
-                <option value="All">All Payment Modes</option>
-                <option value="Card">Credit / Debit Card</option>
-                <option value="PayPal">PayPal</option>
-                <option value="Crypto">Cryptocurrency</option>
-                <option value="Pickup">Pickup / Cash</option>
-              </select>
-            </div>
-
             <span className="text-slate-400 text-[11px] font-mono">
-              Showing {filteredOrders.length} of {orders.length}
+              {pagination.total === 0 ? '0 orders' : `${(pagination.page - 1) * pagination.limit + 1}–${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
             </span>
           </div>
         </div>
@@ -462,17 +323,19 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <th className="py-3 px-4">Order # &amp; Date</th>
                 <th className="py-3 px-4">Customer Details</th>
                 <th className="py-3 px-4">Items Ordered</th>
-                <th className="py-3 px-4">Amount &amp; Gateway</th>
+                <th className="py-3 px-4">Amount &amp; payment</th>
                 <th className="py-3 px-4">Fulfillment Mode</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredOrders.length === 0 ? (
+              {isLoading ? (
+                <tr><td colSpan={7} className="py-12 text-center text-slate-500">Loading orders…</td></tr>
+              ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
-                    No orders matching your search or filters.
+                    No orders match this search and status filter.
                   </td>
                 </tr>
               ) : (
@@ -503,40 +366,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       </span>
                     </td>
 
-                    {/* Financials & Gateway */}
+                    {/* Amount and payment state */}
                     <td className="py-3.5 px-4">
                       <div className="font-mono font-bold text-slate-900 text-sm">
                         ${ord.totalAmount.toFixed(2)}
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        {ord.paymentMethod === 'Credit / Debit Card' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                            <CreditCard className="w-2.5 h-2.5" />
-                            <span>Card {ord.cardLast4 ? `••${ord.cardLast4}` : ''}</span>
-                          </span>
-                        ) : ord.paymentMethod === 'PayPal' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded border border-sky-200">
-                            <span className="font-bold italic">PP</span>
-                            <span>PayPal</span>
-                          </span>
-                        ) : ord.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)' ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                            <QrCode className="w-2.5 h-2.5" />
-                            <span>{ord.cryptoDetails?.currency || 'Crypto'}</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            <span>Pickup</span>
-                          </span>
-                        )}
-                        <span
-                          className={`text-[10px] font-bold px-1 rounded ${
-                            ord.paymentStatus === 'Paid'
-                              ? 'text-emerald-700 bg-emerald-50'
-                              : 'text-amber-700 bg-amber-50'
-                          }`}
-                        >
-                          {ord.paymentStatus || 'Paid'}
+                        <span className="text-[10px] text-slate-500">{ord.paymentMethod || 'Not specified'}</span>
+                        <span className={`rounded px-1 text-[10px] font-bold ${ord.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+                          {ord.paymentStatus || 'Unknown'}
                         </span>
                       </div>
                     </td>
@@ -589,13 +427,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         }}
                         className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
                       >
-                        <option value="Submitted">Submitted</option>
-                        <option value="Pharmacist Review">Review</option>
-                        <option value="Dispensing">Dispensing</option>
-                        <option value="Ready for Pickup">Pickup Ready</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
+                        <option value={ord.status}>{ord.status}</option>
+                        {allowedStatusTransitions[ord.status].map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
 
                       <button
@@ -611,6 +444,13 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+          <p className="text-xs text-slate-500">Page {pagination.page} of {Math.max(1, pagination.pages)} · {pagination.total} total orders</p>
+          <div className="flex gap-2">
+            <button type="button" disabled={pagination.page <= 1 || isLoading} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40">Previous</button>
+            <button type="button" disabled={pagination.page >= pagination.pages || isLoading} onClick={() => setCurrentPage((page) => page + 1)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-40">Next</button>
+          </div>
         </div>
       </div>
 
@@ -652,14 +492,6 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>
             </div>
 
-            {/* Email dispatch alert banner */}
-            {emailSentAlert && (
-              <div className="bg-emerald-50 text-emerald-800 px-5 py-2 text-xs border-b border-emerald-200 flex items-center gap-2 font-medium">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>{emailSentAlert}</span>
-              </div>
-            )}
-
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 text-xs">
               {/* Top Details Grid */}
@@ -678,26 +510,19 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
                 {/* Payment & Audit Info */}
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5">
-                  <span className="font-bold text-slate-800 text-xs block">Payment Audit Trail</span>
+                  <span className="font-bold text-slate-800 text-xs block">Payment status</span>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Method:</span>
-                    <span className="font-bold text-slate-900">{selectedOrder.paymentMethod}</span>
+                    <span className="font-bold text-slate-900">{selectedOrder.paymentMethod || 'Not specified'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Payment Status:</span>
-                    <span className="font-bold text-emerald-700">{selectedOrder.paymentStatus || 'Paid'}</span>
+                    <span className="font-bold text-amber-800">{selectedOrder.paymentStatus || 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Transaction ID:</span>
-                    <span className="font-mono text-teal-800 font-semibold">{selectedOrder.transactionId || 'N/A'}</span>
+                    <span className="font-mono text-slate-700">{selectedOrder.transactionId || 'Not available'}</span>
                   </div>
-                  {selectedOrder.cryptoDetails && (
-                    <div className="pt-1.5 border-t border-slate-200 text-[11px] space-y-0.5">
-                      <span className="text-amber-800 font-semibold block">On-Chain Crypto Record:</span>
-                      <p className="text-slate-600">Network: {selectedOrder.cryptoDetails.network}</p>
-                      <p className="font-mono text-slate-500 truncate">Tx: {selectedOrder.cryptoDetails.txHash}</p>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -764,7 +589,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     </span>
                   </div>
                   <div className="border-t border-slate-300 pt-1.5 flex justify-between font-bold text-slate-900 text-sm">
-                    <span>Total Settled:</span>
+                    <span>Order total (not payment confirmation):</span>
                     <span className="font-mono text-teal-900">${selectedOrder.totalAmount.toFixed(2)}</span>
                   </div>
                 </div>
@@ -774,7 +599,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3">
                 <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
                   <Truck className="w-4 h-4 text-teal-700" />
-                  <span>Fulfillment &amp; Email Draft</span>
+                  <span>Fulfillment &amp; Tracking</span>
                 </span>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -811,14 +636,6 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     className="px-3 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
                   >
                     Save Tracking
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendHostingerEmail}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-teal-800 border border-teal-300 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Send className="w-3 h-3" />
-                    <span>Save Tracking Email Draft</span>
                   </button>
                 </div>
               </div>
@@ -861,12 +678,12 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       )}
 
       {/* Manual Phone/Walk-in Order Modal */}
-      {isManualModalOpen && onAddManualOrder && (
+      {isManualModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 space-y-4 text-xs font-sans">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-bold text-base text-slate-900">
-                Log New Phone or Walk-in Order
+                Create a manual order
               </h3>
               <button
                 onClick={() => setIsManualModalOpen(false)}
@@ -914,50 +731,23 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Product Description</label>
-                <input
-                  type="text"
-                  required
-                  value={manualItemName}
-                  onChange={(e) => setManualItemName(e.target.value)}
-                  placeholder="e.g. Deep Sleep Night Calm Formula"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Amount ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={manualAmount}
-                    onChange={(e) => setManualAmount(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Method</label>
-                  <select
-                    value={manualPaymentMethod}
-                    onChange={(e) => setManualPaymentMethod(e.target.value as PaymentMethod)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                  >
-                    <option value="Credit / Debit Card">Credit / Debit Card</option>
-                    <option value="PayPal">PayPal</option>
-                    <option value="Cryptocurrency (USDC / BTC / ETH / SOL)">Cryptocurrency</option>
-                    <option value="Cash on Delivery / Pickup">Cash / Counter POS</option>
+                <label className="block font-semibold text-slate-700">Product
+                  <select required value={manualProductId} onChange={(event) => setManualProductId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-slate-900">
+                    <option value="">Select a product</option>
+                    {catalogItems.filter((item) => item.inStock).map((item) => <option key={item.id} value={item.id}>{item.name} · ${item.price.toFixed(2)} · {item.stockCount} in stock</option>)}
                   </select>
-                </div>
+                </label>
+                <label className="block font-semibold text-slate-700">Quantity
+                  <input type="number" min="1" max="50" step="1" required value={manualQuantity} onChange={(event) => setManualQuantity(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-slate-900" />
+                </label>
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Fulfillment Mode</label>
                 <select
                   value={manualDelivery}
-                  onChange={(e) => setManualDelivery(e.target.value as any)}
+                  onChange={(e) => setManualDelivery(e.target.value as typeof manualDelivery)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
                 >
                   <option value="Pharmacy Pickup">Dispensary Desk Pickup</option>
@@ -965,6 +755,13 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <option value="Discreet Mail">Discreet Mail</option>
                 </select>
               </div>
+              {manualDelivery !== 'Pharmacy Pickup' && (
+                <label className="block font-semibold text-slate-700">Delivery address
+                  <textarea required maxLength={500} value={manualAddress} onChange={(event) => setManualAddress(event.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-slate-900" />
+                </label>
+              )}
+              <p className="rounded-lg bg-amber-50 p-3 text-amber-900">Order prices come from the live catalog. Payment remains pending; creating an order does not charge the customer.</p>
+              {manualOrderError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-900">{manualOrderError}</p>}
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
@@ -976,9 +773,10 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </button>
                 <button
                   type="submit"
+                  disabled={isSavingManualOrder}
                   className="px-5 py-2 text-xs font-bold text-white bg-teal-800 hover:bg-teal-700 rounded-lg shadow-xs cursor-pointer"
                 >
-                  Record Order to CRM
+                  {isSavingManualOrder ? 'Saving…' : 'Create order'}
                 </button>
               </div>
             </form>

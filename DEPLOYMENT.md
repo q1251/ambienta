@@ -80,9 +80,23 @@ The API persists contact leads, the public product catalog and stock counts,
 storefront orders, fulfillment tracking, fulfillment-only internal order notes,
 and an admin audit log. Cancelling an order restores its reserved stock exactly
 once. Do not put clinical, prescription, insurance, or payment-card details in
-order notes. The sample clinical CRM, staff reminders, and email logs remain
-browser-memory previews; mail is not connected and no email is sent or tracked
-as delivered/opened. The audit log is available only through the authenticated
+order notes. The live CRM workspace shows operational data only: overview
+metrics, searchable/paginated orders, products and stock, contact leads,
+integration status, staff access, and audit history. Manual orders use current
+catalog pricing and reserve stock in the database; their payment status remains
+pending and creating an order does not charge a customer.
+
+The primary administrator can create operator accounts from **Staff access**.
+Each operator receives a temporary password, which is stored as a password
+hash and must be changed on first sign-in. Share temporary passwords through a
+secure out-of-band channel. Operators can manage operational orders, products,
+and contact leads; only the primary administrator can manage staff accounts or
+view the audit log. Deactivated operator accounts are denied access on their
+next protected API request.
+
+Mail is not connected: the application does not send messages or track delivery,
+opens, or replies. Card and PayPal processing are disabled, and cryptocurrency
+remains disabled. The audit log is available only through the authenticated
 admin API.
 
 Storefront checkout currently accepts cash on delivery/pickup only. Card,

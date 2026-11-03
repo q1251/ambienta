@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { PharmacyHero } from './components/PharmacyHero';
 import { CategoriesAndProducts } from './components/CategoriesAndProducts';
@@ -11,26 +11,17 @@ import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { AdminLayout } from './components/Admin/AdminLayout';
 import { AdminLogin } from './components/Admin/AdminLogin';
+import { CATALOG_ITEMS as INITIAL_CATALOG } from './data/seedData';
 import {
-  INITIAL_PATIENTS,
-  INITIAL_HOSTINGER_CONFIG,
-  INITIAL_EMAIL_LOGS,
-  INITIAL_REMINDER_RULES,
-  CATALOG_ITEMS as INITIAL_CATALOG,
-} from './data/seedData';
-import {
-  Patient,
   ContactLead,
   OnlineOrder,
-  HostingerConfig,
-  EmailLog,
-  ReminderRule,
-  PharmacistNote,
   CatalogItem,
   CartItem,
   StoreCategory,
 } from './types/pharmacy';
 import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
+import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChange';
+import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
 
 export default function App() {
   // Current route state: inspect window.location.pathname
@@ -46,17 +37,19 @@ export default function App() {
       : 'unauthenticated')
   );
   const [adminAuthSetupMessage, setAdminAuthSetupMessage] = useState<string>();
+  const [adminRole, setAdminRole] = useState<'admin' | 'operator'>('admin');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   // Master application states
-  const [patients, setPatients] = useState<Patient[]>(INITIAL_PATIENTS);
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
+  const [orderPagination, setOrderPagination] = useState<OrderPagination>({ page: 1, limit: 25, total: 0, pages: 0 });
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const orderRequestId = useRef(0);
   const [leads, setLeads] = useState<ContactLead[]>([]);
   const [adminDataError, setAdminDataError] = useState('');
   const [catalogError, setCatalogError] = useState('');
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
-  const [hostingerConfig, setHostingerConfig] = useState<HostingerConfig>(INITIAL_HOSTINGER_CONFIG);
-  const [emailLogs, setEmailLogs] = useState<EmailLog[]>(INITIAL_EMAIL_LOGS);
-  const [reminderRules, setReminderRules] = useState<ReminderRule[]>(INITIAL_REMINDER_RULES);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
@@ -98,7 +91,6 @@ export default function App() {
   // Modals state
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // Sync with browser navigation
   useEffect(() => {
@@ -124,16 +116,23 @@ export default function App() {
           configured?: boolean;
           code?: string;
           message?: string;
+          email?: string;
+          role?: 'admin' | 'operator';
+          mustChangePassword?: boolean;
         };
         if (!isCurrent) return;
 
         if (response.ok && result.authenticated) {
+          setAdminRole(result.role || 'admin');
+          setAdminEmail(result.email || '');
+          setMustChangePassword(Boolean(result.mustChangePassword));
           setAdminAuthStatus('authenticated');
           setAdminAuthSetupMessage(undefined);
           return;
         }
 
         setAdminAuthStatus('unauthenticated');
+        setMustChangePassword(false);
         if (result.configured) {
           setAdminAuthSetupMessage(undefined);
           return;
@@ -145,6 +144,7 @@ export default function App() {
       .catch(() => {
         if (!isCurrent) return;
         setAdminAuthStatus('unauthenticated');
+        setMustChangePassword(false);
         setAdminAuthSetupMessage('The secure sign-in service could not be reached. Please try again later.');
       });
 
@@ -154,7 +154,7 @@ export default function App() {
   }, [currentPath]);
 
   useEffect(() => {
-    if (currentPath !== '/admin' || adminAuthStatus !== 'authenticated') return;
+    if (currentPath !== '/admin' || adminAuthStatus !== 'authenticated' || mustChangePassword) return;
 
     let isCurrent = true;
     setAdminDataError('');
@@ -162,22 +162,12 @@ export default function App() {
     setLeads([]);
     const loadAdminData = async () => {
       try {
-        const [ordersResponse, leadsResponse] = await Promise.all([
-          fetch('/api/data.php?resource=orders', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
-          fetch('/api/data.php?resource=leads', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
-        ]);
-        const [ordersResult, leadsResult] = await Promise.all([
-          ordersResponse.json() as Promise<{ orders?: OnlineOrder[]; message?: string }>,
-          leadsResponse.json() as Promise<{ leads?: ContactLead[]; message?: string }>,
-        ]);
-        if (!ordersResponse.ok || !Array.isArray(ordersResult.orders)) {
-          throw new Error(ordersResult.message || 'Could not load saved orders from the database.');
-        }
+        const leadsResponse = await fetch('/api/data.php?resource=leads', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const leadsResult = await leadsResponse.json() as { leads?: ContactLead[]; message?: string };
         if (!leadsResponse.ok || !Array.isArray(leadsResult.leads)) {
           throw new Error(leadsResult.message || 'Could not load saved contact leads from the database.');
         }
         if (isCurrent) {
-          setOrders(ordersResult.orders);
           setLeads(leadsResult.leads);
         }
       } catch (error) {
@@ -190,7 +180,45 @@ export default function App() {
     return () => {
       isCurrent = false;
     };
-  }, [currentPath, adminAuthStatus]);
+  }, [currentPath, adminAuthStatus, mustChangePassword]);
+
+  const handleLoadOrders = useCallback(async (search: OrderSearch) => {
+    const requestId = ++orderRequestId.current;
+    setOrdersLoading(true);
+    try {
+      const parameters = new URLSearchParams({
+        page: String(search.page),
+        limit: '25',
+        q: search.query,
+      });
+      if (search.status !== 'All') parameters.set('status', search.status);
+      const response = await fetch(`/api/data.php?resource=orders&${parameters.toString()}`, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
+      const result = await response.json() as {
+        orders?: OnlineOrder[];
+        pagination?: OrderPagination;
+        message?: string;
+      };
+      if (response.status === 401) {
+        setAdminAuthStatus('unauthenticated');
+        throw new Error('Your session has expired. Sign in again to continue.');
+      }
+      if (!response.ok || !Array.isArray(result.orders) || !result.pagination) {
+        throw new Error(result.message || 'Saved orders could not be loaded.');
+      }
+      if (requestId !== orderRequestId.current) return;
+      setOrders(result.orders);
+      setOrderPagination(result.pagination);
+      setAdminDataError('');
+    } catch (error) {
+      if (requestId !== orderRequestId.current) return;
+      setAdminDataError(error instanceof Error ? error.message : 'Saved orders could not be loaded.');
+    } finally {
+      if (requestId === orderRequestId.current) setOrdersLoading(false);
+    }
+  }, []);
 
   const navigateTo = (path: string) => {
     window.history.pushState(null, '', path);
@@ -201,6 +229,8 @@ export default function App() {
       setAdminAuthSetupMessage(undefined);
     } else {
       setAdminAuthStatus('unauthenticated');
+      setAdminEmail('');
+      setMustChangePassword(false);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -297,7 +327,7 @@ export default function App() {
 
   const handleUpdateOrderTracking = async (orderId: string, carrier: string, trackingNumber: string) => {
     const order = orders.find((item) => item.id === orderId);
-    if (!order) return;
+    if (!order) throw new Error('The order is no longer on this page. Refresh the order list and try again.');
     try {
       const response = await fetch('/api/data.php?resource=orders', {
         method: 'PATCH',
@@ -407,83 +437,9 @@ export default function App() {
     );
   };
 
-  // Clinical CRM Handlers
-  const handleAddPharmacistNote = (
-    patientId: string,
-    note: Omit<PharmacistNote, 'id' | 'createdAt'>
-  ) => {
-    const fullNote: PharmacistNote = {
-      ...note,
-      id: `note-${Date.now()}`,
-      createdAt: '2026-11-02 04:55 AM',
-    };
-
-    setPatients((prev) =>
-      prev.map((p) => (p.id === patientId ? { ...p, notes: [fullNote, ...p.notes] } : p))
-    );
-
-    if (selectedPatient && selectedPatient.id === patientId) {
-      setSelectedPatient({
-        ...selectedPatient,
-        notes: [fullNote, ...selectedPatient.notes],
-      });
-    }
-  };
-
-  const handleTriggerRefillDispense = (patientId: string, rxNumber: string) => {
-    setPatients((prev) =>
-      prev.map((p) => {
-        if (p.id !== patientId) return p;
-        const updatedRefills = p.refillHistory.map((r) => {
-          if (r.rxNumber === rxNumber) {
-            return {
-              ...r,
-              remainingRefills: Math.max(0, r.remainingRefills - 1),
-              dateFilled: '2026-11-02',
-              nextRefillDue: '2026-12-02',
-              status: 'Active' as const,
-            };
-          }
-          return r;
-        });
-        return { ...p, refillHistory: updatedRefills };
-      })
-    );
-
-    if (selectedPatient && selectedPatient.id === patientId) {
-      const updatedRefills = selectedPatient.refillHistory.map((r) => {
-        if (r.rxNumber === rxNumber) {
-          return {
-            ...r,
-            remainingRefills: Math.max(0, r.remainingRefills - 1),
-            dateFilled: '2026-11-02',
-            nextRefillDue: '2026-12-02',
-            status: 'Active' as const,
-          };
-        }
-        return r;
-      });
-      setSelectedPatient({ ...selectedPatient, refillHistory: updatedRefills });
-    }
-  };
-
-  const handleSendSingleEmail = (log: EmailLog) => {
-    setEmailLogs((prev) => [log, ...prev]);
-  };
-
-  const handleBatchSendEmails = (logs: EmailLog[]) => {
-    setEmailLogs((prev) => [...logs, ...prev]);
-  };
-
-  const handleToggleReminderRule = (ruleId: string) => {
-    setReminderRules((prev) =>
-      prev.map((r) => (r.id === ruleId ? { ...r, isActive: !r.isActive } : r))
-    );
-  };
-
   const handleUpdateOrderStatus = async (orderId: string, newStatus: OnlineOrder['status']) => {
     const order = orders.find((item) => item.id === orderId);
-    if (!order) return;
+    if (!order) throw new Error('The order is no longer on this page. Refresh the order list and try again.');
     try {
       const response = await fetch('/api/data.php?resource=orders', {
         method: 'PATCH',
@@ -532,6 +488,33 @@ export default function App() {
     });
   };
 
+  const handleCreateManualOrder = async (data: {
+    customerName: string;
+    email: string;
+    phone: string;
+    deliveryMethod: OnlineOrder['deliveryMethod'];
+    deliveryAddress: string;
+    productId: string;
+    quantity: number;
+  }): Promise<OnlineOrder> => {
+    const response = await fetch('/api/data.php?resource=manual-orders', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json() as { order?: OnlineOrder; message?: string };
+    if (!response.ok || !result.order) {
+      throw new Error(result.message || 'The manual order could not be saved.');
+    }
+    const savedOrder = result.order;
+    setCatalogItems((previous) => previous.map((product) => {
+      const item = savedOrder.items?.find((line) => line.productId === product.id);
+      return item ? { ...product, stockCount: Math.max(0, product.stockCount - item.quantity), inStock: product.stockCount - item.quantity > 0 } : product;
+    }));
+    return savedOrder;
+  };
+
   const totalCartCount = cartItems.reduce((acc, ci) => acc + ci.quantity, 0);
 
   // If user is at /admin, render the dedicated Staff CRM & Dispensary Operations Portal
@@ -547,10 +530,22 @@ export default function App() {
     return (
       <AdminLogin
         setupMessage={adminAuthSetupMessage}
-        onAuthenticated={() => {
+        onAuthenticated={(role, shouldChangePassword, email) => {
           setAdminAuthSetupMessage(undefined);
+          setAdminRole(role);
+          setAdminEmail(email);
+          setMustChangePassword(shouldChangePassword);
           setAdminAuthStatus('authenticated');
         }}
+      />
+    );
+  }
+
+  if (currentPath === '/admin' && mustChangePassword) {
+    return (
+      <RequiredPasswordChange
+        onComplete={() => setMustChangePassword(false)}
+        onLogout={handleAdminLogout}
       />
     );
   }
@@ -560,8 +555,8 @@ export default function App() {
       <AdminLayout
         onNavigateHome={() => navigateTo('/')}
         onLogout={handleAdminLogout}
-        patients={patients}
-        onSelectPatient={(p) => setSelectedPatient(p)}
+        role={adminRole}
+        email={adminEmail}
         leads={leads}
         leadDataError={adminDataError}
         dataError={adminDataError}
@@ -572,21 +567,14 @@ export default function App() {
         onUpdateProduct={handleUpdateProduct}
         onDeleteProduct={handleDeleteProduct}
         onBulkPriceAdjust={handleBulkPriceAdjust}
-        hostingerConfig={hostingerConfig}
-        onUpdateHostingerConfig={setHostingerConfig}
-        emailLogs={emailLogs}
-        onSendEmail={handleSendSingleEmail}
-        onBatchSendEmails={handleBatchSendEmails}
-        reminderRules={reminderRules}
-        onToggleReminderRule={handleToggleReminderRule}
         orders={orders}
+        orderPagination={orderPagination}
+        ordersLoading={ordersLoading}
+        onLoadOrders={handleLoadOrders}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onUpdateOrderTracking={handleUpdateOrderTracking}
         onAddOrderInternalNote={handleAddOrderInternalNote}
-        selectedPatient={selectedPatient}
-        onClosePatientModal={() => setSelectedPatient(null)}
-        onAddPharmacistNote={handleAddPharmacistNote}
-        onTriggerRefillDispense={handleTriggerRefillDispense}
+        onCreateManualOrder={handleCreateManualOrder}
       />
     );
   }

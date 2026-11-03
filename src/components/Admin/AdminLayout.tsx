@@ -1,35 +1,42 @@
 import React, { useState } from 'react';
 import {
-  Users,
-  Package,
-  FileSpreadsheet,
-  Bell,
-  Mail,
-  Send,
-  ShoppingBag,
-  ExternalLink,
-  ShieldCheck,
-  Server,
-  LogOut,
-  ChevronRight,
+  ArrowUpRight,
   ClipboardList,
+  FileSpreadsheet,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Settings2,
+  ShieldCheck,
+  Users,
 } from 'lucide-react';
-import { ContactLead, Patient, CatalogItem, HostingerConfig, EmailLog, ReminderRule, OnlineOrder, PharmacistNote } from '../../types/pharmacy';
-import { CrmDashboard } from '../CRM/CrmDashboard';
-import { InventoryManager } from './InventoryManager';
-import { OrdersManager } from './OrdersManager';
-import { ContactLeadManager } from '../CRM/ContactLeadManager';
-import { AutomatedRemindersView } from '../CRM/AutomatedRemindersView';
-import { HostingerEmailSyncView } from '../CRM/HostingerEmailSyncView';
-import { BulkHealthCategoryCampaignView } from '../CRM/BulkHealthCategoryCampaignView';
-import { PatientDetailModal } from '../CRM/PatientDetailModal';
+import { CatalogItem, ContactLead, OnlineOrder } from '../../types/pharmacy';
 import { AuditLogView } from './AuditLogView';
+import { IntegrationStatus } from './IntegrationStatus';
+import { InventoryManager } from './InventoryManager';
+import { OperationsOverview } from './OperationsOverview';
+import { OrdersManager } from './OrdersManager';
+import { StaffManager } from './StaffManager';
+import { ContactLeadManager } from '../CRM/ContactLeadManager';
+
+export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'integrations' | 'staff' | 'audit';
+export interface OrderSearch {
+  query: string;
+  status: string;
+  page: number;
+}
+export interface OrderPagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
 
 interface AdminLayoutProps {
   onNavigateHome: () => void;
   onLogout: () => Promise<void>;
-  patients: Patient[];
-  onSelectPatient: (patient: Patient) => void;
+  role: 'admin' | 'operator';
+  email: string;
   leads: ContactLead[];
   leadDataError?: string;
   dataError?: string;
@@ -40,346 +47,147 @@ interface AdminLayoutProps {
   onUpdateProduct: (item: CatalogItem) => Promise<CatalogItem>;
   onDeleteProduct: (productId: string) => Promise<void>;
   onBulkPriceAdjust: (category: string, percentChange: number) => Promise<void>;
-  hostingerConfig: HostingerConfig;
-  onUpdateHostingerConfig: (config: HostingerConfig) => void;
-  emailLogs: EmailLog[];
-  onSendEmail: (log: EmailLog) => void;
-  onBatchSendEmails: (logs: EmailLog[]) => void;
-  reminderRules: ReminderRule[];
-  onToggleReminderRule: (ruleId: string) => void;
   orders: OnlineOrder[];
+  orderPagination: OrderPagination;
+  ordersLoading: boolean;
+  onLoadOrders: (search: OrderSearch) => void;
   onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
-  onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
-  onAddOrderInternalNote?: (orderId: string, note: string) => Promise<string>;
-  selectedPatient: Patient | null;
-  onClosePatientModal: () => void;
-  onAddPharmacistNote: (patientId: string, note: Omit<PharmacistNote, 'id' | 'createdAt'>) => void;
-  onTriggerRefillDispense: (patientId: string, rxNumber: string) => void;
+  onUpdateOrderTracking: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
+  onAddOrderInternalNote: (orderId: string, note: string) => Promise<string>;
+  onCreateManualOrder: (data: {
+    customerName: string;
+    email: string;
+    phone: string;
+    deliveryMethod: OnlineOrder['deliveryMethod'];
+    deliveryAddress: string;
+    productId: string;
+    quantity: number;
+  }) => Promise<OnlineOrder>;
 }
 
-export type AdminTab =
-  | 'crm'
-  | 'inventory'
-  | 'leads'
-  | 'reminders'
-  | 'hostinger'
-  | 'campaigns'
-  | 'orders'
-  | 'audit';
+const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashboard; group: string }> = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Workspace' },
+  { id: 'orders', label: 'Orders', icon: ClipboardList, group: 'Workspace' },
+  { id: 'leads', label: 'Contact leads', icon: FileSpreadsheet, group: 'Workspace' },
+  { id: 'inventory', label: 'Products & stock', icon: Package, group: 'Workspace' },
+  { id: 'integrations', label: 'Integrations', icon: Settings2, group: 'Settings' },
+  { id: 'staff', label: 'Staff access', icon: Users, group: 'Administration' },
+  { id: 'audit', label: 'Audit log', icon: ShieldCheck, group: 'Administration' },
+];
 
-export const AdminLayout: React.FC<AdminLayoutProps> = ({
-  onNavigateHome,
-  onLogout,
-  patients,
-  onSelectPatient,
-  leads,
-  leadDataError,
-  dataError,
-  onSaveLeads,
-  catalogItems,
-  catalogError,
-  onAddProduct,
-  onUpdateProduct,
-  onDeleteProduct,
-  onBulkPriceAdjust,
-  hostingerConfig,
-  onUpdateHostingerConfig,
-  emailLogs,
-  onSendEmail,
-  onBatchSendEmails,
-  reminderRules,
-  onToggleReminderRule,
-  orders,
-  onUpdateOrderStatus,
-  onUpdateOrderTracking,
-  onAddOrderInternalNote,
-  selectedPatient,
-  onClosePatientModal,
-  onAddPharmacistNote,
-  onTriggerRefillDispense,
-}) => {
-  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('crm');
+export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [logoutError, setLogoutError] = useState('');
+  const visibleNavigation = navigation.filter((item) =>
+    props.role === 'admin' || (item.id !== 'staff' && item.id !== 'audit')
+  );
+  const activeLabel = navigation.find((item) => item.id === activeTab)?.label || 'Overview';
 
-  const handleLogout = async () => {
+  const logout = async () => {
     setLogoutError('');
     try {
-      await onLogout();
+      await props.onLogout();
     } catch (error) {
       setLogoutError(error instanceof Error ? error.message : 'Unable to sign out securely.');
     }
   };
 
-  const pendingOrdersCount = orders.filter(
-    (o) => o.status === 'Submitted' || o.status === 'Pharmacist Review'
-  ).length;
-
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-900">
-      {/* Admin Top Navigation Bar */}
-      <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 gap-4">
-            <div className="flex items-center gap-3">
-              <img src="/ambients-mark.svg" alt="" className="h-8 w-8 rounded-md shadow-xs" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-base tracking-tight text-white">
-                    Ambients Clinical Admin
-                  </span>
-                  <span className="text-[11px] font-mono bg-teal-900/80 text-teal-300 border border-teal-700/60 px-2 py-0.5 rounded">
-                    /admin portal
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Pharmacist &amp; Dispensary Operations Hub
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Hostinger Status Indicator */}
-              <div className="hidden md:flex items-center gap-2 text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 rounded-md border border-slate-700">
-                <span className={`h-2 w-2 rounded-full ${hostingerConfig.isConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                <span className="font-mono">{hostingerConfig.emailAccount}</span>
-                <span className="text-slate-500">·</span>
-                <span className={`${hostingerConfig.isConnected ? 'text-emerald-400' : 'text-amber-300'} font-medium`}>
-                  {hostingerConfig.isConnected ? 'Mailbox connected' : 'Mailbox not connected'}
-                </span>
-              </div>
-
-              {/* Back to Public Site */}
-              <button
-                onClick={onNavigateHome}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md transition-colors border border-slate-700"
-              >
-                <span>View Public Pharmacy (/)</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Sign out</span>
-              </button>
+    <div className="min-h-screen bg-[#f5f7fa] text-slate-900">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex h-[68px] items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/ambients-mark.svg" alt="" className="h-10 w-10 rounded-xl" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold tracking-tight text-slate-950">Ambients operations</p>
+              <p className="text-xs text-slate-500">{activeLabel}</p>
             </div>
           </div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <span className="hidden max-w-52 truncate rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-600 sm:inline">{props.email}</span>
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${props.role === 'admin' ? 'bg-violet-50 text-violet-800' : 'bg-teal-50 text-teal-800'}`}>
+              {props.role === 'admin' ? 'Administrator' : 'Operator'}
+            </span>
+            <button type="button" onClick={props.onNavigateHome} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 md:inline-flex">
+              Storefront <ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={() => void logout()} aria-label="Sign out" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              <LogOut className="h-3.5 w-3.5" /><span className="hidden sm:inline">Sign out</span>
+            </button>
+          </div>
         </div>
+        {logoutError && <p role="alert" className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">{logoutError}</p>}
       </header>
 
-      {logoutError && (
-        <div role="alert" className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-900">
-          {logoutError}
-        </div>
-      )}
-
-      <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-950">
-        Sample clinical records stay in preview memory. The server stores product inventory, contact leads, orders, and fulfillment-only order notes.
-      </div>
-      {dataError && <div role="alert" className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-900">{dataError}</div>}
-
-      {/* Admin Subheader with Tabs */}
-      <nav className="bg-white border-b border-slate-200 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-1 overflow-x-auto py-2 no-scrollbar text-xs font-semibold">
-            <button
-              onClick={() => setActiveAdminTab('crm')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'crm'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Patient &amp; Refill CRM ({patients.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('inventory')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'inventory'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Catalog &amp; Stock Inventory ({catalogItems.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('orders')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'orders'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              <span>Dispensing Orders ({orders.length})</span>
-              {pendingOrdersCount > 0 && (
-                <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                  {pendingOrdersCount} review
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('audit')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'audit'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Audit Log</span>
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('leads')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'leads'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>CSV Lead Ingestion</span>
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('reminders')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'reminders'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              <span>Automated Reminders</span>
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('hostinger')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'hostinger'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Server className="w-3.5 h-3.5" />
-              <span>Hostinger Mailbox</span>
-            </button>
-
-            <button
-              onClick={() => setActiveAdminTab('campaigns')}
-              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
-                activeAdminTab === 'campaigns'
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>Health Category Bulk Email</span>
-            </button>
+      <div className="mx-auto flex min-h-[calc(100vh-68px)] max-w-[1680px]">
+        <aside className="sticky top-[68px] hidden h-[calc(100vh-68px)] w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-5 lg:flex">
+          <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
+          {visibleNavigation.filter((item) => item.group === 'Workspace').map((item) => (
+            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={setActiveTab} />
+          ))}
+          <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
+          {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
+            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={setActiveTab} />
+          ))}
+          {props.role === 'admin' && (
+            <>
+              <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Administration</p>
+              {visibleNavigation.filter((item) => item.group === 'Administration').map((item) => (
+                <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={setActiveTab} />
+              ))}
+            </>
+          )}
+          <div className="mt-auto rounded-xl border border-amber-100 bg-amber-50 p-3">
+            <p className="text-xs font-semibold text-amber-950">Operational data only</p>
+            <p className="mt-1 text-[11px] leading-4 text-amber-900">Do not enter patient, prescription, insurance, or payment-card data.</p>
           </div>
-        </div>
-      </nav>
+        </aside>
 
-      {/* Main Admin Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeAdminTab === 'crm' && (
-          <CrmDashboard
-            patients={patients}
-            onSelectPatient={onSelectPatient}
-            leads={leads}
-            leadDataError={leadDataError}
-            onSaveLeads={onSaveLeads}
-            hostingerConfig={hostingerConfig}
-            onUpdateHostingerConfig={onUpdateHostingerConfig}
-            emailLogs={emailLogs}
-            onSendEmail={onSendEmail}
-            onBatchSendEmails={onBatchSendEmails}
-            reminderRules={reminderRules}
-            onToggleReminderRule={onToggleReminderRule}
-            onTriggerDirectEmail={(p) => onSelectPatient(p)}
-          />
-        )}
+        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-7 lg:px-9 lg:py-8">
+          <div className="mb-5 lg:hidden">
+            <label htmlFor="admin-section" className="sr-only">Workspace section</label>
+            <select id="admin-section" value={activeTab} onChange={(event) => setActiveTab(event.target.value as AdminTab)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium">
+              {visibleNavigation.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </div>
+          {props.dataError && <p role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{props.dataError}</p>}
 
-        {activeAdminTab === 'inventory' && (
-          <InventoryManager
-            catalogItems={catalogItems}
-            catalogError={catalogError}
-            onAddProduct={onAddProduct}
-            onUpdateProduct={onUpdateProduct}
-            onDeleteProduct={onDeleteProduct}
-            onBulkPriceAdjust={onBulkPriceAdjust}
-          />
-        )}
-
-        {activeAdminTab === 'orders' && (
-          <OrdersManager
-            orders={orders}
-            onUpdateOrderStatus={onUpdateOrderStatus}
-            onUpdateOrderTracking={onUpdateOrderTracking}
-            onAddOrderInternalNote={onAddOrderInternalNote}
-            onSendEmailNotification={onSendEmail}
-            catalogItems={catalogItems}
-          />
-        )}
-
-        {activeAdminTab === 'leads' && (
-          <ContactLeadManager
-            leads={leads}
-            dataError={leadDataError}
-            onSaveLeads={onSaveLeads}
-          />
-        )}
-
-        {activeAdminTab === 'reminders' && (
-          <AutomatedRemindersView
-            patients={patients}
-            reminderRules={reminderRules}
-            onToggleRule={onToggleReminderRule}
-            onDispatchReminderEmails={onBatchSendEmails}
-            emailLogs={emailLogs}
-          />
-        )}
-
-        {activeAdminTab === 'hostinger' && (
-          <HostingerEmailSyncView
-            config={hostingerConfig}
-            onUpdateConfig={onUpdateHostingerConfig}
-            patients={patients}
-            emailLogs={emailLogs}
-            onSendDirectEmail={onSendEmail}
-          />
-        )}
-
-        {activeAdminTab === 'campaigns' && (
-          <BulkHealthCategoryCampaignView
-            patients={patients}
-            onDispatchBulkCampaign={onBatchSendEmails}
-            hostingerConfig={hostingerConfig}
-          />
-        )}
-
-        {activeAdminTab === 'audit' && <AuditLogView />}
-      </main>
-
-      {/* Patient Profile Detail Modal */}
-      <PatientDetailModal
-        patient={selectedPatient}
-        isOpen={selectedPatient !== null}
-        onClose={onClosePatientModal}
-        onAddNote={onAddPharmacistNote}
-        onTriggerRefill={onTriggerRefillDispense}
-        onOpenEmailComposer={() => {
-          onClosePatientModal();
-          setActiveAdminTab('hostinger');
-        }}
-      />
+          {activeTab === 'overview' && <OperationsOverview onNavigate={setActiveTab} />}
+          {activeTab === 'orders' && (
+            <OrdersManager
+              orders={props.orders}
+              pagination={props.orderPagination}
+              isLoading={props.ordersLoading}
+              onLoadOrders={props.onLoadOrders}
+              onUpdateOrderStatus={props.onUpdateOrderStatus}
+              onUpdateOrderTracking={props.onUpdateOrderTracking}
+              onAddOrderInternalNote={props.onAddOrderInternalNote}
+              onCreateManualOrder={props.onCreateManualOrder}
+              catalogItems={props.catalogItems}
+            />
+          )}
+          {activeTab === 'inventory' && (
+            <InventoryManager catalogItems={props.catalogItems} catalogError={props.catalogError} onAddProduct={props.onAddProduct} onUpdateProduct={props.onUpdateProduct} onDeleteProduct={props.onDeleteProduct} onBulkPriceAdjust={props.onBulkPriceAdjust} />
+          )}
+          {activeTab === 'leads' && <ContactLeadManager leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} />}
+          {activeTab === 'integrations' && <IntegrationStatus />}
+          {activeTab === 'staff' && props.role === 'admin' && <StaffManager />}
+          {activeTab === 'audit' && props.role === 'admin' && <AuditLogView />}
+        </main>
+      </div>
     </div>
   );
 };
+
+interface NavButtonProps {
+  item: (typeof navigation)[number];
+  active: boolean;
+  onSelect: (tab: AdminTab) => void;
+}
+
+const NavButton: React.FC<NavButtonProps> = ({ item, active, onSelect }) => (
+  <button type="button" onClick={() => onSelect(item.id)} className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${active ? 'bg-teal-50 text-teal-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}>
+    <item.icon className={`h-4 w-4 ${active ? 'text-teal-800' : 'text-slate-400'}`} />
+    <span>{item.label}</span>
+  </button>
+);

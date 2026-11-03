@@ -4,12 +4,15 @@ import wellnessImage from '../../assets/images/wellness_vitamins_display_1793621
 
 interface AdminLoginProps {
   setupMessage?: string;
-  onAuthenticated: () => void;
+  onAuthenticated: (role: 'admin' | 'operator', mustChangePassword: boolean, email: string) => void;
 }
 
 interface AuthResponse {
   authenticated?: boolean;
   configured?: boolean;
+  role?: 'admin' | 'operator';
+  mustChangePassword?: boolean;
+  email?: string;
   message?: string;
 }
 
@@ -40,7 +43,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
       }
 
       setPassword('');
-      onAuthenticated();
+      onAuthenticated(result.role || 'admin', Boolean(result.mustChangePassword), result.email || email);
     } catch {
       setErrorMessage('The secure sign-in service could not be reached. Please try again later.');
     } finally {
@@ -62,7 +65,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
             <img src="/ambients-mark.svg" alt="" className="h-11 w-11 rounded-2xl" />
             <div>
               <p className="text-sm font-semibold">Ambients</p>
-              <p className="text-[10px] uppercase tracking-[0.16em] text-blue-100">Clinical operations</p>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-blue-100">Business operations</p>
             </div>
           </div>
           <div className="absolute bottom-10 left-9 right-9 text-white">
@@ -82,7 +85,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
               <img src="/ambients-mark.svg" alt="" className="h-11 w-11 rounded-2xl" />
               <div>
                 <p className="text-sm font-semibold text-slate-900">Ambients</p>
-                <p className="text-[10px] uppercase tracking-[0.16em] text-[#356a9e]">Clinical operations</p>
+                <p className="text-[10px] uppercase tracking-[0.16em] text-[#356a9e]">Business operations</p>
               </div>
             </div>
 
@@ -90,9 +93,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e8f2fb] text-[#174c80]">
                 <LockKeyhole className="h-5 w-5" />
               </div>
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#356a9e]">Admin sign in</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#356a9e]">Staff sign in</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-[-0.045em] text-slate-900">Welcome back</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">Use your authorized administrator account to continue.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">Sign in with your authorized operations account.</p>
             </div>
 
             {setupMessage && (
