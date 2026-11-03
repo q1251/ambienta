@@ -58,6 +58,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [selectedProfile, setSelectedProfile] = useState<AgentProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [resetPasswordReveal, setResetPasswordReveal] = useState<{ accountId: number; password: string } | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPermissions, setEditPermissions] = useState<StaffPermission[]>([]);
@@ -159,7 +160,14 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       });
       const result = await response.json() as { message?: string; temporaryPassword?: string | null };
       if (!response.ok) throw new Error(result.message || 'The agent account could not be updated.');
-      setMessage(successMessage);
+      if (changes.resetPassword === true) {
+        if (!result.temporaryPassword) throw new Error('The password was reset, but its one-time value was not returned. Reset it again before sharing credentials.');
+        setResetPasswordReveal({ accountId: account.id, password: result.temporaryPassword });
+        setMessage('Temporary password generated. Copy it now and share it through a secure channel.');
+      } else {
+        setResetPasswordReveal(null);
+        setMessage(successMessage);
+      }
       setEditingId(null);
       await loadAccounts();
       if (profileAccountId === account.id) await openProfile(account);
@@ -208,6 +216,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   };
 
   const openProfile = async (account: StaffAccount) => {
+    if (profileAccountId !== account.id) setResetPasswordReveal(null);
     setProfileAccountId(account.id);
     setSelectedProfile(null);
     setProfileError('');
@@ -277,7 +286,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
 
       {profileAccountId !== null ? (
         <section className="space-y-6">
-          <button type="button" onClick={() => { setProfileAccountId(null); setSelectedProfile(null); setProfileError(''); setEditingId(null); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <button type="button" onClick={() => { setProfileAccountId(null); setSelectedProfile(null); setProfileError(''); setEditingId(null); setResetPasswordReveal(null); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <ArrowLeft className="h-4 w-4" />Back to agents
           </button>
           {profileLoading && <p role="status" className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">Loading agent profile…</p>}
@@ -296,6 +305,22 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { isActive: !selectedProfile.is_active }, `Agent ${selectedProfile.is_active ? 'deactivated' : 'activated'}.`)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><UserX className="h-4 w-4" />{selectedProfile.is_active ? 'Deactivate' : 'Activate'}</button>
                 </div>
               </header>
+
+              {resetPasswordReveal?.accountId === selectedProfile.id && (
+                <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-950">Temporary password — shown once</p>
+                  <p className="mt-1 text-xs text-amber-900">Copy and share this password through a secure channel. It will not be available after you leave this profile.</p>
+                  <input
+                    type="text"
+                    aria-label="One-time temporary password"
+                    readOnly
+                    value={resetPasswordReveal.password}
+                    onFocus={(event) => event.currentTarget.select()}
+                    className="mt-3 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 font-mono text-sm text-slate-900"
+                  />
+                  <button type="button" onClick={() => setResetPasswordReveal(null)} className="mt-3 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100">Hide password</button>
+                </div>
+              )}
 
               <>
                   <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
