@@ -77,6 +77,8 @@ export interface ContactLead {
   lastOrderAt?: string | null;
   activeOrderCount?: number;
   callCount?: number;
+  assignedStaffId?: number | null;
+  assignedStaffName?: string | null;
 }
 
 export type ContactLeadInput = Pick<
@@ -124,6 +126,7 @@ export interface ContactLeadUpdate {
   marketingConsent?: boolean;
   phone?: string;
   country?: string;
+  assignedStaffId?: number | null;
 }
 
 export interface LeadProfile {

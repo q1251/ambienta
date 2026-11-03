@@ -18,7 +18,6 @@ function data_respond(int $status, array $body): never
     echo json_encode($body, JSON_UNESCAPED_SLASHES);
     exit;
 }
-
 function data_config(): array
 {
     $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'private' . DIRECTORY_SEPARATOR . 'app-config.php';
@@ -209,8 +208,10 @@ function data_ensure_schema(PDO $db): void
             display_name VARCHAR(120) NOT NULL DEFAULT '',
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(24) NOT NULL DEFAULT 'operator',
+            permissions TEXT NOT NULL DEFAULT '[\"leads\",\"orders\",\"products\",\"integrations\"]',
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+            session_version INT UNSIGNED NOT NULL DEFAULT 1,
             created_by VARCHAR(254) NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -227,6 +228,20 @@ function data_ensure_schema(PDO $db): void
     $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', 'display_name']);
     if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
         $db->exec("ALTER TABLE staff_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT '' AFTER email");
+    }
+    foreach ([
+        'permissions' => "TEXT NOT NULL DEFAULT '[\"leads\",\"orders\",\"products\",\"integrations\"]'",
+        'session_version' => 'INT UNSIGNED NOT NULL DEFAULT 1',
+    ] as $column => $definition) {
+        $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', $column]);
+        if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE staff_users ADD COLUMN `$column` $definition");
+        }
+    }
+    $assignedLeadColumn = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $assignedLeadColumn->execute([$databaseName, 'leads', 'assigned_staff_id']);
+    if ((int) $assignedLeadColumn->fetchColumn() === 0) {
+        $db->exec('ALTER TABLE leads ADD COLUMN assigned_staff_id BIGINT UNSIGNED NULL, ADD KEY leads_assigned_staff (assigned_staff_id)');
     }
     $leadColumns = [
         'status' => "VARCHAR(24) NOT NULL DEFAULT 'Cold'",
@@ -377,11 +392,11 @@ function data_require_admin(string $requiredRole = 'operator'): void
     ) {
         data_respond(401, ['error' => 'unauthorized', 'message' => 'Sign in to access this resource.']);
     }
-    if ($_SESSION['admin_role'] === 'operator') {
-        if ((bool) ($_SESSION['must_change_password'] ?? false)) {
+    if ($_SESSION['admin_role'] === 'operator' && !($requiredRole === 'exit-impersonation' && !empty($_SESSION['is_impersonating']))) {
+        if ((bool) ($_SESSION['must_change_password'] ?? false) && empty($_SESSION['is_impersonating'])) {
             data_respond(403, ['error' => 'password_change_required', 'message' => 'Change the temporary password before using the workspace.']);
         }
-        $check = data_db()->prepare('SELECT is_active, must_change_password FROM staff_users WHERE email = ? AND role = ?');
+        $check = data_db()->prepare('SELECT id, is_active, must_change_password, permissions, session_version FROM staff_users WHERE email = ? AND role = ?');
         $check->execute([$_SESSION['admin_email'], 'operator']);
         $staff = $check->fetch();
         if (!is_array($staff) || (int) $staff['is_active'] !== 1) {
@@ -389,15 +404,59 @@ function data_require_admin(string $requiredRole = 'operator'): void
             session_destroy();
             data_respond(401, ['error' => 'account_disabled', 'message' => 'This staff account is inactive. Contact an administrator.']);
         }
-        if ((int) $staff['must_change_password'] === 1) {
+        if (isset($_SESSION['staff_session_version']) && (int) $_SESSION['staff_session_version'] !== (int) $staff['session_version']) {
+            $_SESSION = [];
+            session_destroy();
+            data_respond(401, ['error' => 'session_revoked', 'message' => 'This account was updated. Sign in again.']);
+        }
+        if ((int) $staff['must_change_password'] === 1 && empty($_SESSION['is_impersonating'])) {
             $_SESSION['must_change_password'] = true;
             data_respond(403, ['error' => 'password_change_required', 'message' => 'Change the temporary password before using the workspace.']);
         }
+        $_SESSION['staff_id'] = (int) $staff['id'];
+        $_SESSION['staff_session_version'] = (int) $staff['session_version'];
+        $permissions = json_decode((string) $staff['permissions'], true);
+        $_SESSION['admin_permissions'] = is_array($permissions)
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations'], true)))
+            : [];
     }
     if ($requiredRole === 'admin' && $_SESSION['admin_role'] !== 'admin') {
         data_respond(403, ['error' => 'admin_required', 'message' => 'Administrator access is required for this action.']);
     }
     $_SESSION['last_activity'] = time();
+}
+
+function data_require_permission(string $permission): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) data_require_admin();
+    if (($_SESSION['admin_role'] ?? '') !== 'admin'
+        && !in_array($permission, $_SESSION['admin_permissions'] ?? [], true)) {
+        data_respond(403, ['error' => 'permission_required', 'message' => 'Your account does not have access to this section.']);
+    }
+}
+
+function data_require_lead_access(PDO $db, int $leadId): void
+{
+    if (($_SESSION['admin_role'] ?? '') === 'admin') return;
+    $owner = $db->prepare('SELECT assigned_staff_id FROM leads WHERE id = ?');
+    $owner->execute([$leadId]);
+    $assignedStaffId = $owner->fetchColumn();
+    if ($assignedStaffId === false) {
+        data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+    }
+    if ($assignedStaffId === null || (int) $assignedStaffId !== (int) ($_SESSION['staff_id'] ?? 0)) {
+        data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+    }
+}
+
+function data_staff_permissions($permissions): ?array
+{
+    $validPermissions = ['leads', 'orders', 'products', 'integrations'];
+    if (!is_array($permissions)) return null;
+    foreach ($permissions as $permission) {
+        if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
+    }
+    return array_values(array_unique($permissions));
 }
 
 function data_read_json(int $maxBytes = 262144): array
@@ -445,10 +504,14 @@ function data_lead_row(array $row): array
         'marketingConsent' => (bool) ($row['marketing_consent'] ?? false),
         'marketingConsentAt' => $row['marketing_consent_at'] ?? null,
     ];
-    if (array_key_exists('order_count', $row)) $lead['orderCount'] = (int) $row['order_count'];
-    if (array_key_exists('last_order_at', $row)) $lead['lastOrderAt'] = $row['last_order_at'];
-    if (array_key_exists('active_order_count', $row)) $lead['activeOrderCount'] = (int) $row['active_order_count'];
+    $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
+        || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
+    if ($canViewOrders && array_key_exists('order_count', $row)) $lead['orderCount'] = (int) $row['order_count'];
+    if ($canViewOrders && array_key_exists('last_order_at', $row)) $lead['lastOrderAt'] = $row['last_order_at'];
+    if ($canViewOrders && array_key_exists('active_order_count', $row)) $lead['activeOrderCount'] = (int) $row['active_order_count'];
     if (array_key_exists('call_count', $row)) $lead['callCount'] = (int) $row['call_count'];
+    if (array_key_exists('assigned_staff_id', $row)) $lead['assignedStaffId'] = $row['assigned_staff_id'] === null ? null : (int) $row['assigned_staff_id'];
+    if (array_key_exists('assigned_staff_name', $row)) $lead['assignedStaffName'] = $row['assigned_staff_name'];
     return $lead;
 }
 
@@ -542,7 +605,12 @@ function data_audit(PDO $db, string $action, string $entityType, string $entityI
     if ($encoded === false) {
         throw new RuntimeException('Audit detail encoding failed.');
     }
-    $actor = is_string($_SESSION['admin_email'] ?? null) ? $_SESSION['admin_email'] : 'unknown';
+    $actor = is_string($_SESSION['impersonated_by'] ?? null)
+        ? $_SESSION['impersonated_by']
+        : (is_string($_SESSION['admin_email'] ?? null) ? $_SESSION['admin_email'] : 'unknown');
+    if (!empty($_SESSION['is_impersonating']) && is_string($_SESSION['admin_email'] ?? null)) {
+        $details['actingAs'] = $_SESSION['admin_email'];
+    }
     $db->prepare(
         'INSERT INTO admin_audit_log (actor_email, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)'
     )->execute([$actor, $action, $entityType, $entityId, $encoded]);
@@ -692,6 +760,101 @@ if (!is_string($resource)) {
     data_respond(400, ['error' => 'invalid_resource', 'message' => 'The requested resource is invalid.']);
 }
 
+if ($method === 'POST' && $resource === 'staff-session') {
+    $body = data_read_json();
+    $action = $body['action'] ?? null;
+    if ($action === 'enter') {
+        data_require_admin('admin');
+        $staffId = filter_var($body['staffId'] ?? null, FILTER_VALIDATE_INT);
+        if ($staffId === false || $staffId < 1) {
+            data_respond(400, ['error' => 'invalid_staff_id', 'message' => 'Select a valid agent account.']);
+        }
+        $db = data_db();
+        $find = $db->prepare('SELECT id, email, display_name, role, permissions, session_version, must_change_password FROM staff_users WHERE id = ? AND is_active = 1');
+        $find->execute([$staffId]);
+        $staff = $find->fetch();
+        if (!$staff || $staff['role'] !== 'operator') {
+            data_respond(404, ['error' => 'staff_not_found', 'message' => 'The active agent account was not found.']);
+        }
+        if (!empty($_SESSION['is_impersonating'])) {
+            data_respond(409, ['error' => 'already_impersonating', 'message' => 'Exit the current agent account before entering another.']);
+        }
+        $db->beginTransaction();
+        try {
+            data_audit($db, 'staff.impersonation_started', 'staff', (string) $staffId, ['email' => $staff['email']]);
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('Ambients account-entry audit failed: ' . $error->getMessage());
+            data_respond(500, ['error' => 'impersonation_failed', 'message' => 'The agent account could not be opened.']);
+        }
+        if (!session_regenerate_id(true)) {
+            data_respond(500, ['error' => 'session_rotation_failed', 'message' => 'The secure session could not be renewed.']);
+        }
+        $_SESSION['original_admin'] = [
+            'email' => (string) $_SESSION['admin_email'],
+            'displayName' => (string) ($_SESSION['admin_display_name'] ?? ''),
+        ];
+        $_SESSION['is_impersonating'] = true;
+        $_SESSION['impersonated_by'] = (string) $_SESSION['original_admin']['email'];
+        $_SESSION['admin_email'] = (string) $staff['email'];
+        $_SESSION['admin_display_name'] = (string) $staff['display_name'];
+        $_SESSION['admin_role'] = 'operator';
+        $_SESSION['must_change_password'] = false;
+        $_SESSION['impersonated_email'] = (string) $staff['email'];
+        $_SESSION['staff_id'] = (int) $staff['id'];
+        $_SESSION['staff_session_version'] = (int) $staff['session_version'];
+        $permissions = json_decode((string) $staff['permissions'], true);
+        $_SESSION['admin_permissions'] = is_array($permissions)
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations'], true)))
+            : [];
+        $_SESSION['last_activity'] = time();
+        data_respond(200, [
+            'role' => 'operator',
+            'email' => $_SESSION['admin_email'],
+            'displayName' => $_SESSION['admin_display_name'],
+            'permissions' => $_SESSION['admin_permissions'],
+            'impersonating' => true,
+            'impersonatedBy' => $_SESSION['impersonated_by'],
+            'mustChangePassword' => false,
+        ]);
+    }
+    if ($action === 'exit') {
+        data_require_admin('exit-impersonation');
+        if (empty($_SESSION['is_impersonating']) || !is_array($_SESSION['original_admin'] ?? null)) {
+            data_respond(409, ['error' => 'not_impersonating', 'message' => 'There is no administrator session to return to.']);
+        }
+        $original = $_SESSION['original_admin'];
+        if (!session_regenerate_id(true)) {
+            data_respond(503, ['error' => 'session_rotation_failed', 'message' => 'The secure session could not be renewed.']);
+        }
+        $db = data_db();
+        $db->beginTransaction();
+        try {
+            data_audit($db, 'staff.impersonation_ended', 'staff', (string) ($_SESSION['staff_id'] ?? ''), ['email' => (string) ($_SESSION['impersonated_email'] ?? '')]);
+            $db->commit();
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('Ambients account-exit audit failed: ' . $error->getMessage());
+            data_respond(500, ['error' => 'impersonation_exit_failed', 'message' => 'The administrator account could not be restored.']);
+        }
+        $_SESSION['admin_email'] = $original['email'];
+        $_SESSION['admin_display_name'] = $original['displayName'];
+        $_SESSION['admin_role'] = 'admin';
+        unset($_SESSION['original_admin'], $_SESSION['is_impersonating'], $_SESSION['impersonated_by'], $_SESSION['staff_id'], $_SESSION['staff_session_version'], $_SESSION['admin_permissions'], $_SESSION['must_change_password'], $_SESSION['impersonated_email']);
+        $_SESSION['last_activity'] = time();
+        data_respond(200, [
+            'role' => 'admin',
+            'email' => $_SESSION['admin_email'],
+            'displayName' => $_SESSION['admin_display_name'],
+            'permissions' => ['leads', 'orders', 'products', 'integrations'],
+            'impersonating' => false,
+            'mustChangePassword' => false,
+        ]);
+    }
+    data_respond(400, ['error' => 'invalid_staff_session_action', 'message' => 'Choose whether to enter or exit the agent account.']);
+}
+
 if ($method === 'GET' && $resource === 'catalog') {
     $db = data_db();
     $rows = $db->query('SELECT * FROM products WHERE is_active = 1 AND is_archived = 0 ORDER BY is_featured DESC, name')->fetchAll();
@@ -703,18 +866,22 @@ if ($method === 'GET') {
     data_require_admin();
     $db = data_db();
     if ($resource === 'products') {
+        data_require_permission('products');
         $rows = $db->query('SELECT * FROM products WHERE is_archived = 0 ORDER BY is_featured DESC, name')->fetchAll();
         data_respond(200, ['products' => array_map('data_product_row', $rows)]);
     }
     if ($resource === 'leads') {
+        data_require_permission('leads');
         $leadId = $_GET['id'] ?? null;
         if ($leadId !== null) {
             $id = filter_var($leadId, FILTER_VALIDATE_INT);
             if ($id === false || $id < 1) {
                 data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
             }
+            data_require_lead_access($db, (int) $id);
             $find = $db->prepare(
                 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                        l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                         COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                         COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                         (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
@@ -724,30 +891,44 @@ if ($method === 'GET') {
             $find->execute([$id]);
             $lead = $find->fetch();
             if (!$lead) data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
-            $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
-            $orderQuery->execute([$lead['email']]);
-            $orders = array_map(static fn (array $row): array => data_order_row($db, $row), $orderQuery->fetchAll());
+            $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
+                || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
+            $orders = [];
+            if ($canViewOrders) {
+                $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
+                $orderQuery->execute([$lead['email']]);
+                $orders = array_map(static fn (array $row): array => data_order_row($db, $row), $orderQuery->fetchAll());
+            }
             data_respond(200, [
                 'lead' => data_lead_row($lead),
                 'orders' => $orders,
                 'activities' => data_lead_activities($db, (int) $id),
             ]);
         }
-        $rows = $db->query(
-            'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        $listSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                    l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                     COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                     COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                     (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
-             FROM leads l LEFT JOIN orders o ON o.email = l.email
-             GROUP BY l.id ORDER BY l.id DESC'
-        )->fetchAll();
+             FROM leads l LEFT JOIN orders o ON o.email = l.email';
+        if (($_SESSION['admin_role'] ?? '') === 'operator') {
+            $listSql .= ' WHERE l.assigned_staff_id = ?';
+            $listSql .= ' GROUP BY l.id ORDER BY l.id DESC';
+            $listQuery = $db->prepare($listSql);
+            $listQuery->execute([(int) ($_SESSION['staff_id'] ?? 0)]);
+            $rows = $listQuery->fetchAll();
+        } else {
+            $rows = $db->query($listSql . ' GROUP BY l.id ORDER BY l.id DESC')->fetchAll();
+        }
         data_respond(200, ['leads' => array_map('data_lead_row', $rows)]);
     }
     if ($resource === 'categories') {
+        data_require_permission('products');
         $categories = $db->query('SELECT name FROM product_categories WHERE is_active = 1 ORDER BY name')->fetchAll(PDO::FETCH_COLUMN);
         data_respond(200, ['categories' => $categories]);
     }
     if ($resource === 'orders') {
+        data_require_permission('orders');
         $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
         $limit = filter_var($_GET['limit'] ?? '100', FILTER_VALIDATE_INT);
         if ($page === false || $page < 1 || $limit === false || $limit < 1) {
@@ -796,31 +977,50 @@ if ($method === 'GET') {
     }
     if ($resource === 'staff') {
         data_require_admin('admin');
-        $rows = $db->query('SELECT id, email, display_name, role, is_active, created_by, created_at, updated_at FROM staff_users ORDER BY email')->fetchAll();
+        $rows = $db->query(
+            'SELECT s.id, s.email, s.display_name, s.role, s.permissions, s.is_active, s.created_by, s.created_at, s.updated_at,
+                    (SELECT COUNT(*) FROM leads l WHERE l.assigned_staff_id = s.id) AS assigned_lead_count
+             FROM staff_users s ORDER BY s.email'
+        )->fetchAll();
         foreach ($rows as &$row) {
             $row['id'] = (int) $row['id'];
             $row['is_active'] = (bool) $row['is_active'];
+            $row['permissions'] = json_decode((string) $row['permissions'], true) ?: [];
+            $row['assigned_lead_count'] = (int) $row['assigned_lead_count'];
         }
         unset($row);
         data_respond(200, ['staff' => $rows]);
     }
     if ($resource === 'overview') {
-        $orderCounts = $db->query('SELECT status, COUNT(*) AS count FROM orders GROUP BY status')->fetchAll();
+        $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin' || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
+        $canViewLeads = ($_SESSION['admin_role'] ?? '') === 'admin' || in_array('leads', $_SESSION['admin_permissions'] ?? [], true);
+        $canViewProducts = ($_SESSION['admin_role'] ?? '') === 'admin' || in_array('products', $_SESSION['admin_permissions'] ?? [], true);
+        $orderCounts = $canViewOrders ? $db->query('SELECT status, COUNT(*) AS count FROM orders GROUP BY status')->fetchAll() : [];
         $counts = [];
         foreach ($orderCounts as $row) {
             $counts[$row['status']] = (int) $row['count'];
         }
-        $lowStock = $db->query(
+        $lowStock = $canViewProducts ? $db->query(
             'SELECT id, name, sku, stock_count, min_stock_threshold FROM products WHERE is_active = 1 AND stock_count <= min_stock_threshold ORDER BY stock_count ASC, name ASC LIMIT 8'
-        )->fetchAll();
-        $lowStockCount = (int) $db->query(
+        )->fetchAll() : [];
+        $lowStockCount = $canViewProducts ? (int) $db->query(
             'SELECT COUNT(*) FROM products WHERE is_active = 1 AND stock_count <= min_stock_threshold'
-        )->fetchColumn();
-        $recent = $db->query('SELECT * FROM orders ORDER BY placed_at DESC LIMIT 8')->fetchAll();
+        )->fetchColumn() : 0;
+        $recent = $canViewOrders ? $db->query('SELECT * FROM orders ORDER BY placed_at DESC LIMIT 8')->fetchAll() : [];
+        $leadCount = 0;
+        if ($canViewLeads) {
+            if (($_SESSION['admin_role'] ?? '') === 'admin') {
+                $leadCount = (int) $db->query('SELECT COUNT(*) FROM leads')->fetchColumn();
+            } else {
+                $leadCountQuery = $db->prepare('SELECT COUNT(*) FROM leads WHERE assigned_staff_id = ?');
+                $leadCountQuery->execute([(int) ($_SESSION['staff_id'] ?? 0)]);
+                $leadCount = (int) $leadCountQuery->fetchColumn();
+            }
+        }
         data_respond(200, [
-            'orders' => ['total' => (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn(), 'byStatus' => $counts],
-            'leads' => (int) $db->query('SELECT COUNT(*) FROM leads')->fetchColumn(),
-            'products' => (int) $db->query('SELECT COUNT(*) FROM products WHERE is_active = 1')->fetchColumn(),
+            'orders' => ['total' => $canViewOrders ? (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn() : 0, 'byStatus' => $counts],
+            'leads' => $leadCount,
+            'products' => $canViewProducts ? (int) $db->query('SELECT COUNT(*) FROM products WHERE is_active = 1')->fetchColumn() : 0,
             'lowStockCount' => $lowStockCount,
             'lowStock' => array_map(static fn (array $row): array => [
                 'id' => $row['id'],
@@ -836,7 +1036,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST' && $resource === 'product-images') {
-    data_require_admin();
+    data_require_permission('products');
     $files = $_FILES['images'] ?? null;
     if (!is_array($files) || !isset($files['name'], $files['type'], $files['tmp_name'], $files['error'], $files['size'])) {
         $contentLength = filter_var($_SERVER['CONTENT_LENGTH'] ?? null, FILTER_VALIDATE_INT);
@@ -931,7 +1131,7 @@ if ($method === 'POST' && $resource === 'product-images') {
 }
 
 if ($method === 'POST' && $resource === 'products') {
-    data_require_admin();
+    data_require_permission('products');
     $body = data_read_json(4194304);
     $db = data_db();
     $isBulk = array_key_exists('products', $body);
@@ -997,7 +1197,7 @@ if ($method === 'POST' && $resource === 'products') {
 }
 
 if ($method === 'POST' && $resource === 'categories') {
-    data_require_admin();
+    data_require_permission('products');
     $body = data_read_json();
     $name = data_string($body, 'name', 80);
     if (
@@ -1031,23 +1231,63 @@ if ($method === 'POST' && $resource === 'categories') {
 if ($method === 'POST' && $resource === 'staff') {
     data_require_admin('admin');
     $body = data_read_json();
+    $db = data_db();
+    if (($body['createDemoAgents'] ?? false) === true) {
+        $demoAgents = [
+            ['Agent One', 'agent.one@example.com'],
+            ['Agent Two', 'agent.two@example.com'],
+            ['Agent Three', 'agent.three@example.com'],
+            ['Agent Four', 'agent.four@example.com'],
+            ['Agent Five', 'agent.five@example.com'],
+        ];
+        $permissionsJson = json_encode(['leads', 'orders', 'products', 'integrations']);
+        $created = [];
+        $db->beginTransaction();
+        try {
+            foreach ($demoAgents as [$displayName, $email]) {
+                $exists = $db->prepare('SELECT id FROM staff_users WHERE email = ?');
+                $exists->execute([$email]);
+                if ($exists->fetchColumn()) continue;
+                $temporaryPassword = bin2hex(random_bytes(16));
+                $hash = password_hash($temporaryPassword, PASSWORD_DEFAULT);
+                if (!is_string($hash) || !is_string($permissionsJson)) {
+                    throw new RuntimeException('Demo agent credentials could not be generated.');
+                }
+                $db->prepare('INSERT INTO staff_users (email, display_name, password_hash, role, permissions, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, ?)')
+                    ->execute([$email, $displayName, $hash, 'operator', $permissionsJson, $_SESSION['admin_email']]);
+                $id = (string) $db->lastInsertId();
+                data_audit($db, 'staff.created', 'staff', $id, ['email' => $email, 'role' => 'operator', 'demo' => true]);
+                $created[] = ['displayName' => $displayName, 'email' => $email, 'temporaryPassword' => $temporaryPassword];
+            }
+            $db->commit();
+            data_respond(201, ['created' => $created, 'message' => 'New demo passwords are shown only once. Existing demo accounts were left unchanged.']);
+        } catch (Throwable $error) {
+            if ($db->inTransaction()) $db->rollBack();
+            error_log('Ambients demo agent creation failed: ' . $error->getMessage());
+            data_respond(500, ['error' => 'demo_staff_create_failed', 'message' => 'The demo agent accounts could not be created.']);
+        }
+    }
+
     $email = strtolower(data_string($body, 'email', 254));
+    $displayName = data_string($body, 'displayName', 120);
     $password = $body['temporaryPassword'] ?? null;
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !is_string($password) || strlen($password) < 12 || strlen($password) > 1024) {
-        data_respond(400, ['error' => 'invalid_staff_account', 'message' => 'Enter a valid email and a temporary password of at least 12 characters.']);
+    $permissions = data_staff_permissions($body['permissions'] ?? null);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !is_string($password) || strlen($password) < 12 || strlen($password) > 1024
+        || $permissions === null) {
+        data_respond(400, ['error' => 'invalid_staff_account', 'message' => 'Enter a display name, valid email, temporary password of at least 12 characters, and valid permissions.']);
     }
     $hash = password_hash($password, PASSWORD_DEFAULT);
-    if (!is_string($hash)) {
-        error_log('Ambients staff password hashing failed.');
+    $permissionsJson = json_encode(array_values(array_unique($permissions)));
+    if (!is_string($hash) || !is_string($permissionsJson)) {
+        error_log('Ambients staff password or permissions encoding failed.');
         data_respond(500, ['error' => 'staff_create_failed', 'message' => 'The staff account could not be created.']);
     }
-    $db = data_db();
     $db->beginTransaction();
     try {
-        $db->prepare('INSERT INTO staff_users (email, password_hash, role, is_active, created_by) VALUES (?, ?, ?, 1, ?)')
-            ->execute([$email, $hash, 'operator', $_SESSION['admin_email']]);
+        $db->prepare('INSERT INTO staff_users (email, display_name, password_hash, role, permissions, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, ?)')
+            ->execute([$email, $displayName, $hash, 'operator', $permissionsJson, $_SESSION['admin_email']]);
         $staffId = (string) $db->lastInsertId();
-        data_audit($db, 'staff.created', 'staff', $staffId, ['email' => $email, 'role' => 'operator']);
+        data_audit($db, 'staff.created', 'staff', $staffId, ['email' => $email, 'role' => 'operator', 'permissions' => $permissions]);
         $db->commit();
         data_respond(201, ['created' => true]);
     } catch (Throwable $error) {
@@ -1064,11 +1304,11 @@ if ($method === 'PATCH' && $resource === 'staff') {
     data_require_admin('admin');
     $body = data_read_json();
     $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
-    if ($id === false || $id < 1 || !is_bool($body['isActive'] ?? null)) {
+    if ($id === false || $id < 1) {
         data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'The staff account update is invalid.']);
     }
     $db = data_db();
-    $find = $db->prepare('SELECT id, email, is_active FROM staff_users WHERE id = ?');
+    $find = $db->prepare('SELECT id, email, display_name, is_active FROM staff_users WHERE id = ?');
     $find->execute([$id]);
     $staff = $find->fetch();
     if (!$staff) {
@@ -1077,22 +1317,74 @@ if ($method === 'PATCH' && $resource === 'staff') {
     if ($staff['email'] === $_SESSION['admin_email']) {
         data_respond(409, ['error' => 'primary_admin_protected', 'message' => 'The primary administrator account cannot be changed here.']);
     }
-    $db->beginTransaction();
+    $updates = [];
+    $parameters = [];
+    $auditDetails = [];
+    if (array_key_exists('isActive', $body)) {
+        if (!is_bool($body['isActive'])) data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'Choose whether the account should be active.']);
+        $updates[] = 'is_active = ?';
+        $parameters[] = (int) $body['isActive'];
+        $auditDetails['isActive'] = $body['isActive'];
+    }
+    if (array_key_exists('displayName', $body)) {
+        $displayName = data_string($body, 'displayName', 120);
+        if ($displayName === '') data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'Enter a display name.']);
+        $updates[] = 'display_name = ?';
+        $parameters[] = $displayName;
+        $auditDetails['displayNameChanged'] = true;
+    }
+    if (array_key_exists('email', $body)) {
+        $email = strtolower(data_string($body, 'email', 254));
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'Enter a valid email address.']);
+        $updates[] = 'email = ?';
+        $parameters[] = $email;
+        $auditDetails['emailChanged'] = true;
+    }
+    if (array_key_exists('permissions', $body)) {
+        $permissions = data_staff_permissions($body['permissions']);
+        if ($permissions === null) {
+            data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'Choose valid access permissions.']);
+        }
+        $permissionsJson = json_encode($permissions);
+        if (!is_string($permissionsJson)) data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'The access permissions could not be saved.']);
+        $updates[] = 'permissions = ?';
+        $parameters[] = $permissionsJson;
+        $auditDetails['permissions'] = array_values(array_unique($permissions));
+    }
+    $temporaryPassword = null;
+    if (($body['resetPassword'] ?? false) === true) {
+        $temporaryPassword = bin2hex(random_bytes(16));
+        $hash = password_hash($temporaryPassword, PASSWORD_DEFAULT);
+        if (!is_string($hash)) {
+            error_log('Ambients staff reset password hashing failed.');
+            data_respond(500, ['error' => 'staff_reset_failed', 'message' => 'A temporary password could not be generated.']);
+        }
+        $updates[] = 'password_hash = ?';
+        $parameters[] = $hash;
+        $updates[] = 'must_change_password = 1';
+        $auditDetails['passwordReset'] = true;
+    }
+    if ($updates === []) data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'No account changes were provided.']);
+    $updates[] = 'session_version = session_version + 1';
+    $parameters[] = $id;
     try {
-        $db->prepare('UPDATE staff_users SET is_active = ? WHERE id = ?')
-            ->execute([(int) $body['isActive'], $id]);
-        data_audit($db, $body['isActive'] ? 'staff.activated' : 'staff.deactivated', 'staff', (string) $id, ['email' => $staff['email']]);
+        $db->beginTransaction();
+        $db->prepare('UPDATE staff_users SET ' . implode(', ', $updates) . ' WHERE id = ?')->execute($parameters);
+        data_audit($db, 'staff.updated', 'staff', (string) $id, ['email' => $staff['email']] + $auditDetails);
         $db->commit();
-        data_respond(200, ['updated' => true]);
+        data_respond(200, ['updated' => true, 'temporaryPassword' => $temporaryPassword]);
     } catch (Throwable $error) {
         if ($db->inTransaction()) $db->rollBack();
+        if ($error instanceof PDOException && (string) $error->getCode() === '23000') {
+            data_respond(409, ['error' => 'staff_email_conflict', 'message' => 'That email address is already assigned to another account.']);
+        }
         error_log('Ambients staff account update failed: ' . $error->getMessage());
         data_respond(500, ['error' => 'staff_update_failed', 'message' => 'The staff account could not be updated.']);
     }
 }
 
 if ($method === 'PATCH' && $resource === 'products') {
-    data_require_admin();
+    data_require_permission('products');
     $body = data_read_json();
     $db = data_db();
     if (isset($body['bulkPercent'])) {
@@ -1161,7 +1453,7 @@ if ($method === 'PATCH' && $resource === 'products') {
 }
 
 if ($method === 'DELETE' && $resource === 'products') {
-    data_require_admin();
+    data_require_permission('products');
     $id = data_string($_GET, 'id', 64);
     $db = data_db();
     $db->beginTransaction();
@@ -1183,7 +1475,7 @@ if ($method === 'DELETE' && $resource === 'products') {
 }
 
 if ($method === 'POST' && $resource === 'manual-orders') {
-    data_require_admin();
+    data_require_permission('orders');
     $body = data_read_json();
     $customerName = data_string($body, 'customerName', 160);
     $email = strtolower(data_string($body, 'email', 254));
@@ -1367,7 +1659,7 @@ if ($method === 'POST' && $resource === 'orders') {
 }
 
 if ($method === 'POST' && $resource === 'leads') {
-    data_require_admin();
+    data_require_permission('leads');
     $body = data_read_json();
     $leads = $body['leads'] ?? null;
     if (!is_array($leads) || count($leads) < 1 || count($leads) > 500) {
@@ -1376,24 +1668,28 @@ if ($method === 'POST' && $resource === 'leads') {
 
     $db = data_db();
     $canEditContactDetails = ($_SESSION['admin_role'] ?? '') === 'admin';
+    $assignedStaffId = $canEditContactDetails ? null : (int) ($_SESSION['staff_id'] ?? 0);
     $insert = $db->prepare(
-        'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL))
+        'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at, assigned_staff_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL), ?)
          ON DUPLICATE KEY UPDATE first_name = IF(? = 1, VALUES(first_name), first_name),
            last_name = IF(? = 1, VALUES(last_name), last_name),
            phone = IF(? = 1, VALUES(phone), phone),
            country = IF(? = 1 AND VALUES(country) <> \'\', VALUES(country), country),
            marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
-           marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at)'
+           marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at),
+           assigned_staff_id = IF(assigned_staff_id IS NULL, VALUES(assigned_staff_id), assigned_staff_id)'
     );
     $find = $db->prepare(
         'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                 (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
          FROM leads l LEFT JOIN orders o ON o.email = l.email
          WHERE l.email = ? GROUP BY l.id LIMIT 1'
     );
+    $existingOwner = $db->prepare('SELECT assigned_staff_id FROM leads WHERE email = ?');
     $priorConsent = $db->prepare('SELECT marketing_consent FROM leads WHERE email = ?');
     $saved = [];
     $db->beginTransaction();
@@ -1419,10 +1715,18 @@ if ($method === 'POST' && $resource === 'leads') {
             $source = in_array($lead['leadSource'] ?? '', ['CSV Upload', 'Manual Entry'], true)
                 ? $lead['leadSource']
                 : 'Manual Entry';
+            $existingOwner->execute([$email]);
+            $ownerId = $existingOwner->fetchColumn();
+            if ($ownerId !== false && !$canEditContactDetails && $ownerId !== null && (int) $ownerId !== $assignedStaffId) {
+                data_respond(404, ['error' => 'lead_not_found', 'message' => 'A submitted contact lead is not available to this agent.']);
+            }
             $canEditValue = (int) $canEditContactDetails;
-            $insert->execute([$firstName, $lastName, $email, $phone, $country, $source, (int) $marketingConsent, (int) $marketingConsent, $canEditValue, $canEditValue, $canEditValue, $canEditValue]);
+            $insert->execute([$firstName, $lastName, $email, $phone, $country, $source, (int) $marketingConsent, (int) $marketingConsent, $assignedStaffId, $canEditValue, $canEditValue, $canEditValue, $canEditValue]);
             $find->execute([$email]);
             $savedLead = $find->fetch();
+            if (!$canEditContactDetails && (!$savedLead || (int) $savedLead['assigned_staff_id'] !== $assignedStaffId)) {
+                data_respond(404, ['error' => 'lead_not_found', 'message' => 'A submitted contact lead is not available to this agent.']);
+            }
             $saved[] = data_lead_row($savedLead);
             if ($marketingConsent && !$wasOptedIn) {
                 data_audit($db, 'lead.marketing_opt_in', 'lead', (string) $savedLead['id']);
@@ -1442,7 +1746,7 @@ if ($method === 'POST' && $resource === 'leads') {
 }
 
 if ($method === 'PATCH' && $resource === 'leads') {
-    data_require_admin();
+    data_require_permission('leads');
     $body = data_read_json();
     $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
     if ($id === false || $id < 1) {
@@ -1465,12 +1769,20 @@ if ($method === 'PATCH' && $resource === 'leads') {
     $countryProvided = array_key_exists('country', $body);
     $country = $countryProvided ? data_string($body, 'country', 100, false) : null;
     $contactDetailsProvided = $firstNameProvided || $lastNameProvided || $emailProvided || $phoneProvided || $countryProvided;
+    $assignedStaffProvided = array_key_exists('assignedStaffId', $body);
+    $assignedStaffId = $body['assignedStaffId'] ?? null;
     if ($contactDetailsProvided && ($_SESSION['admin_role'] ?? '') !== 'admin') {
         data_respond(403, ['error' => 'admin_required', 'message' => 'Only a superadmin can edit lead contact details.']);
     }
+    if ($assignedStaffProvided && ($_SESSION['admin_role'] ?? '') !== 'admin') {
+        data_respond(403, ['error' => 'admin_required', 'message' => 'Only a superadmin can assign contact leads.']);
+    }
+    if ($assignedStaffProvided && $assignedStaffId !== null && (!is_int($assignedStaffId) || $assignedStaffId < 1)) {
+        data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent or leave the lead unassigned.']);
+    }
     $validStatuses = ['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
     if (
-        ($status === null && $marketingConsent === null && !$contactDetailsProvided)
+        ($status === null && $marketingConsent === null && !$contactDetailsProvided && !$assignedStaffProvided)
         || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))
         || ($marketingConsent !== null && !is_bool($marketingConsent))
         || ($statusNote !== null && $status === null)
@@ -1479,12 +1791,26 @@ if ($method === 'PATCH' && $resource === 'leads') {
     }
 
     $db = data_db();
+    data_require_lead_access($db, (int) $id);
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT id, first_name, last_name, email, phone, country, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
+        if ($assignedStaffProvided && $assignedStaffId !== null) {
+            $activeStaff = $db->prepare('SELECT id FROM staff_users WHERE id = ? AND role = ? AND is_active = 1 FOR UPDATE');
+            $activeStaff->execute([$assignedStaffId, 'operator']);
+            if (!$activeStaff->fetchColumn()) {
+                $db->rollBack();
+                data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent or leave the lead unassigned.']);
+            }
+        }
+        $find = $db->prepare('SELECT id, first_name, last_name, email, phone, country, status, marketing_consent, assigned_staff_id FROM leads WHERE id = ? FOR UPDATE');
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+        }
+        if (($_SESSION['admin_role'] ?? '') !== 'admin'
+            && ($current['assigned_staff_id'] === null || (int) $current['assigned_staff_id'] !== (int) ($_SESSION['staff_id'] ?? 0))) {
             $db->rollBack();
             data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
         }
@@ -1557,6 +1883,11 @@ if ($method === 'PATCH' && $resource === 'leads') {
             $parameters[] = $marketingConsent ? gmdate('Y-m-d H:i:s') : null;
             data_audit($db, $marketingConsent ? 'lead.marketing_opt_in' : 'lead.marketing_opt_out', 'lead', (string) $id);
         }
+        if ($assignedStaffProvided) {
+            $updates[] = 'assigned_staff_id = ?';
+            $parameters[] = $assignedStaffId;
+            data_audit($db, 'lead.assignment_changed', 'lead', (string) $id, ['assignedStaffId' => $assignedStaffId]);
+        }
         if ($updates) {
             $parameters[] = $id;
             $db->prepare('UPDATE leads SET ' . implode(', ', $updates) . ' WHERE id = ?')->execute($parameters);
@@ -1569,6 +1900,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
     }
     $find = $db->prepare(
         'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                 (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
@@ -1580,7 +1912,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
 }
 
 if ($method === 'POST' && $resource === 'lead-activities') {
-    data_require_admin();
+    data_require_permission('leads');
     $body = data_read_json();
     $leadId = filter_var($body['leadId'] ?? null, FILTER_VALIDATE_INT);
     if ($leadId === false || $leadId < 1) {
@@ -1604,16 +1936,23 @@ if ($method === 'POST' && $resource === 'lead-activities') {
     }
 
     $db = data_db();
-    $exists = $db->prepare('SELECT id FROM leads WHERE id = ?');
+    $db->beginTransaction();
+    $exists = $db->prepare('SELECT id, assigned_staff_id FROM leads WHERE id = ? FOR UPDATE');
     $exists->execute([$leadId]);
-    if (!$exists->fetch()) {
+    $lead = $exists->fetch();
+    if (!$lead) {
+        $db->rollBack();
+        data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+    }
+    if (($_SESSION['admin_role'] ?? '') !== 'admin'
+        && ($lead['assigned_staff_id'] === null || (int) $lead['assigned_staff_id'] !== (int) ($_SESSION['staff_id'] ?? 0))) {
+        $db->rollBack();
         data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
     }
 
     $authorEmail = (string) ($_SESSION['admin_email'] ?? 'unknown');
     $authorName = trim((string) ($_SESSION['admin_display_name'] ?? ''));
     if ($authorName === '') $authorName = $authorEmail;
-    $db->beginTransaction();
     try {
         $insert = $db->prepare(
             'INSERT INTO lead_activities (lead_id, activity_type, note, call_outcome, follow_up_date, author_email, author_name)
@@ -1656,7 +1995,7 @@ if ($method === 'POST' && $resource === 'lead-activities') {
 }
 
 if ($method === 'POST' && $resource === 'order-notes') {
-    data_require_admin();
+    data_require_permission('orders');
     $body = data_read_json();
     $orderId = data_string($body, 'orderId', 64);
     $note = data_string($body, 'note', 2000);
@@ -1684,7 +2023,7 @@ if ($method === 'POST' && $resource === 'order-notes') {
 }
 
 if ($method === 'PATCH' && $resource === 'orders') {
-    data_require_admin();
+    data_require_permission('orders');
     $body = data_read_json();
     $id = data_string($body, 'id', 64);
     $status = data_string($body, 'status', 32);

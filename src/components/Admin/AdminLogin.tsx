@@ -4,7 +4,7 @@ import wellnessImage from '../../assets/images/wellness_vitamins_display_1793621
 
 interface AdminLoginProps {
   setupMessage?: string;
-  onAuthenticated: (role: 'admin' | 'operator', mustChangePassword: boolean, email: string, displayName: string) => void;
+  onAuthenticated: (role: 'admin' | 'operator', mustChangePassword: boolean, email: string, displayName: string, permissions: string[]) => void;
 }
 
 interface AuthResponse {
@@ -14,6 +14,7 @@ interface AuthResponse {
   mustChangePassword?: boolean;
   email?: string;
   displayName?: string;
+  permissions?: string[];
   message?: string;
 }
 
@@ -44,7 +45,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
       }
 
       setPassword('');
-      onAuthenticated(result.role || 'admin', Boolean(result.mustChangePassword), result.email || email, result.displayName || result.email || email);
+      onAuthenticated(result.role || 'admin', Boolean(result.mustChangePassword), result.email || email, result.displayName || result.email || email, result.permissions || []);
     } catch {
       setErrorMessage('The secure sign-in service could not be reached. Please try again later.');
     } finally {

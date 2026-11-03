@@ -17,6 +17,13 @@ interface ContactLeadManagerProps {
   onAddLeadActivity?: (leadId: number, activity: LeadActivityInput) => Promise<LeadProfile['activities'][number]>;
 }
 
+interface AgentOption {
+  id: number;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+}
+
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   role,
   leads,
@@ -57,6 +64,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   });
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [contactDetailsEditing, setContactDetailsEditing] = useState(false);
   const [activityNote, setActivityNote] = useState('');
@@ -68,6 +76,34 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const isSuperadmin = role === 'admin';
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    let active = true;
+    fetch('/api/data.php?resource=staff', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    }).then(async (response) => {
+      const result = await response.json() as { staff?: AgentOption[]; message?: string };
+      if (!response.ok || !Array.isArray(result.staff)) {
+        throw new Error(result.message || 'Agent accounts could not be loaded for lead assignment.');
+      }
+      if (active) setAgents(result.staff.filter((agent) => agent.is_active));
+    }).catch((error: unknown) => {
+      if (active) setRequestError(error instanceof Error ? error.message : 'Agent accounts could not be loaded for lead assignment.');
+    });
+    return () => { active = false; };
+  }, [isSuperadmin]);
+
+  const assignLead = async (lead: ContactLead, value: string) => {
+    if (!onUpdateLead) return;
+    setRequestError('');
+    try {
+      await onUpdateLead(lead.id, { assignedStaffId: value ? Number(value) : null });
+      setSuccess(`Lead assignment updated for ${lead.firstName} ${lead.lastName}.`);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'The lead assignment could not be saved.');
+    }
+  };
   useEffect(() => {
     if (!mode) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -785,7 +821,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Status</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th><th className="py-3 pr-5 text-right">Actions</th></tr></thead>
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Status</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th>{isSuperadmin && <th className="py-3">Assigned agent</th>}<th className="py-3 pr-5 text-right">Actions</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
                 <tr
@@ -834,6 +870,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>
+                  {isSuperadmin && (
+                    <td className="py-3 pr-3">
+                      <select
+                        aria-label={`Assign ${lead.firstName} ${lead.lastName}`}
+                        value={lead.assignedStaffId ?? ''}
+                        onChange={(event) => void assignLead(lead, event.target.value)}
+                        className="max-w-40 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"
+                      >
+                        <option value="">Unassigned</option>
+                        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || agent.email}</option>)}
+                      </select>
+                    </td>
+                  )}
                   <td className="py-3 pr-5 text-right">
                     <button
                       type="button"
@@ -850,7 +899,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </td>
                 </tr>
               ))}
-              {!filteredLeads.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
+              {!filteredLeads.length && <tr><td colSpan={isSuperadmin ? 9 : 8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
             </tbody>
           </table>
         </div>

@@ -100,8 +100,10 @@ function connect_staff_database(): PDO
                 display_name VARCHAR(120) NOT NULL DEFAULT '',
                 password_hash VARCHAR(255) NOT NULL,
                 role VARCHAR(24) NOT NULL DEFAULT 'operator',
+                permissions TEXT NOT NULL DEFAULT '[\"leads\",\"orders\",\"products\",\"integrations\"]',
                 is_active TINYINT(1) NOT NULL DEFAULT 1,
                 must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+                session_version INT UNSIGNED NOT NULL DEFAULT 1,
                 created_by VARCHAR(254) NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -117,6 +119,15 @@ function connect_staff_database(): PDO
         $column->execute([$databaseName, 'staff_users', 'display_name']);
         if ((int) $column->fetchColumn() === 0) {
             $db->exec("ALTER TABLE staff_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT '' AFTER email");
+        }
+        foreach ([
+            'permissions' => "TEXT NOT NULL DEFAULT '[\"leads\",\"orders\",\"products\",\"integrations\"]'",
+            'session_version' => 'INT UNSIGNED NOT NULL DEFAULT 1',
+        ] as $columnName => $definition) {
+            $column->execute([$databaseName, 'staff_users', $columnName]);
+            if ((int) $column->fetchColumn() === 0) {
+                $db->exec("ALTER TABLE staff_users ADD COLUMN `$columnName` $definition");
+            }
         }
         $db->exec(
             "CREATE TABLE IF NOT EXISTS admin_profile (
@@ -142,7 +153,7 @@ function connect_staff_database(): PDO
 function find_staff_account(string $email): ?array
 {
     $db = connect_staff_database();
-    $statement = $db->prepare('SELECT email, display_name, password_hash, role, must_change_password FROM staff_users WHERE email = ? AND is_active = 1');
+    $statement = $db->prepare('SELECT id, email, display_name, password_hash, role, permissions, session_version, must_change_password FROM staff_users WHERE email = ? AND is_active = 1');
     $statement->execute([$email]);
     $staff = $statement->fetch();
     return is_array($staff) ? $staff : null;
@@ -311,14 +322,24 @@ if ($action === 'session' && $method === 'GET') {
         if ($staff === null || $staff['role'] !== 'operator') {
             $authenticated = false;
         } else {
+            if (isset($_SESSION['staff_session_version']) && (int) $_SESSION['staff_session_version'] !== (int) $staff['session_version']) {
+                $authenticated = false;
+            }
             $_SESSION['admin_email'] = $staff['email'];
             $_SESSION['admin_display_name'] = $staff['display_name'];
-            $_SESSION['must_change_password'] = (bool) $staff['must_change_password'];
+            $_SESSION['staff_id'] = (int) $staff['id'];
+            $_SESSION['staff_session_version'] = (int) $staff['session_version'];
+            $permissions = json_decode((string) $staff['permissions'], true);
+            $_SESSION['admin_permissions'] = is_array($permissions)
+                ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations'], true)))
+                : [];
+            $_SESSION['must_change_password'] = !empty($_SESSION['is_impersonating']) ? false : (bool) $staff['must_change_password'];
         }
     } elseif ($authenticated) {
         $admin = find_admin_account();
         $_SESSION['admin_email'] = $admin['email'];
         $_SESSION['admin_display_name'] = $admin['display_name'];
+        $_SESSION['admin_permissions'] = ['leads', 'orders', 'products', 'integrations'];
     }
 
     if ($authenticated) {
@@ -334,6 +355,9 @@ if ($action === 'session' && $method === 'GET') {
         'displayName' => $authenticated ? ($_SESSION['admin_display_name'] ?? '') : null,
         'role' => $authenticated ? ($_SESSION['admin_role'] ?? null) : null,
         'mustChangePassword' => $authenticated && (bool) ($_SESSION['must_change_password'] ?? false),
+        'permissions' => $authenticated ? ($_SESSION['admin_permissions'] ?? []) : [],
+        'impersonating' => $authenticated && !empty($_SESSION['is_impersonating']),
+        'impersonatedBy' => $authenticated ? ($_SESSION['impersonated_by'] ?? null) : null,
     ]);
 }
 
@@ -359,6 +383,7 @@ if ($action === 'login' && $method === 'POST') {
 
     $role = null;
     $mustChangePassword = false;
+    $staffSession = null;
     $admin = find_admin_account();
     if (hash_equals(strtolower($admin['email']), $email)) {
         if (password_verify($password, $admin['password_hash'])) {
@@ -375,6 +400,7 @@ if ($action === 'login' && $method === 'POST') {
             $role = 'operator';
             $mustChangePassword = (bool) $staff['must_change_password'];
             $displayName = $staff['display_name'];
+            $staffSession = $staff;
         }
     }
 
@@ -394,10 +420,22 @@ if ($action === 'login' && $method === 'POST') {
         ]);
     }
 
+    $_SESSION = [];
     $_SESSION['admin_email'] = $email;
     $_SESSION['admin_display_name'] = $displayName;
     $_SESSION['admin_role'] = $role;
     $_SESSION['must_change_password'] = $mustChangePassword;
+    if ($role === 'operator' && is_array($staffSession)) {
+        $_SESSION['staff_id'] = (int) $staffSession['id'];
+        $_SESSION['staff_session_version'] = (int) $staffSession['session_version'];
+        $permissions = json_decode((string) $staffSession['permissions'], true);
+        $_SESSION['admin_permissions'] = is_array($permissions)
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations'], true)))
+            : [];
+    } else {
+        unset($_SESSION['staff_id'], $_SESSION['staff_session_version'], $_SESSION['is_impersonating'], $_SESSION['impersonated_by'], $_SESSION['original_admin']);
+        $_SESSION['admin_permissions'] = ['leads', 'orders', 'products', 'integrations'];
+    }
     $_SESSION['last_activity'] = time();
     respond(200, [
         'authenticated' => true,
@@ -406,6 +444,8 @@ if ($action === 'login' && $method === 'POST') {
         'displayName' => $displayName,
         'role' => $role,
         'mustChangePassword' => $mustChangePassword,
+        'permissions' => $_SESSION['admin_permissions'],
+        'impersonating' => false,
     ]);
 }
 
@@ -533,12 +573,18 @@ if ($action === 'change-password' && $method === 'POST') {
         error_log('Ambients staff password hashing failed during password change.');
         respond(500, ['message' => 'The password could not be changed. Please try again.']);
     }
-    $currentPassword = $db->prepare('SELECT password_hash FROM staff_users WHERE email = ? AND is_active = 1');
+    $currentPassword = $db->prepare('SELECT password_hash, session_version FROM staff_users WHERE email = ? AND is_active = 1');
     $currentPassword->execute([$_SESSION['admin_email']]);
-    $currentHash = $currentPassword->fetchColumn();
-    if (!is_string($currentHash)) {
+    $staff = $currentPassword->fetch();
+    if (!is_array($staff) || !is_string($staff['password_hash'])) {
         respond(401, ['authenticated' => false, 'message' => 'This staff account is inactive. Sign in again or contact an administrator.']);
     }
+    if (isset($_SESSION['staff_session_version']) && (int) $_SESSION['staff_session_version'] !== (int) $staff['session_version']) {
+        $_SESSION = [];
+        session_destroy();
+        respond(401, ['authenticated' => false, 'message' => 'This account was updated. Sign in again.']);
+    }
+    $currentHash = $staff['password_hash'];
     if (password_verify($newPassword, $currentHash)) {
         respond(400, ['message' => 'Choose a password different from your temporary password.']);
     }

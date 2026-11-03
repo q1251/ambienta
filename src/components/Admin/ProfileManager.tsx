@@ -67,7 +67,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Account settings</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Profile &amp; security</h1>
-        <p className="mt-2 text-sm text-slate-600">Update the name and email shown for your {role === 'admin' ? 'administrator' : 'operator'} account, or set a new password.</p>
+        <p className="mt-2 text-sm text-slate-600">Update the name and email shown for your {role === 'admin' ? 'administrator' : 'agent'} account, or set a new password.</p>
       </header>
 
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}

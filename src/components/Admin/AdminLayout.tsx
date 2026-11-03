@@ -1,4 +1,4 @@
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpRight,
   ClipboardList,
@@ -42,6 +42,18 @@ interface AdminLayoutProps {
   role: 'admin' | 'operator';
   email: string;
   displayName: string;
+  permissions: string[];
+  isImpersonating: boolean;
+  impersonatedBy: string;
+  onExitImpersonation: () => Promise<void>;
+  onEnterAccount: (session: {
+    role: 'operator';
+    email: string;
+    displayName: string;
+    permissions: Array<'leads' | 'orders' | 'products' | 'integrations'>;
+    impersonating: true;
+    impersonatedBy: string;
+  }) => void;
   onProfileUpdated: (email: string, displayName: string) => void;
   leads: ContactLead[];
   leadDataError?: string;
@@ -85,9 +97,15 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
   { id: 'inventory', label: 'Products & stock', icon: Package, group: 'Workspace' },
   { id: 'integrations', label: 'Integrations', icon: Settings2, group: 'Settings' },
   { id: 'profile', label: 'Profile & security', icon: UserRound, group: 'Settings' },
-  { id: 'staff', label: 'Staff access', icon: Users, group: 'Administration' },
+  { id: 'staff', label: 'Agent management', icon: Users, group: 'Administration' },
   { id: 'audit', label: 'Audit log', icon: ShieldCheck, group: 'Administration' },
 ];
+const permissionForTab: Partial<Record<AdminTab, string>> = {
+  leads: 'leads',
+  orders: 'orders',
+  inventory: 'products',
+  integrations: 'integrations',
+};
 
 export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
@@ -96,11 +114,26 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     const requestedTab = params.get('section');
     const validTabs: AdminTab[] = ['overview', 'orders', 'inventory', 'leads', 'integrations', 'profile', 'staff', 'audit'];
     if (!requestedTab || !validTabs.includes(requestedTab as AdminTab)) return 'overview';
-    if (props.role !== 'admin' && (requestedTab === 'staff' || requestedTab === 'audit')) return 'overview';
+    if (props.role !== 'admin' && (requestedTab === 'staff' || requestedTab === 'audit'
+      || (requestedTab === 'leads' && !props.permissions.includes('leads'))
+      || (requestedTab === 'orders' && !props.permissions.includes('orders'))
+      || (requestedTab === 'inventory' && !props.permissions.includes('products'))
+      || (requestedTab === 'integrations' && !props.permissions.includes('integrations')))) return 'overview';
     return requestedTab as AdminTab;
   });
   const [logoutError, setLogoutError] = useState('');
+  const [impersonationError, setImpersonationError] = useState('');
   const selectTab = (tab: AdminTab) => {
+    const neededPermission = tab === 'leads' ? 'leads'
+      : tab === 'orders' ? 'orders'
+        : tab === 'inventory' ? 'products'
+          : tab === 'integrations' ? 'integrations'
+            : null;
+    if (props.role !== 'admin' && (
+      tab === 'staff'
+      || tab === 'audit'
+      || (neededPermission !== null && !props.permissions.includes(neededPermission))
+    )) return;
     const url = new URL(window.location.href);
     if (tab === 'overview') url.searchParams.delete('section');
     else url.searchParams.set('section', tab);
@@ -108,9 +141,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     window.history.replaceState(window.history.state, '', url);
     setActiveTab(tab);
   };
-  const visibleNavigation = navigation.filter((item) =>
-    props.role === 'admin' || (item.id !== 'staff' && item.id !== 'audit')
-  );
+  const permissionsKey = props.permissions.join(',');
+  const visibleNavigation = useMemo(() => navigation.filter((item) => {
+    const requiredPermission = permissionForTab[item.id];
+    return props.role === 'admin'
+      || (item.id !== 'staff' && item.id !== 'audit' && (!requiredPermission || permissionsKey.split(',').includes(requiredPermission)));
+  }), [props.role, permissionsKey]);
+  useEffect(() => {
+    if (visibleNavigation.some((item) => item.id === activeTab)) return;
+    setActiveTab('overview');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('section');
+    url.searchParams.delete('leadId');
+    window.history.replaceState(window.history.state, '', url);
+  }, [activeTab, props.role, visibleNavigation]);
   const activeLabel = navigation.find((item) => item.id === activeTab)?.label || 'Overview';
 
   const logout = async () => {
@@ -119,6 +163,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
       await props.onLogout();
     } catch (error) {
       setLogoutError(error instanceof Error ? error.message : 'Unable to sign out securely.');
+    }
+  };
+
+  const exitImpersonation = async () => {
+    setImpersonationError('');
+    try {
+      await props.onExitImpersonation();
+    } catch (error) {
+      setImpersonationError(error instanceof Error ? error.message : 'The administrator account could not be restored.');
     }
   };
 
@@ -135,7 +188,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${props.role === 'admin' ? 'bg-violet-50 text-violet-800' : 'bg-teal-50 text-teal-800'}`}>
-              {props.role === 'admin' ? 'Administrator' : 'Operator'}
+              {props.role === 'admin' ? 'Superadmin' : 'Agent'}
             </span>
             <button type="button" onClick={props.onNavigateHome} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 md:inline-flex">
               Storefront <ArrowUpRight className="h-3.5 w-3.5" />
@@ -143,6 +196,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           </div>
         </div>
         {logoutError && <p role="alert" className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">{logoutError}</p>}
+        {props.isImpersonating && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-violet-200 bg-violet-50 px-4 py-3">
+            <p className="text-sm font-medium text-violet-950">Superadmin {props.impersonatedBy} is viewing as {props.displayName} ({props.email}).</p>
+            <button type="button" onClick={() => void exitImpersonation()} className="rounded-lg bg-violet-800 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-900">Return to superadmin</button>
+          </div>
+        )}
+        {impersonationError && <p role="alert" className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">{impersonationError}</p>}
       </header>
 
       <div className="flex min-h-[calc(100vh-68px)]">
@@ -210,7 +270,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           )}
           {activeTab === 'integrations' && <IntegrationStatus />}
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
-          {activeTab === 'staff' && props.role === 'admin' && <StaffManager />}
+          {activeTab === 'staff' && props.role === 'admin' && <StaffManager onEnterAccount={props.onEnterAccount} />}
           {activeTab === 'audit' && props.role === 'admin' && <AuditLogView />}
           <button
             type="button"

@@ -61,6 +61,9 @@ export default function App() {
   const [adminRole, setAdminRole] = useState<'admin' | 'operator'>('admin');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminDisplayName, setAdminDisplayName] = useState('');
+  const [adminPermissions, setAdminPermissions] = useState<string[]>(['leads', 'orders', 'products', 'integrations']);
+  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [impersonatedBy, setImpersonatedBy] = useState('');
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   // Master application states
@@ -142,6 +145,9 @@ export default function App() {
           displayName?: string;
           role?: 'admin' | 'operator';
           mustChangePassword?: boolean;
+          permissions?: string[];
+          impersonating?: boolean;
+          impersonatedBy?: string | null;
         };
         if (!isCurrent) return;
 
@@ -149,6 +155,9 @@ export default function App() {
           setAdminRole(result.role || 'admin');
           setAdminEmail(result.email || '');
           setAdminDisplayName(result.displayName || result.email || '');
+          setAdminPermissions(result.permissions || []);
+          setIsImpersonating(Boolean(result.impersonating));
+          setImpersonatedBy(result.impersonatedBy || '');
           setMustChangePassword(Boolean(result.mustChangePassword));
           setAdminAuthStatus('authenticated');
           setAdminAuthSetupMessage(undefined);
@@ -157,6 +166,9 @@ export default function App() {
 
         setAdminAuthStatus('unauthenticated');
         setMustChangePassword(false);
+        setAdminPermissions([]);
+        setIsImpersonating(false);
+        setImpersonatedBy('');
         if (result.configured) {
           setAdminAuthSetupMessage(undefined);
           return;
@@ -169,6 +181,9 @@ export default function App() {
         if (!isCurrent) return;
         setAdminAuthStatus('unauthenticated');
         setMustChangePassword(false);
+        setAdminPermissions([]);
+        setIsImpersonating(false);
+        setImpersonatedBy('');
         setAdminAuthSetupMessage('The secure sign-in service could not be reached. Please try again later.');
       });
 
@@ -186,25 +201,42 @@ export default function App() {
     setLeads([]);
     const loadAdminData = async () => {
       try {
-        const [leadsResponse, productsResponse] = await Promise.all([
-          fetch('/api/data.php?resource=leads', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
-          fetch('/api/data.php?resource=products', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
-        ]);
-        const [leadsResult, productsResult] = await Promise.all([
-          leadsResponse.json() as Promise<{ leads?: ContactLead[]; message?: string }>,
-          productsResponse.json() as Promise<{ products?: CatalogItem[]; message?: string }>,
-        ]);
-        if (!leadsResponse.ok || !Array.isArray(leadsResult.leads)) {
-          throw new Error(leadsResult.message || 'Could not load saved contact leads from the database.');
+        const headers = { credentials: 'same-origin' as const, headers: { Accept: 'application/json' } };
+        const requests: Promise<void>[] = [];
+        if (adminRole === 'admin' || adminPermissions.includes('leads')) {
+          requests.push(fetch('/api/data.php?resource=leads', headers).then(async (response) => {
+            const result = await response.json() as { leads?: ContactLead[]; message?: string };
+            if (!response.ok || !Array.isArray(result.leads)) throw new Error(result.message || 'Could not load saved contact leads from the database.');
+            if (isCurrent) setLeads(result.leads);
+          }));
+        } else {
+          setLeads([]);
         }
-        if (!productsResponse.ok || !Array.isArray(productsResult.products)) {
-          throw new Error(productsResult.message || 'Could not load the complete product catalog.');
+        if (adminRole === 'admin' || adminPermissions.includes('products')) {
+          requests.push(fetch('/api/data.php?resource=products', headers).then(async (response) => {
+            const result = await response.json() as { products?: CatalogItem[]; message?: string };
+            if (!response.ok || !Array.isArray(result.products)) throw new Error(result.message || 'Could not load the complete product catalog.');
+            if (isCurrent) {
+              const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
+              setCatalogItems(result.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
+            }
+          }));
+        } else if (adminPermissions.includes('orders')) {
+          requests.push(fetch('/api/data.php?resource=catalog', headers).then(async (response) => {
+            const result = await response.json() as { products?: CatalogItem[]; categories?: string[]; message?: string };
+            if (!response.ok || !Array.isArray(result.products) || !Array.isArray(result.categories)) {
+              throw new Error(result.message || 'The product catalog could not be loaded for order entry.');
+            }
+            if (isCurrent) {
+              const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
+              setCatalogItems(result.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
+              setCategories(result.categories);
+            }
+          }));
+        } else {
+          setCatalogItems([]);
         }
-        if (isCurrent) {
-          setLeads(leadsResult.leads);
-          const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
-          setCatalogItems(productsResult.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
-        }
+        await Promise.all(requests);
       } catch (error) {
         if (!isCurrent) return;
         setAdminDataError(error instanceof Error ? error.message : 'The application database could not be reached.');
@@ -215,7 +247,7 @@ export default function App() {
     return () => {
       isCurrent = false;
     };
-  }, [currentPath, adminAuthStatus, mustChangePassword]);
+  }, [currentPath, adminAuthStatus, mustChangePassword, adminRole, adminPermissions]);
 
   const handleLoadOrders = useCallback(async (search: OrderSearch) => {
     const requestId = ++orderRequestId.current;
@@ -266,6 +298,9 @@ export default function App() {
       setAdminAuthStatus('unauthenticated');
       setAdminEmail('');
       setMustChangePassword(false);
+      setAdminPermissions([]);
+      setIsImpersonating(false);
+      setImpersonatedBy('');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -281,7 +316,59 @@ export default function App() {
       throw new Error('The secure sign-out request failed. Please try again.');
     }
     setAdminAuthStatus('unauthenticated');
+    setAdminPermissions([]);
+    setIsImpersonating(false);
+    setImpersonatedBy('');
     navigateTo('/');
+  };
+
+  const handleEnterAgent = (session: {
+    role: 'operator';
+    email: string;
+    displayName: string;
+    permissions: string[];
+    impersonating: true;
+    impersonatedBy: string;
+  }) => {
+    orderRequestId.current += 1;
+    setAdminRole(session.role);
+    setAdminEmail(session.email);
+    setAdminDisplayName(session.displayName);
+    setAdminPermissions(session.permissions);
+    setIsImpersonating(true);
+    setImpersonatedBy(session.impersonatedBy);
+    setMustChangePassword(false);
+    setOrders([]);
+    setOrdersLoading(false);
+  };
+
+  const handleExitImpersonation = async () => {
+    orderRequestId.current += 1;
+    const response = await fetch('/api/data.php?resource=staff-session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ action: 'exit' }),
+    });
+    const result = await response.json() as {
+      role?: 'admin';
+      email?: string;
+      displayName?: string;
+      permissions?: string[];
+      message?: string;
+    };
+    if (!response.ok || result.role !== 'admin' || !result.email) {
+      throw new Error(result.message || 'The administrator account could not be restored.');
+    }
+    setAdminRole('admin');
+    setAdminEmail(result.email);
+    setAdminDisplayName(result.displayName || result.email);
+    setAdminPermissions(result.permissions || ['leads', 'orders', 'products', 'integrations']);
+    setIsImpersonating(false);
+    setImpersonatedBy('');
+    setMustChangePassword(false);
+    setOrders([]);
+    setOrdersLoading(false);
   };
 
   // Cart Handlers
@@ -674,11 +761,14 @@ export default function App() {
     return (
       <AdminLogin
         setupMessage={adminAuthSetupMessage}
-        onAuthenticated={(role, shouldChangePassword, email, displayName) => {
+        onAuthenticated={(role, shouldChangePassword, email, displayName, permissions) => {
           setAdminAuthSetupMessage(undefined);
           setAdminRole(role);
           setAdminEmail(email);
           setAdminDisplayName(displayName);
+          setAdminPermissions(permissions);
+          setIsImpersonating(false);
+          setImpersonatedBy('');
           setMustChangePassword(shouldChangePassword);
           setAdminAuthStatus('authenticated');
         }}
@@ -703,6 +793,11 @@ export default function App() {
         role={adminRole}
         email={adminEmail}
         displayName={adminDisplayName}
+        permissions={adminPermissions}
+        isImpersonating={isImpersonating}
+        impersonatedBy={impersonatedBy}
+        onExitImpersonation={handleExitImpersonation}
+        onEnterAccount={handleEnterAgent}
         onProfileUpdated={(email, displayName) => {
           setAdminEmail(email);
           setAdminDisplayName(displayName);
