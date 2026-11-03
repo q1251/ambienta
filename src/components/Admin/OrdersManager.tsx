@@ -44,6 +44,35 @@ const orderStatuses: OnlineOrder['status'][] = [
   'Cancelled',
 ];
 
+const orderStatusClasses: Record<OnlineOrder['status'], string> = {
+  Pending: 'border-amber-300 bg-amber-50 text-amber-800',
+  Submitted: 'border-amber-300 bg-amber-50 text-amber-800',
+  'Pharmacist Review': 'border-sky-300 bg-sky-50 text-sky-800',
+  Dispensing: 'border-purple-300 bg-purple-50 text-purple-800',
+  'Ready for Pickup': 'border-blue-300 bg-blue-50 text-blue-800',
+  Shipped: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  Delivered: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  Completed: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  Cancelled: 'border-rose-300 bg-rose-50 text-rose-800',
+};
+
+const OrderStatusTag: React.FC<{
+  order: OnlineOrder;
+  disabled?: boolean;
+  onChange: (order: OnlineOrder, status: OnlineOrder['status'], select: HTMLSelectElement) => void;
+}> = ({ order, disabled = false, onChange }) => (
+  <select
+    aria-label={`Change order status for ${order.orderNumber}`}
+    value={order.status}
+    disabled={disabled}
+    onClick={(event) => event.stopPropagation()}
+    onChange={(event) => onChange(order, event.currentTarget.value as OnlineOrder['status'], event.currentTarget)}
+    className={`max-w-full cursor-pointer appearance-none rounded-full border px-2.5 py-1 text-[11px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:cursor-wait disabled:opacity-60 ${orderStatusClasses[order.status]}`}
+  >
+    {orderStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+  </select>
+);
+
 export const OrdersManager: React.FC<OrdersManagerProps> = ({
   orders,
   pagination,
@@ -484,40 +513,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
                     {/* Status Badge */}
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                          ord.status === 'Pending' || ord.status === 'Submitted'
-                            ? 'bg-amber-50 text-amber-800 border-amber-300'
-                            : ord.status === 'Pharmacist Review'
-                            ? 'bg-sky-50 text-sky-800 border-sky-300'
-                            : ord.status === 'Dispensing'
-                            ? 'bg-purple-50 text-purple-800 border-purple-300'
-                            : ord.status === 'Ready for Pickup'
-                            ? 'bg-blue-50 text-blue-800 border-blue-300'
-                            : ord.status === 'Shipped' || ord.status === 'Delivered' || ord.status === 'Completed'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            : 'bg-rose-50 text-rose-800 border-rose-300'
-                        }`}
-                      >
-                        {ord.status}
-                      </span>
+                      <OrderStatusTag order={ord} onChange={requestStatusChange} />
                     </td>
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
-                      <select
-                        value={ord.status}
-                        onChange={(e) => {
-                          const nextStatus = e.target.value as OnlineOrder['status'];
-                          requestStatusChange(ord, nextStatus, e.currentTarget);
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                        className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
-                      >
-                        <option value={ord.status}>{ord.status}</option>
-                        {orderStatuses.filter((status) => status !== ord.status).map((status) => <option key={status} value={status}>{status}</option>)}
-                      </select>
-
                       <button
                         type="button"
                         onClick={(event) => {
@@ -582,37 +582,23 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </button>
                 <div className="flex flex-wrap items-center gap-3">
                   <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Order #{selectedOrder.orderNumber}</h1>
-                  <span className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-bold text-teal-900">{selectedOrder.status}</span>
+                  <OrderStatusTag order={selectedOrder} disabled={isSavingStatus} onChange={requestStatusChange} />
                 </div>
                 <p className="mt-2 text-sm text-slate-500">Placed {selectedOrder.placedAt} <span className="mx-1.5">·</span> {selectedOrder.patientName}</p>
               </div>
-              <div className="flex flex-col gap-3 self-start sm:items-end">
-                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  Change order status
-                  <select
-                    aria-label={`Change order status for ${selectedOrder.orderNumber}`}
-                    value={selectedOrder.status}
-                    disabled={isSavingStatus}
-                    onChange={(event) => requestStatusChange(selectedOrder, event.currentTarget.value as OnlineOrder['status'], event.currentTarget)}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-700 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {orderStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </label>
-                <div className="flex items-center gap-3">
-                  {isSavingStatus && <span role="status" className="text-xs text-slate-500">Saving status…</span>}
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-                  >
-                    <Printer className="h-4 w-4" />Print order
-                  </button>
-                </div>
+              <div className="flex flex-col items-start gap-2 self-start sm:items-end">
+                {isSavingStatus && <span role="status" className="text-xs text-slate-500">Saving status…</span>}
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                >
+                  <Printer className="h-4 w-4" />Print order
+                </button>
               </div>
             </div>
           )}
-          {orderPageId && orderSaveError && (
+          {orderSaveError && (
             <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{orderSaveError}</p>
           )}
           <div className={orderPageId ? 'w-full' : 'bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200'}>
@@ -625,9 +611,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <div>
                   <h3 className="font-bold text-base text-white flex items-center gap-2">
                     <span>Order #{selectedOrder.orderNumber}</span>
-                    <span className="text-xs font-mono font-bold bg-teal-900 text-teal-300 px-2 py-0.5 rounded border border-teal-700">
-                      {selectedOrder.status}
-                    </span>
+                    <OrderStatusTag order={selectedOrder} disabled={isSavingStatus} onChange={requestStatusChange} />
                   </h3>
                   <p className="text-xs text-slate-400">Placed on {selectedOrder.placedAt}</p>
                 </div>
