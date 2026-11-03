@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
@@ -45,6 +45,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [activitySaving, setActivitySaving] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  const [emailComposerOpen, setEmailComposerOpen] = useState(false);
   const profileRequestId = useRef(0);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
   const filteredLeads = leads.filter((lead) => {
@@ -211,6 +212,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     event.preventDefault();
     const mailto = `mailto:${recipient}?subject=${encodeURIComponent(emailSubject.trim())}&body=${encodeURIComponent(emailBody.trim())}`;
     window.location.href = mailto;
+    setEmailComposerOpen(false);
   };
 
   if (selectedLeadId !== null) {
@@ -331,31 +333,51 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Mail className="h-4 w-4 text-teal-800" />Email this contact</h3>
-              <p className="mt-1 text-sm text-slate-600">
-                Compose a message to {profile.lead.email}. This opens your device’s default email app; sending, delivery status, replies, and tracking are not connected to the CRM.
-              </p>
-              <form onSubmit={(event) => openEmailComposer(event, profile.lead.email)} className="mt-4 space-y-4">
-                <label className="block text-sm font-medium text-slate-700">To
-                  <input type="email" readOnly value={profile.lead.email} className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-slate-600" />
-                </label>
-                <label className="block text-sm font-medium text-slate-700">Subject
-                  <input required maxLength={200} value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
-                </label>
-                <label className="block text-sm font-medium text-slate-700">Message
-                  <textarea required maxLength={10000} rows={5} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
-                </label>
-                {!profile.lead.marketingConsent && (
-                  <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                    This contact has not opted in to marketing. Do not use this composer for promotional outreach unless valid consent is recorded.
-                  </p>
-                )}
-                <button type="submit" disabled={!emailSubject.trim() || !emailBody.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                  <Send className="h-4 w-4" /> Open email app
-                </button>
-              </form>
+            <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5">
+              <div>
+                <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Mail className="h-4 w-4 text-teal-800" />Email this contact</h3>
+                <p className="mt-1 text-sm text-slate-600">Compose a message to {profile.lead.email}.</p>
+              </div>
+              <button type="button" onClick={() => setEmailComposerOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900">
+                <Mail className="h-4 w-4" /> Compose email
+              </button>
             </section>
+
+            {emailComposerOpen && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="lead-email-title">
+                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+                  <div className="flex items-start justify-between border-b border-slate-200 p-5">
+                    <div>
+                      <h3 id="lead-email-title" className="flex items-center gap-2 text-lg font-bold text-slate-900"><Mail className="h-5 w-5 text-teal-800" />Compose email</h3>
+                      <p className="mt-1 text-sm text-slate-600">This opens your default email app. CRM sending, delivery status, replies, and tracking are not connected.</p>
+                    </div>
+                    <button type="button" onClick={() => setEmailComposerOpen(false)} aria-label="Close email composer" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+                  </div>
+                  <form onSubmit={(event) => openEmailComposer(event, profile.lead.email)} className="space-y-4 p-5">
+                    <label className="block text-sm font-medium text-slate-700">To
+                      <input type="email" readOnly value={profile.lead.email} className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-slate-600" />
+                    </label>
+                    <label className="block text-sm font-medium text-slate-700">Subject
+                      <input required maxLength={200} value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                    </label>
+                    <label className="block text-sm font-medium text-slate-700">Message
+                      <textarea required maxLength={10000} rows={7} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                    </label>
+                    {!profile.lead.marketingConsent && (
+                      <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                        This contact has not opted in to marketing. Do not use this composer for promotional outreach unless valid consent is recorded.
+                      </p>
+                    )}
+                    <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                      <button type="button" onClick={() => setEmailComposerOpen(false)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                      <button type="submit" disabled={!emailSubject.trim() || !emailBody.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                        <Send className="h-4 w-4" /> Open email app
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
               <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
