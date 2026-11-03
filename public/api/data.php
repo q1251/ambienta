@@ -435,6 +435,8 @@ function data_lead_row(array $row): array
     ];
     if (array_key_exists('order_count', $row)) $lead['orderCount'] = (int) $row['order_count'];
     if (array_key_exists('last_order_at', $row)) $lead['lastOrderAt'] = $row['last_order_at'];
+    if (array_key_exists('active_order_count', $row)) $lead['activeOrderCount'] = (int) $row['active_order_count'];
+    if (array_key_exists('call_count', $row)) $lead['callCount'] = (int) $row['call_count'];
     return $lead;
 }
 
@@ -656,7 +658,9 @@ if ($method === 'GET') {
             }
             $find = $db->prepare(
                 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
-                        COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+                        COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
+                        COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
+                        (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
                  FROM leads l LEFT JOIN orders o ON o.email = l.email
                  WHERE l.id = ? GROUP BY l.id LIMIT 1'
             );
@@ -674,7 +678,9 @@ if ($method === 'GET') {
         }
         $rows = $db->query(
             'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
-                    COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+                    COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
+                    COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
+                    (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
              FROM leads l LEFT JOIN orders o ON o.email = l.email
              GROUP BY l.id ORDER BY l.id DESC'
         )->fetchAll();
@@ -1223,7 +1229,9 @@ if ($method === 'POST' && $resource === 'leads') {
     );
     $find = $db->prepare(
         'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
-                COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+                COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
+                COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
+                (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
          FROM leads l LEFT JOIN orders o ON o.email = l.email
          WHERE l.email = ? GROUP BY l.id LIMIT 1'
     );
@@ -1343,7 +1351,9 @@ if ($method === 'PATCH' && $resource === 'leads') {
     }
     $find = $db->prepare(
         'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
-                COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+                COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
+                COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
+                (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
          FROM leads l LEFT JOIN orders o ON o.email = l.email
          WHERE l.id = ? GROUP BY l.id LIMIT 1'
     );

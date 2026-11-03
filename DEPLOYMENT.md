@@ -123,6 +123,11 @@ comments retain their author and timestamp. Notes are operational only: never
 enter health, prescription, insurance, payment-card, or other sensitive
 personal information.
 
+The Leads table includes a **Not called, repeat buyers** view for contacts with
+no recorded call activity and at least two non-cancelled orders. Its order
+count excludes cancelled orders; the **All leads** view continues to show total
+order history.
+
 The CRM seeds 20 clearly labeled synthetic demo contacts for interface testing.
 Their addresses use the reserved `example.com` domain, their phone numbers are
 fictional, and they have no marketing consent. They are not actual prospects or

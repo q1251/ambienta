@@ -74,6 +74,8 @@ export interface ContactLead {
   marketingConsentAt?: string | null;
   orderCount?: number;
   lastOrderAt?: string | null;
+  activeOrderCount?: number;
+  callCount?: number;
 }
 
 export type ContactLeadInput = Pick<

@@ -36,6 +36,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
+  const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers'>('all');
   const [profile, setProfile] = useState<LeadProfile | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(() => {
     const value = Number(new URLSearchParams(window.location.search).get('leadId'));
@@ -53,11 +54,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
+  const isUncalledRepeatBuyer = (lead: ContactLead) => (lead.callCount ?? 0) === 0 && (lead.activeOrderCount ?? 0) >= 2;
+  const uncalledRepeatBuyers = leads.filter(isUncalledRepeatBuyer);
   const filteredLeads = leads.filter((lead) => {
     const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
     const query = search.trim().toLowerCase();
     const matchesSearch = !query || `${lead.firstName} ${lead.lastName} ${lead.email} ${lead.phone}`.toLowerCase().includes(query);
-    return matchesStage && matchesSearch;
+    const matchesTab = leadTab === 'all' || isUncalledRepeatBuyer(lead);
+    return matchesStage && matchesSearch && matchesTab;
   });
 
   const parse = (value: string) => {
@@ -533,6 +537,25 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 pt-4" role="group" aria-label="Lead groups">
+          <button
+            type="button"
+            aria-pressed={leadTab === 'all'}
+            onClick={() => setLeadTab('all')}
+            className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'all' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            All leads ({leads.length})
+          </button>
+          <button
+            type="button"
+            aria-pressed={leadTab === 'uncalled_repeat_buyers'}
+            onClick={() => setLeadTab('uncalled_repeat_buyers')}
+            className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'uncalled_repeat_buyers' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+            title="Leads with no recorded call and at least two non-cancelled orders"
+          >
+            Not called, repeat buyers ({uncalledRepeatBuyers.length})
+          </button>
+        </div>
         <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-4">
           <div>
             <h3 className="text-base font-bold text-slate-900">Saved contacts ({leads.length})</h3>
@@ -555,7 +578,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Stage</th><th className="py-3">Orders</th><th className="py-3">Source</th></tr></thead>
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
                 <tr
@@ -593,11 +616,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     </span>
                   </td>
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
-                  <td className="py-3">{lead.orderCount || 0}</td>
+                  <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>
                 </tr>
               ))}
-              {!filteredLeads.length && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">{leads.length ? 'No contacts match these filters.' : 'No contact leads are stored yet.'}</td></tr>}
+              {!filteredLeads.length && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
             </tbody>
           </table>
         </div>
