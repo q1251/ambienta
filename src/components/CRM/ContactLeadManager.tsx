@@ -555,7 +555,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Stage</th><th className="py-3">Orders</th><th className="py-3">Marketing consent</th><th className="py-3">Source</th></tr></thead>
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Stage</th><th className="py-3">Orders</th><th className="py-3">Source</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
                 <tr
@@ -594,11 +594,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </td>
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{lead.orderCount || 0}</td>
-                  <td className="py-3">{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td>
                   <td className="py-3">{lead.leadSource}</td>
                 </tr>
               ))}
-              {!filteredLeads.length && <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">{leads.length ? 'No contacts match these filters.' : 'No contact leads are stored yet.'}</td></tr>}
+              {!filteredLeads.length && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">{leads.length ? 'No contacts match these filters.' : 'No contact leads are stored yet.'}</td></tr>}
             </tbody>
           </table>
         </div>
