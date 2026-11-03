@@ -70,6 +70,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [trackingInput, setTrackingInput] = useState('');
   const [newInternalNote, setNewInternalNote] = useState('');
   const [orderSaveError, setOrderSaveError] = useState('');
+  const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
 
   // Manual Order Modal
@@ -177,12 +178,25 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   const handleStatusChange = async (orderId: string, status: OnlineOrder['status']) => {
     setOrderSaveError('');
+    setIsSavingStatus(true);
     try {
       await onUpdateOrderStatus(orderId, status);
+      setSelectedOrder((current) => current?.id === orderId ? { ...current, status } : current);
       setReloadCounter((counter) => counter + 1);
     } catch (error) {
       setOrderSaveError(error instanceof Error ? error.message : 'Order status could not be saved.');
+    } finally {
+      setIsSavingStatus(false);
     }
+  };
+
+  const requestStatusChange = (order: OnlineOrder, status: OnlineOrder['status'], select: HTMLSelectElement) => {
+    if (status === 'Cancelled' && order.status !== 'Cancelled'
+      && !window.confirm(`Cancel order ${order.orderNumber}? Its reserved inventory will be returned to stock.`)) {
+      select.value = order.status;
+      return;
+    }
+    void handleStatusChange(order.id, status);
   };
 
   // Add internal staff note
@@ -495,12 +509,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         value={ord.status}
                         onChange={(e) => {
                           const nextStatus = e.target.value as OnlineOrder['status'];
-                          if (nextStatus === 'Cancelled' && ord.status !== 'Cancelled'
-                            && !window.confirm(`Cancel order ${ord.orderNumber}? Its reserved inventory will be returned to stock.`)) {
-                            e.currentTarget.value = ord.status;
-                            return;
-                          }
-                          void handleStatusChange(ord.id, nextStatus);
+                          requestStatusChange(ord, nextStatus, e.currentTarget);
                         }}
                         onClick={(event) => event.stopPropagation()}
                         className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
@@ -734,10 +743,34 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
               {/* Fulfillment & Tracking Section */}
               <div className={orderPageId ? 'space-y-4 rounded-2xl border border-teal-200 bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-2' : 'bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3'}>
-                <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
-                  <Truck className="w-4 h-4 text-teal-700" />
-                  <span>Fulfillment &amp; Tracking</span>
-                </span>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-teal-700" />
+                    <span>Fulfillment &amp; Tracking</span>
+                  </span>
+                  <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
+                    Order status
+                    <select
+                      aria-label={`Change order status for ${selectedOrder.orderNumber}`}
+                      value={selectedOrder.status}
+                      disabled={isSavingStatus || allowedStatusTransitions[selectedOrder.status].length === 0}
+                      onChange={(event) => {
+                        const nextStatus = event.currentTarget.value as OnlineOrder['status'];
+                        requestStatusChange(selectedOrder, nextStatus, event.currentTarget);
+                      }}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value={selectedOrder.status}>{selectedOrder.status}</option>
+                      {allowedStatusTransitions[selectedOrder.status].map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                    {isSavingStatus && <span role="status" className="font-normal text-slate-500">Saving…</span>}
+                  </label>
+                </div>
+                {orderSaveError && (
+                  <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{orderSaveError}</p>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
