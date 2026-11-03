@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Check, Copy, Download, FileSpreadsheet, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, ArrowLeft, Check, Copy, Download, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
@@ -22,7 +22,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   onUpdateLead,
   onAddLeadActivity,
 }) => {
-  const [mode, setMode] = useState<'csv' | 'manual'>('csv');
+  const [mode, setMode] = useState<'csv' | 'manual' | null>(null);
   const [csv, setCsv] = useState('');
   const [preview, setPreview] = useState<NewLead[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
@@ -53,6 +53,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [copiedField, setCopiedField] = useState('');
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
+  useEffect(() => {
+    if (!mode) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) setMode(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, saving]);
   const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
   const isUncalledRepeatBuyer = (lead: ContactLead) => (lead.callCount ?? 0) === 0 && (lead.activeOrderCount ?? 0) >= 2;
   const uncalledRepeatBuyers = leads.filter(isUncalledRepeatBuyer);
@@ -86,6 +94,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setEmail('');
       setPhone('');
       setMarketingConsent(false);
+      setMode(null);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : 'Unable to save contact leads.');
     } finally {
@@ -108,6 +117,30 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     const link = document.createElement('a');
     link.href = url;
     link.download = 'ambients-contact-leads.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadContacts = () => {
+    const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
+    const rows = [
+      ['first_name', 'last_name', 'email', 'phone', 'lead_source', 'status', 'marketing_consent', 'created_at'],
+      ...leads.map((lead) => [
+        lead.firstName,
+        lead.lastName,
+        lead.email,
+        lead.phone,
+        lead.leadSource,
+        lead.status,
+        lead.marketingConsent ? 'yes' : 'no',
+        lead.createdAt,
+      ]),
+    ];
+    const contents = rows.map((row) => row.map(escapeCsv).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ambients-contacts.csv';
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -468,16 +501,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       <header className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-bold text-slate-900">Contact leads</h2>
         <p className="mt-1 text-sm text-slate-600">
-            Track contact stages and order fulfillment history. Only contacts with recorded marketing opt-in are eligible for future bulk outreach. Do not upload health, prescription, or insurance information.
+          Track contact stages and order fulfillment history. Only contacts with recorded marketing opt-in are eligible for future bulk outreach. Do not upload health, prescription, or insurance information.
         </p>
-        <div className="mt-4 flex gap-2">
-          <button type="button" onClick={() => setMode('csv')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${mode === 'csv' ? 'bg-teal-800 text-white' : 'bg-slate-100 text-slate-700'}`}>
-            <FileSpreadsheet className="h-4 w-4" /> CSV import
-          </button>
-          <button type="button" onClick={() => setMode('manual')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${mode === 'manual' ? 'bg-teal-800 text-white' : 'bg-slate-100 text-slate-700'}`}>
-            <UserPlus className="h-4 w-4" /> Add contact
-          </button>
-        </div>
       </header>
 
       {dataError && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
@@ -489,51 +514,68 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </p>
       )}
 
-      {mode === 'csv' ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
-              <Upload className="h-4 w-4" /> Choose CSV
-              <input type="file" accept=".csv,text/csv" className="sr-only" onChange={handleFile} />
-            </label>
-            <button type="button" onClick={downloadSample} className="inline-flex items-center gap-2 text-sm font-medium text-teal-800 underline">
-              <Download className="h-4 w-4" /> Download contact-only template
-            </button>
-          </div>
-          <label htmlFor="contact-leads-csv" className="mt-4 block text-sm font-medium text-slate-700">Or paste CSV</label>
-          <textarea
-            id="contact-leads-csv"
-            value={csv}
-            onChange={(event) => parse(event.target.value)}
-            rows={5}
-            placeholder={'first_name,last_name,email,phone\nJane,Doe,jane@example.com,555-0100'}
-            className="mt-2 w-full rounded-md border border-slate-300 p-3 font-mono text-sm"
-          />
-          {errors.map((error) => <p key={error} className="mt-2 flex items-center gap-2 text-sm text-rose-700"><AlertCircle className="h-4 w-4" />{error}</p>)}
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th><th>Marketing consent</th></tr></thead>
-              <tbody>
-                {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td></tr>)}
-              </tbody>
-            </table>
-          </div>
-          <button type="button" disabled={!preview.length || saving} onClick={() => void save(preview)} className="mt-4 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-            {saving ? 'Saving…' : `Save ${preview.length} leads`}
-          </button>
+      {mode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !saving) setMode(null);
+        }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="lead-modal-title" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+            <header className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 id="lead-modal-title" className="text-lg font-bold text-slate-900">{mode === 'csv' ? 'Import contacts from CSV' : 'Add contact'}</h3>
+                <p className="mt-1 text-sm text-slate-500">{mode === 'csv' ? 'Upload a CSV file or paste contact rows to preview before saving.' : 'Enter the contact details below.'}</p>
+              </div>
+              <button type="button" onClick={() => setMode(null)} disabled={saving} aria-label="Close dialog" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50">
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            {mode === 'csv' ? (
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
+                    <Upload className="h-4 w-4" /> Choose CSV
+                    <input type="file" accept=".csv,text/csv" className="sr-only" onChange={handleFile} />
+                  </label>
+                  <button type="button" onClick={downloadSample} className="inline-flex items-center gap-2 text-sm font-medium text-teal-800 underline">
+                    <Download className="h-4 w-4" /> Download contact-only template
+                  </button>
+                </div>
+                <label htmlFor="contact-leads-csv" className="mt-4 block text-sm font-medium text-slate-700">Or paste CSV</label>
+                <textarea
+                  id="contact-leads-csv"
+                  value={csv}
+                  onChange={(event) => parse(event.target.value)}
+                  rows={5}
+                  placeholder={'first_name,last_name,email,phone\nJane,Doe,jane@example.com,555-0100'}
+                  className="mt-2 w-full rounded-md border border-slate-300 p-3 font-mono text-sm"
+                />
+                {errors.map((error) => <p key={error} className="mt-2 flex items-center gap-2 text-sm text-rose-700"><AlertCircle className="h-4 w-4" />{error}</p>)}
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th><th>Marketing consent</th></tr></thead>
+                    <tbody>
+                      {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td></tr>)}
+                    </tbody>
+                  </table>
+                </div>
+                <button type="button" disabled={!preview.length || saving} onClick={() => void save(preview)} className="mt-4 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  {saving ? 'Saving…' : `Save ${preview.length} leads`}
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleManualSubmit} className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">First name<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                <label className="text-sm font-medium text-slate-700">Phone (optional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+                  <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
+                  <span>Contact explicitly opted in to marketing emails. Leave unchecked unless consent was actually given.</span>
+                </label>
+                <button disabled={saving} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-2">{saving ? 'Saving…' : 'Save contact lead'}</button>
+              </form>
+            )}
+          </section>
         </div>
-      ) : (
-        <form onSubmit={handleManualSubmit} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-2">
-          <label className="text-sm font-medium text-slate-700">First name<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-          <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-          <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-          <label className="text-sm font-medium text-slate-700">Phone (optional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-          <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
-            <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
-            <span>Contact explicitly opted in to marketing emails. Leave unchecked unless consent was actually given.</span>
-          </label>
-          <button disabled={saving} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-2">{saving ? 'Saving…' : 'Save contact lead'}</button>
-        </form>
       )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -562,6 +604,15 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             <p className="mt-1 text-xs text-slate-500">{eligibleCount} explicitly opted-in contact{eligibleCount === 1 ? '' : 's'} eligible for bulk email</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => { setRequestError(''); setMode('csv'); }} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <Upload className="h-4 w-4" /> CSV import
+            </button>
+            <button type="button" onClick={() => { setRequestError(''); setMode('manual'); }} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-900">
+              <UserPlus className="h-4 w-4" /> Add contact
+            </button>
+            <button type="button" onClick={downloadContacts} disabled={!leads.length} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <Download className="h-4 w-4" /> Download contacts
+            </button>
             <button type="button" disabled title="Mail is not connected; sending is disabled until credentials are configured privately." className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-400">
               <Mail className="h-4 w-4" /> Bulk email unavailable
             </button>
