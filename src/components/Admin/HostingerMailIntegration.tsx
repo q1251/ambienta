@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -34,6 +34,9 @@ interface MailActivity {
   body: string;
   status: 'Queued' | 'Sent' | 'Failed';
   sentAt: string;
+  cc: string[];
+  bcc: string[];
+  threadHeaders: { 'In-Reply-To'?: string; References?: string };
 }
 
 interface MailDraft {
@@ -41,7 +44,17 @@ interface MailDraft {
   recipientEmail: string;
   subject: string;
   body: string;
+  cc: string[];
+  bcc: string[];
+  threadHeaders: { 'In-Reply-To'?: string; References?: string };
+  attachments: MailAttachment[];
   updatedAt: string;
+}
+
+interface MailAttachment {
+  name: string;
+  contentType: string;
+  content: string;
 }
 
 interface InboxMessage {
@@ -52,6 +65,12 @@ interface InboxMessage {
   date: string;
   body: string;
   unread: boolean;
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string;
+  detailsLoaded?: boolean;
+  detailsLoading?: boolean;
+  attachments?: MailAttachment[];
 }
 
 type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history';
@@ -63,12 +82,21 @@ interface MailCampaign {
   body: string;
   status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'partial' | 'failed';
   scheduledAt: string | null;
+  audienceFilter: CampaignAudienceFilter;
+  trackOpens: boolean;
+  openCount: number;
   recipientCount: number;
   sentCount: number;
   failedCount: number;
   unsubscribedCount: number;
   createdAt: string;
   completedAt: string | null;
+}
+
+interface CampaignAudienceFilter {
+  country: string;
+  status: string;
+  source: string;
 }
 
 interface ApiResponse {
@@ -100,7 +128,40 @@ interface ApiResponse {
   command?: string;
   processed?: number;
   failed?: number;
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  countries?: string[];
+  statuses?: string[];
+  sources?: string[];
+  recipient?: string;
+  body?: string;
+  attachments?: MailAttachment[];
 }
+
+const campaignTemplates = {
+  blank: { subject: '', body: '' },
+  update: {
+    subject: 'A note from Ambienta',
+    body: 'Hello {{first_name}},\n\nWe have an update to share from Ambienta. Visit our website to learn more.\n\nWarm regards,\nAmbienta Customer Support',
+  },
+  welcome: {
+    subject: 'Welcome to Ambienta',
+    body: 'Hello {{first_name}},\n\nThank you for staying in touch with Ambienta. We are here to help with questions about our services.\n\nVisit ambienta.io for more information.\n\nWarm regards,\nAmbienta Customer Support',
+  },
+  seasonal: {
+    subject: 'News from Ambienta',
+    body: 'Hello {{first_name}},\n\nHere is the latest news from Ambienta. Visit our website to see current updates and offerings.\n\nWarm regards,\nAmbienta Customer Support',
+  },
+} as const;
+
+const previewMergeTags = (value: string): string => value
+  .replaceAll('{{first_name}}', 'Alex')
+  .replaceAll('{{last_name}}', 'Morgan')
+  .replaceAll('{{email}}', 'alex@example.com')
+  .replaceAll('{{country}}', 'South Africa')
+  .replace(/\*\*(.*?)\*\*/gs, '$1')
+  .replace(/\*(.*?)\*/gs, '$1');
 
 const getDefaultScheduleValue = (): string => {
   const date = new Date(Date.now() + 10 * 60 * 1000 - new Date().getTimezoneOffset() * 60 * 1000);
@@ -139,9 +200,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [campaignName, setCampaignName] = useState('');
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignBody, setCampaignBody] = useState('');
+  const [campaignTemplate, setCampaignTemplate] = useState<keyof typeof campaignTemplates>('blank');
+  const [campaignAudienceFilter, setCampaignAudienceFilter] = useState<CampaignAudienceFilter>({ country: '', status: '', source: '' });
+  const [campaignCountries, setCampaignCountries] = useState<string[]>([]);
+  const [campaignStatuses, setCampaignStatuses] = useState<string[]>([]);
+  const [campaignSources, setCampaignSources] = useState<string[]>([]);
+  const [campaignTrackOpens, setCampaignTrackOpens] = useState(false);
   const [campaignScheduleAt, setCampaignScheduleAt] = useState(getDefaultScheduleValue);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [campaignWorkerCommand, setCampaignWorkerCommand] = useState('');
+  const campaignBodyRef = useRef<HTMLTextAreaElement>(null);
   const [isCampaignSaving, setIsCampaignSaving] = useState(false);
   const [isCampaignAction, setIsCampaignAction] = useState(false);
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
@@ -149,6 +217,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [inboxMessages, setInboxMessages] = useState<InboxMessage[]>([]);
   const [hostSentMessages, setHostSentMessages] = useState<InboxMessage[]>([]);
   const [mailTrashMessages, setMailTrashMessages] = useState<InboxMessage[]>([]);
+  const [mailboxSearchInput, setMailboxSearchInput] = useState('');
+  const [mailboxSearch, setMailboxSearch] = useState('');
+  const [mailboxPage, setMailboxPage] = useState(1);
+  const [mailboxTotal, setMailboxTotal] = useState(0);
   const [inboxFolderAvailable, setInboxFolderAvailable] = useState(true);
   const [sentFolderAvailable, setSentFolderAvailable] = useState(false);
   const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
@@ -158,6 +230,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [recipientEmail, setRecipientEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [threadHeaders, setThreadHeaders] = useState<{ 'In-Reply-To'?: string; References?: string }>({});
+  const [attachments, setAttachments] = useState<MailAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncingInbox, setIsSyncingInbox] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -167,12 +243,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    if (mode === 'mailbox' && settings.configured) {
-      if (activeFolder === 'inbox') void refreshMailboxFolder('inbox');
-      if (activeFolder === 'sent') void refreshMailboxFolder('sent');
-      if (activeFolder === 'trash') void refreshMailboxFolder('trash');
+    if (mode === 'mailbox' && settings.verified) {
+      if (activeFolder === 'inbox' || activeFolder === 'sent' || activeFolder === 'trash') {
+        void refreshMailboxFolder(activeFolder);
+        const interval = window.setInterval(() => void refreshMailboxFolder(activeFolder), 60_000);
+        return () => window.clearInterval(interval);
+      }
     }
-  }, [mode, activeFolder, settings.configured]);
+  }, [mode, activeFolder, settings.verified, mailboxPage, mailboxSearch]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -207,11 +285,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             requestMailApi('email-campaigns', 'GET'),
             requestMailApi('email-campaign-audience', 'GET'),
           ]);
-          if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number') {
+          if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
+            || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
             throw new Error('Campaign data returned an invalid response.');
           }
           setCampaigns(campaignResult.campaigns);
           setCampaignAudienceCount(audienceResult.audienceCount);
+          setCampaignCountries(audienceResult.countries);
+          setCampaignStatuses(audienceResult.statuses);
+          setCampaignSources(audienceResult.sources);
         }
       }
     } catch (error) {
@@ -224,6 +306,35 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   useEffect(() => {
     void loadData();
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'mailbox' || role !== 'admin' || activeFolder !== 'campaigns') return;
+    const query = new URLSearchParams({
+      country: campaignAudienceFilter.country,
+      status: campaignAudienceFilter.status,
+      source: campaignAudienceFilter.source,
+    }).toString();
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void requestMailApi(`email-campaign-audience&${query}`, 'GET')
+        .then((result) => {
+          if (active && typeof result.audienceCount === 'number') setCampaignAudienceCount(result.audienceCount);
+        })
+        .catch((error: unknown) => {
+          if (active) setErrorMessage(error instanceof Error ? error.message : 'The campaign audience could not be refreshed.');
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [campaignAudienceFilter, mode, role, activeFolder]);
+
+  useEffect(() => {
+    if (mode !== 'mailbox' || activeFolder !== 'campaign-history') return;
+    const interval = window.setInterval(() => void loadData(), 60_000);
+    return () => window.clearInterval(interval);
+  }, [mode, activeFolder]);
 
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -267,8 +378,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setErrorMessage('');
     if (folder === 'inbox') setIsSyncingInbox(true);
     try {
-      const result = await requestMailApi(`email-inbox&folder=${folder}`, 'GET');
+      const result = await requestMailApi(
+        `email-inbox&folder=${folder}&page=${mailboxPage}&search=${encodeURIComponent(mailboxSearch)}`,
+        'GET'
+      );
       if (!Array.isArray(result.mailboxMessages)) throw new Error('The mailbox response is invalid.');
+      setMailboxTotal(result.total ?? 0);
       if (folder === 'inbox') {
         setInboxMessages(result.mailboxMessages);
         setInboxFolderAvailable(result.folderAvailable !== false);
@@ -290,6 +405,47 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
   const refreshInbox = () => refreshMailboxFolder('inbox');
 
+  const setMessageReadState = async (message: InboxMessage, folder: 'inbox' | 'sent' | 'trash', seen: boolean) => {
+    setErrorMessage('');
+    try {
+      await requestMailApi('email-message-seen', 'POST', { id: message.id, folder, seen });
+      const update = (current: InboxMessage[]) => current.map((item) => item.id === message.id ? { ...item, unread: !seen } : item);
+      if (folder === 'inbox') setInboxMessages(update);
+      if (folder === 'sent') setHostSentMessages(update);
+      if (folder === 'trash') setMailTrashMessages(update);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The message read status could not be updated.');
+    }
+  };
+
+  const loadMessageDetails = async (message: InboxMessage, folder: 'inbox' | 'sent' | 'trash'): Promise<{ body: string; attachments: MailAttachment[] } | null> => {
+    setErrorMessage('');
+    const update = (current: InboxMessage[]) => current.map((item) => item.id === message.id ? { ...item, detailsLoading: true } : item);
+    if (folder === 'inbox') setInboxMessages(update);
+    if (folder === 'sent') setHostSentMessages(update);
+    if (folder === 'trash') setMailTrashMessages(update);
+    try {
+      const result = await requestMailApi('email-message-details', 'POST', { id: message.id, folder });
+      if (typeof result.body !== 'string' || !Array.isArray(result.attachments)) {
+        throw new Error('The message details response was invalid.');
+      }
+      const updateDetails = (current: InboxMessage[]) => current.map((item) => item.id === message.id
+        ? { ...item, body: result.body!, attachments: result.attachments!, detailsLoaded: true, detailsLoading: false }
+        : item);
+      if (folder === 'inbox') setInboxMessages(updateDetails);
+      if (folder === 'sent') setHostSentMessages(updateDetails);
+      if (folder === 'trash') setMailTrashMessages(updateDetails);
+      return { body: result.body, attachments: result.attachments };
+    } catch (error) {
+      const clearLoading = (current: InboxMessage[]) => current.map((item) => item.id === message.id ? { ...item, detailsLoading: false } : item);
+      if (folder === 'inbox') setInboxMessages(clearLoading);
+      if (folder === 'sent') setHostSentMessages(clearLoading);
+      if (folder === 'trash') setMailTrashMessages(clearLoading);
+      setErrorMessage(error instanceof Error ? error.message : 'The message details could not be loaded.');
+      return null;
+    }
+  };
+
   const replyToInbox = (message: InboxMessage) => {
     const address = message.from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
     if (!address) {
@@ -299,6 +455,29 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setRecipientEmail(address);
     setSubject(message.subject.toLowerCase().startsWith('re:') ? message.subject : `Re: ${message.subject}`);
     setMessageBody('');
+    setCc('');
+    setBcc('');
+    setAttachments([]);
+    setThreadHeaders({
+      'In-Reply-To': message.messageId || undefined,
+      References: [message.references, message.messageId].filter(Boolean).join(' ') || undefined,
+    });
+    setEditingDraftId(null);
+    setActiveFolder('compose');
+  };
+
+  const forwardInboxMessage = async (message: InboxMessage) => {
+    const details = message.detailsLoaded
+      ? { body: message.body, attachments: message.attachments || [] }
+      : await loadMessageDetails(message, 'inbox');
+    if (details === null) return;
+    setRecipientEmail('');
+    setSubject(message.subject.toLowerCase().startsWith('fwd:') ? message.subject : `Fwd: ${message.subject}`);
+    setMessageBody(`\n\n---------- Forwarded message ----------\nFrom: ${message.from}\nDate: ${message.date}\nSubject: ${message.subject}\n\n${details.body}`);
+    setCc('');
+    setBcc('');
+    setAttachments(details.attachments);
+    setThreadHeaders({});
     setEditingDraftId(null);
     setActiveFolder('compose');
   };
@@ -312,6 +491,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         recipientEmail,
         subject,
         body: messageBody,
+        cc,
+        bcc,
+        threadHeaders,
+        attachments,
       });
       if (!result.draft) throw new Error('The saved draft was missing from the response.');
       setDrafts((current) => [
@@ -330,6 +513,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setRecipientEmail(draft.recipientEmail);
     setSubject(draft.subject);
     setMessageBody(draft.body);
+    setCc(draft.cc.join(', '));
+    setBcc(draft.bcc.join(', '));
+    setThreadHeaders(draft.threadHeaders);
+    setAttachments(draft.attachments);
     setActiveFolder('compose');
   };
 
@@ -403,6 +590,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       name: campaignName,
       subject: campaignSubject,
       body: campaignBody,
+      audienceFilter: campaignAudienceFilter,
+      trackOpens: campaignTrackOpens,
     });
     if (!result.campaignId) throw new Error('The saved campaign was missing from the response.');
     setEditingCampaignId(result.campaignId);
@@ -430,6 +619,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setCampaignName(campaign.name);
     setCampaignSubject(campaign.subject);
     setCampaignBody(campaign.body);
+    setCampaignTemplate('blank');
+    setCampaignAudienceFilter(campaign.audienceFilter);
+    setCampaignTrackOpens(campaign.trackOpens);
     setCampaignScheduleAt(getDefaultScheduleValue());
   };
 
@@ -439,7 +631,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setSuccessMessage('');
     setIsCampaignAction(true);
     try {
-      const audienceResult = await requestMailApi('email-campaign-audience', 'GET');
+      const audienceQuery = new URLSearchParams({
+        country: campaignAudienceFilter.country,
+        status: campaignAudienceFilter.status,
+        source: campaignAudienceFilter.source,
+      });
+      const audienceResult = await requestMailApi(`email-campaign-audience&${audienceQuery}`, 'GET');
       if (typeof audienceResult.audienceCount !== 'number') throw new Error('The campaign audience count is invalid.');
       setCampaignAudienceCount(audienceResult.audienceCount);
       if (audienceResult.audienceCount === 0 || audienceResult.audienceCount > 5000) {
@@ -472,7 +669,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setSuccessMessage('');
     setIsCampaignAction(true);
     try {
-      const audienceResult = await requestMailApi('email-campaign-audience', 'GET');
+      const audienceQuery = new URLSearchParams({
+        country: campaignAudienceFilter.country,
+        status: campaignAudienceFilter.status,
+        source: campaignAudienceFilter.source,
+      });
+      const audienceResult = await requestMailApi(`email-campaign-audience&${audienceQuery}`, 'GET');
       if (typeof audienceResult.audienceCount !== 'number') throw new Error('The campaign audience count is invalid.');
       setCampaignAudienceCount(audienceResult.audienceCount);
       if (audienceResult.audienceCount === 0 || audienceResult.audienceCount > 5000) {
@@ -522,6 +724,46 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     }
   };
 
+  const sendCampaignTest = async () => {
+    if (!campaignSubject.trim() || !campaignBody.trim()) {
+      setErrorMessage('Add a subject and message before sending a test.');
+      return;
+    }
+    if (!window.confirm(`Send a test of "${campaignSubject}" to ${settings.emailAccount}?`)) return;
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsCampaignAction(true);
+    try {
+      const result = await requestMailApi('email-campaign-test-send', 'POST', {
+        subject: campaignSubject,
+        body: campaignBody,
+      });
+      if (result.sent !== true) throw new Error('Hostinger did not accept the test email.');
+      setSuccessMessage(`Hostinger accepted the test email for ${result.recipient || settings.emailAccount}.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The campaign test email could not be sent.');
+    } finally {
+      setIsCampaignAction(false);
+    }
+  };
+
+  const wrapCampaignSelection = (marker: '**' | '*') => {
+    const textarea = campaignBodyRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = campaignBody.slice(start, end);
+    const replacement = `${marker}${selected || 'text'}${marker}`;
+    const nextBody = `${campaignBody.slice(0, start)}${replacement}${campaignBody.slice(end)}`;
+    setCampaignBody(nextBody);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const selectionStart = start + marker.length;
+      const selectionEnd = selectionStart + (selected || 'text').length;
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+    });
+  };
+
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMessage('');
@@ -532,6 +774,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         recipientEmail,
         subject,
         body: messageBody,
+        cc,
+        bcc,
+        threadHeaders,
+        attachments,
       });
       if (result.sent !== true) throw new Error(result.message || 'Hostinger did not accept the email.');
       setSuccessMessage(result.message || 'Hostinger accepted the email for sending.');
@@ -548,6 +794,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setRecipientEmail('');
       setSubject('');
       setMessageBody('');
+      setCc('');
+      setBcc('');
+      setThreadHeaders({});
+      setAttachments([]);
       try {
         await loadData();
       } catch (error) {
@@ -561,6 +811,43 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setIsSending(false);
     }
   };
+
+  const addAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setErrorMessage('');
+    try {
+      const selectedFiles = Array.from(files);
+      if (attachments.length + selectedFiles.length > 5) {
+        throw new Error('You can attach up to five files.');
+      }
+      const selectedBytes = selectedFiles.reduce((total, file) => total + file.size, 0);
+      const currentBytes = attachments.reduce((total, attachment) => total + Math.floor(attachment.content.length * 3 / 4), 0);
+      if (selectedBytes + currentBytes > 4 * 1024 * 1024) {
+        throw new Error('Attachments must total 4 MB or less.');
+      }
+      const encoded = await Promise.all(selectedFiles.map(async (file): Promise<MailAttachment> => {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+          reader.onload = () => typeof reader.result === 'string'
+            ? resolve(reader.result)
+            : reject(new Error(`Could not read ${file.name}.`));
+          reader.readAsDataURL(file);
+        });
+        return {
+          name: file.name,
+          contentType: file.type || 'application/octet-stream',
+          content: dataUrl.split(',', 2)[1] || '',
+        };
+      }));
+      setAttachments((current) => [...current, ...encoded]);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The selected attachments could not be added.');
+    }
+  };
+
+  const totalCampaignOpens = campaigns.reduce((total, campaign) => total + campaign.openCount, 0);
+  const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
 
   return (
     <div className="space-y-5">
@@ -653,7 +940,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs font-medium text-slate-500">Opened</p>
-            <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
+            <p className="mt-1 text-lg font-semibold text-slate-700">{hasOpenTrackedCampaign ? `${totalCampaignOpens} campaign opens` : 'Campaign tracking off'}</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs font-medium text-slate-500">Drafts · Trash</p>
@@ -687,7 +974,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 key={folder}
                 type="button"
                 aria-current={activeFolder === folder ? 'page' : undefined}
-                onClick={() => setActiveFolder(folder)}
+                onClick={() => {
+                  setMailboxPage(1);
+                  setActiveFolder(folder);
+                }}
                 className={`flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === folder
                     ? 'bg-violet-50 text-violet-900'
@@ -754,6 +1044,19 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <label htmlFor="mail-recipient" className="mb-1 block text-sm font-medium text-slate-700">To</label>
                 <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
               </div>
+              <details className="rounded-lg border border-slate-200 px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium text-slate-700">CC and BCC</summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="mail-cc" className="mb-1 block text-xs font-medium text-slate-600">CC</label>
+                    <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="Separate addresses with commas" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                  </div>
+                  <div>
+                    <label htmlFor="mail-bcc" className="mb-1 block text-xs font-medium text-slate-600">BCC</label>
+                    <input id="mail-bcc" type="text" value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="Separate addresses with commas" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                  </div>
+                </div>
+              </details>
               <div>
                 <label htmlFor="mail-subject" className="mb-1 block text-sm font-medium text-slate-700">Subject</label>
                 <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
@@ -762,6 +1065,21 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <label htmlFor="mail-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
                 <textarea id="mail-body" maxLength={6000} rows={9} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                 <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
+              </div>
+              <div>
+                <label htmlFor="mail-attachments" className="mb-1 block text-sm font-medium text-slate-700">Attachments</label>
+                <input id="mail-attachments" type="file" multiple onChange={(event) => { void addAttachments(event.target.files); event.target.value = ''; }} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200" />
+                <p className="mt-1 text-xs text-slate-500">Up to five files, 4 MB total.</p>
+                {attachments.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {attachments.map((attachment, index) => (
+                      <li key={`${attachment.name}-${index}`} className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                        <span className="truncate">{attachment.name}</span>
+                        <button type="button" onClick={() => setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index))} className="font-semibold text-rose-700">Remove</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => void saveDraft()} disabled={isLoading || (!recipientEmail && !subject && !messageBody)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
@@ -781,12 +1099,25 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-slate-950">Inbox</h2>
-                  <p className="mt-1 text-sm text-slate-600">Recent messages from the Hostinger INBOX mailbox.</p>
+                  <p className="mt-1 text-sm text-slate-600">Recent Hostinger INBOX messages. Refreshes automatically every minute.</p>
                 </div>
-                <button type="button" onClick={() => void refreshInbox()} disabled={!settings.configured || isSyncingInbox} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                <button type="button" onClick={() => void refreshInbox()} disabled={!settings.verified || isSyncingInbox} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   <RefreshCw className={`h-4 w-4 ${isSyncingInbox ? 'animate-spin' : ''}`} /> {isSyncingInbox ? 'Syncing…' : 'Sync inbox'}
                 </button>
               </div>
+              <MailboxSearchControls
+                searchInput={mailboxSearchInput}
+                page={mailboxPage}
+                total={mailboxTotal}
+                disabled={!settings.verified}
+                onSearchChange={setMailboxSearchInput}
+                onSearch={(event) => {
+                  event.preventDefault();
+                  setMailboxPage(1);
+                  setMailboxSearch(mailboxSearchInput.trim());
+                }}
+                onPageChange={setMailboxPage}
+              />
               {!settings.configured ? (
                 <p className="py-8 text-center text-sm text-slate-500">Configure the Hostinger mailbox under Integrations to load the inbox.</p>
               ) : !inboxFolderAvailable ? (
@@ -796,27 +1127,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               ) : inboxMessages.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-500">No inbox messages were returned. Use Sync inbox to check again.</p>
               ) : (
-                <ul className="divide-y divide-slate-100">
-                  {inboxMessages.map((item) => (
-                    <li key={item.id} className="py-3">
-                      <p className={`truncate text-sm ${item.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{item.subject}</p>
-                      <p className="mt-1 truncate text-xs text-slate-600">{item.from}</p>
-                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs text-slate-500">{item.date} {item.unread ? '· Unread' : ''}</p>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => replyToInbox(item)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Reply</button>
-                          <button type="button" onClick={() => void moveMailToTrash(item)} className="rounded-md border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
-                        </div>
-                      </div>
-                      {item.body && (
-                        <details className="mt-2 text-xs text-slate-600">
-                          <summary className="cursor-pointer font-medium">Read message preview</summary>
-                          <p className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3">{item.body}</p>
-                        </details>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <MailboxThreadList
+                  messages={inboxMessages}
+                  onReply={replyToInbox}
+                  onForward={(message) => void forwardInboxMessage(message)}
+                  onSetRead={(message, seen) => void setMessageReadState(message, 'inbox', seen)}
+                  onTrash={(message) => void moveMailToTrash(message)}
+                  onLoadDetails={(message) => void loadMessageDetails(message, 'inbox')}
+                />
               )}
             </section>
           )}
@@ -826,10 +1144,23 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-slate-950">Sent from CRM</h2>
-                  <p className="mt-1 text-sm text-slate-600">Messages submitted from this CRM.</p>
+                  <p className="mt-1 text-sm text-slate-600">Messages submitted from this CRM. Hostinger’s Sent folder auto-refreshes every minute.</p>
                 </div>
-                <button type="button" onClick={() => { void loadData(); void refreshMailboxFolder('sent'); }} disabled={isLoading || !settings.configured} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
+                <button type="button" onClick={() => { void loadData(); void refreshMailboxFolder('sent'); }} disabled={isLoading || !settings.verified} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
               </div>
+              <MailboxSearchControls
+                searchInput={mailboxSearchInput}
+                page={mailboxPage}
+                total={mailboxTotal}
+                disabled={!settings.verified}
+                onSearchChange={setMailboxSearchInput}
+                onSearch={(event) => {
+                  event.preventDefault();
+                  setMailboxPage(1);
+                  setMailboxSearch(mailboxSearchInput.trim());
+                }}
+                onPageChange={setMailboxPage}
+              />
               {messages.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No email has been sent from the CRM yet.</p> : (
                 <ul className="divide-y divide-slate-100">
                   {messages.map((item) => (
@@ -839,6 +1170,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status}</span>
                       </div>
                       <p className="mt-1 truncate text-xs text-slate-600">{item.recipientEmail} · {item.sentAt}</p>
+                      {(item.cc.length > 0 || item.bcc.length > 0) && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          {item.cc.length > 0 ? `CC: ${item.cc.join(', ')}` : ''}
+                          {item.cc.length > 0 && item.bcc.length > 0 ? ' · ' : ''}
+                          {item.bcc.length > 0 ? `BCC: ${item.bcc.join(', ')}` : ''}
+                        </p>
+                      )}
                       {item.body && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-medium">View message</summary><p className="mt-2 whitespace-pre-wrap">{item.body}</p></details>}
                       <p className="mt-1 text-xs text-slate-500">{item.status === 'Sent' ? 'Accepted by SMTP; delivery is not confirmed.' : item.status === 'Failed' ? 'Sending failed.' : 'Sending outcome unknown; check Hostinger before retrying.'}</p>
                     </li>
@@ -854,8 +1192,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       <li key={item.id} className="py-3">
                         <p className="truncate text-sm font-medium text-slate-900">{item.subject}</p>
                         <p className="mt-1 truncate text-xs text-slate-600">{item.from}</p>
-                        <p className="mt-1 text-xs text-slate-500">{item.date}</p>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <p className="text-xs text-slate-500">{item.date} {item.unread ? '· Unread' : ''}</p>
+                          <button type="button" onClick={() => void setMessageReadState(item, 'sent', item.unread)} className="text-xs font-semibold text-violet-800">{item.unread ? 'Mark read' : 'Mark unread'}</button>
+                        </div>
                         {item.body && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-medium">View message</summary><p className="mt-2 whitespace-pre-wrap">{item.body}</p></details>}
+                        <MessageAttachmentActions message={item} onLoad={() => void loadMessageDetails(item, 'sent')} />
                       </li>
                     ))}
                   </ul>
@@ -869,11 +1211,26 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
           {activeFolder === 'trash' && (
             <div className="space-y-5">
+              <MailboxSearchControls
+                searchInput={mailboxSearchInput}
+                page={mailboxPage}
+                total={mailboxTotal}
+                disabled={!settings.verified}
+                onSearchChange={setMailboxSearchInput}
+                onSearch={(event) => {
+                  event.preventDefault();
+                  setMailboxPage(1);
+                  setMailboxSearch(mailboxSearchInput.trim());
+                }}
+                onPageChange={setMailboxPage}
+              />
               <MailTrashFolder
                 messages={mailTrashMessages}
                 folderAvailable={trashFolderAvailable}
                 onRestore={(message) => void restoreMailMessage(message)}
                 onDelete={(message) => void permanentlyDeleteMailMessage(message)}
+                onSetSeen={(message, seen) => void setMessageReadState(message, 'trash', seen)}
+                onLoadDetails={(message) => void loadMessageDetails(message, 'trash')}
               />
               <TrashFolder drafts={trash} onRestore={(draft) => void restoreDraft(draft)} onDelete={(draft) => void permanentlyDeleteDraft(draft)} />
             </div>
@@ -912,6 +1269,51 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
                   <div>
+                    <label htmlFor="campaign-template" className="mb-1 block text-sm font-medium text-slate-700">Start from a template</label>
+                    <select id="campaign-template" value={campaignTemplate} onChange={(event) => {
+                      const template = campaignTemplates[event.target.value as keyof typeof campaignTemplates];
+                      setCampaignTemplate(event.target.value as keyof typeof campaignTemplates);
+                      setCampaignSubject(template.subject);
+                      setCampaignBody(template.body);
+                    }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:max-w-sm">
+                      <option value="blank">Blank campaign</option>
+                      <option value="welcome">Welcome</option>
+                      <option value="update">Customer update</option>
+                      <option value="seasonal">News announcement</option>
+                    </select>
+                  </div>
+                  <fieldset className="rounded-xl border border-slate-200 p-4">
+                    <legend className="px-1 text-sm font-semibold text-slate-800">Audience segments</legend>
+                    <p className="mb-3 text-xs text-slate-500">All recipients must have recorded marketing consent. Filters narrow that opted-in audience.</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="text-xs font-medium text-slate-600">
+                        Country
+                        <select value={campaignAudienceFilter.country} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, country: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+                          <option value="">All countries</option>
+                          {campaignCountries.map((country) => <option key={country} value={country}>{country}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-medium text-slate-600">
+                        Lead status
+                        <select value={campaignAudienceFilter.status} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, status: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+                          <option value="">All statuses</option>
+                          {campaignStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-medium text-slate-600">
+                        Lead source
+                        <select value={campaignAudienceFilter.source} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, source: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+                          <option value="">All sources</option>
+                          {campaignSources.map((source) => <option key={source} value={source}>{source}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  </fieldset>
+                  <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                    <input type="checkbox" checked={campaignTrackOpens} onChange={(event) => setCampaignTrackOpens(event.target.checked)} className="mt-0.5 rounded border-slate-300 text-violet-700 focus:ring-violet-500" />
+                    <span><span className="font-medium">Enable approximate open tracking</span><span className="mt-1 block text-xs text-slate-500">Adds a 1-pixel image to campaign messages. Privacy features may block it, and image loads are not proof that a person read the email.</span></span>
+                  </label>
+                  <div>
                     <label htmlFor="campaign-schedule" className="mb-1 block text-sm font-medium text-slate-700">Schedule for</label>
                     <div className="flex flex-wrap items-end gap-3">
                       <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:w-auto" />
@@ -922,9 +1324,22 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </div>
                   <div>
                     <label htmlFor="campaign-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
-                    <textarea id="campaign-body" value={campaignBody} maxLength={5000} rows={8} required onChange={(event) => setCampaignBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                    <p className="mt-1 text-xs text-slate-500">Each campaign email includes a working unsubscribe link and one-click unsubscribe headers. Do not include sensitive health information.</p>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => wrapCampaignSelection('**')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Bold</button>
+                      <button type="button" onClick={() => wrapCampaignSelection('*')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs italic text-slate-700">Italic</button>
+                      <span className="text-xs text-slate-500">Personalize:</span>
+                      {(['{{first_name}}', '{{last_name}}', '{{email}}', '{{country}}'] as const).map((tag) => (
+                        <button key={tag} type="button" onClick={() => setCampaignBody((current) => `${current}${tag}`)} className="rounded-md bg-violet-50 px-2 py-1 font-mono text-[11px] text-violet-800">{tag}</button>
+                      ))}
+                    </div>
+                    <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} rows={8} required onChange={(event) => setCampaignBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    <p className="mt-1 text-xs text-slate-500">Supports bold and italic formatting. Every campaign includes unsubscribe links and one-click unsubscribe headers. Do not include sensitive health information.</p>
                   </div>
+                  <details className="rounded-lg border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">Preview with sample recipient</summary>
+                    <p className="mt-3 font-semibold text-slate-900">{previewMergeTags(campaignSubject) || '(subject preview)'}</p>
+                    <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-slate-700">{previewMergeTags(campaignBody) || '(message preview)'}</pre>
+                  </details>
                   <div className="flex flex-wrap items-end gap-3">
                     <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {isCampaignSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
@@ -932,6 +1347,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     </button>
                     <button type="button" onClick={() => void launchCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
                       {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Send now
+                    </button>
+                    <button type="button" onClick={() => void sendCampaignTest()} disabled={!settings.verified || !campaignSubject.trim() || !campaignBody.trim() || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      Send test to mailbox
                     </button>
                   </div>
                   {!editingCampaignId && <p className="text-xs text-slate-500">Save the campaign draft first to enable scheduling or sending.</p>}
@@ -958,7 +1376,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-slate-950">Campaign history</h2>
-                  <p className="mt-1 text-sm text-slate-600">View send progress and manage scheduled campaigns. “Sent” means accepted by SMTP; delivery and opens are not tracked.</p>
+                  <p className="mt-1 text-sm text-slate-600">View send progress and manage scheduled campaigns. SMTP acceptance is not confirmed delivery; open counts are approximate.</p>
                 </div>
                 <button type="button" onClick={() => void loadData()} disabled={isLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
               </div>
@@ -981,7 +1399,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         </div>
                         <p className="mt-1 truncate text-sm text-slate-700">{campaign.subject}</p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {campaign.recipientCount} recipients · {campaign.sentCount} sent · {campaign.failedCount} failed · {campaign.unsubscribedCount} unsubscribed
+                          {campaign.recipientCount} recipients · {campaign.sentCount} SMTP accepted · {campaign.failedCount} failed · {campaign.unsubscribedCount} unsubscribed · {campaign.trackOpens ? `${campaign.openCount} opens` : 'open tracking off'}
                           {campaign.scheduledAt ? ` · Scheduled ${new Date(`${campaign.scheduledAt.replace(' ', 'T')}Z`).toLocaleString()}` : ''}
                         </p>
                       </div>
@@ -1013,7 +1431,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       </section>}
 
       {mode === 'mailbox' && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-        Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. SMTP does not provide delivered/opened events, so those statistics are not available.
+        Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. Hostinger SMTP confirms acceptance only, not final delivery; campaign opens are approximate and available only when open tracking is enabled for a campaign.
       </p>}
     </div>
   );
@@ -1024,6 +1442,129 @@ interface DraftFolderProps {
   onOpen: (draft: MailDraft) => void;
   onTrash: (draft: MailDraft) => void;
 }
+
+interface MailboxSearchControlsProps {
+  searchInput: string;
+  page: number;
+  total: number;
+  disabled: boolean;
+  onSearchChange: (value: string) => void;
+  onSearch: (event: React.FormEvent) => void;
+  onPageChange: (page: number) => void;
+}
+
+interface MailboxThreadListProps {
+  messages: InboxMessage[];
+  onReply: (message: InboxMessage) => void;
+  onForward: (message: InboxMessage) => void;
+  onSetRead: (message: InboxMessage, seen: boolean) => void;
+  onTrash: (message: InboxMessage) => void;
+  onLoadDetails: (message: InboxMessage) => void;
+}
+
+const MailboxThreadList: React.FC<MailboxThreadListProps> = ({
+  messages,
+  onReply,
+  onForward,
+  onSetRead,
+  onTrash,
+  onLoadDetails,
+}) => {
+  const threads = new Map<string, InboxMessage[]>();
+  messages.forEach((message) => {
+    const rootMessageId = message.references?.trim().split(/\s+/)[0] || message.inReplyTo || message.messageId;
+    const key = rootMessageId || message.id;
+    threads.set(key, [...(threads.get(key) || []), message]);
+  });
+  threads.forEach((threadMessages) => {
+    threadMessages.sort((first, second) => Date.parse(first.date) - Date.parse(second.date));
+  });
+  return (
+    <ul className="divide-y divide-slate-100">
+      {Array.from(threads.entries()).map(([threadId, threadMessages]) => (
+        <li key={threadId} className="py-3">
+          {threadMessages.length > 1 ? (
+            <details open>
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+                {threadMessages[0].subject} · {threadMessages.length} messages in conversation
+              </summary>
+              <div className="mt-2 divide-y divide-slate-100 pl-2">
+                {threadMessages.map((message) => (
+                  <MailboxMessageRow key={message.id} message={message} onReply={onReply} onForward={onForward} onSetRead={onSetRead} onTrash={onTrash} onLoadDetails={onLoadDetails} />
+                ))}
+              </div>
+            </details>
+          ) : (
+            <MailboxMessageRow message={threadMessages[0]} onReply={onReply} onForward={onForward} onSetRead={onSetRead} onTrash={onTrash} onLoadDetails={onLoadDetails} />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+interface MailboxMessageRowProps extends Omit<MailboxThreadListProps, 'messages'> {
+  message: InboxMessage;
+}
+
+const MailboxMessageRow: React.FC<MailboxMessageRowProps> = ({ message, onReply, onForward, onSetRead, onTrash, onLoadDetails }) => (
+  <div className="py-2">
+    <p className={`truncate text-sm ${message.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{message.subject}</p>
+    <p className="mt-1 truncate text-xs text-slate-600">{message.from}</p>
+    <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs text-slate-500">{message.date} {message.unread ? '· Unread' : ''}</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onReply(message)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Reply</button>
+        <button type="button" onClick={() => onForward(message)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Forward</button>
+        <button type="button" onClick={() => onSetRead(message, message.unread)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{message.unread ? 'Mark read' : 'Mark unread'}</button>
+        <button type="button" onClick={() => onTrash(message)} className="rounded-md border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
+      </div>
+    </div>
+    {message.body && (
+      <details className="mt-2 text-xs text-slate-600">
+        <summary className="cursor-pointer font-medium" onClick={() => { if (message.unread) onSetRead(message, true); }}>Read message preview</summary>
+        <p className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3">{message.body}</p>
+      </details>
+    )}
+    <MessageAttachmentActions message={message} onLoad={() => onLoadDetails(message)} />
+  </div>
+);
+
+const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
+  searchInput,
+  page,
+  total,
+  disabled,
+  onSearchChange,
+  onSearch,
+  onPageChange,
+}) => {
+  const pageCount = Math.max(1, Math.ceil(total / 20));
+  return (
+    <div className="mb-4 space-y-3">
+      <form onSubmit={onSearch} className="flex flex-wrap gap-2">
+        <label htmlFor="mailbox-search" className="sr-only">Search Hostinger mailbox messages</label>
+        <input
+          id="mailbox-search"
+          value={searchInput}
+          maxLength={128}
+          disabled={disabled}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="Search this Hostinger folder"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+        />
+        <button type="submit" disabled={disabled} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Search</button>
+      </form>
+      <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+        <span>{total} messages · Page {Math.min(page, pageCount)} of {pageCount}</span>
+        <div className="flex gap-2">
+          <button type="button" disabled={disabled || page <= 1} onClick={() => onPageChange(page - 1)} className="rounded-md border border-slate-300 px-2.5 py-1.5 font-semibold text-slate-700 disabled:opacity-40">Previous</button>
+          <button type="button" disabled={disabled || page >= pageCount} onClick={() => onPageChange(page + 1)} className="rounded-md border border-slate-300 px-2.5 py-1.5 font-semibold text-slate-700 disabled:opacity-40">Next</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const DraftFolder: React.FC<DraftFolderProps> = ({ drafts, onOpen, onTrash }) => (
   <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -1053,9 +1594,11 @@ interface MailTrashFolderProps {
   folderAvailable: boolean;
   onRestore: (message: InboxMessage) => void;
   onDelete: (message: InboxMessage) => void;
+  onSetSeen: (message: InboxMessage, seen: boolean) => void;
+  onLoadDetails: (message: InboxMessage) => void;
 }
 
-const MailTrashFolder: React.FC<MailTrashFolderProps> = ({ messages, folderAvailable, onRestore, onDelete }) => (
+const MailTrashFolder: React.FC<MailTrashFolderProps> = ({ messages, folderAvailable, onRestore, onDelete, onSetSeen, onLoadDetails }) => (
   <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
     <h2 className="font-semibold text-slate-950">Hostinger mailbox Trash</h2>
     {!folderAvailable ? (
@@ -1069,6 +1612,8 @@ const MailTrashFolder: React.FC<MailTrashFolderProps> = ({ messages, folderAvail
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-slate-900">{message.subject}</p>
               <p className="mt-1 truncate text-xs text-slate-600">{message.from} · {message.date}</p>
+              <button type="button" onClick={() => onSetSeen(message, message.unread)} className="mt-1 text-xs font-semibold text-violet-800">{message.unread ? 'Mark read' : 'Mark unread'}</button>
+              <MessageAttachmentActions message={message} onLoad={() => onLoadDetails(message)} />
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => onRestore(message)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Restore to Inbox</button>
@@ -1079,6 +1624,37 @@ const MailTrashFolder: React.FC<MailTrashFolderProps> = ({ messages, folderAvail
       </ul>
     )}
   </section>
+);
+
+interface MessageAttachmentActionsProps {
+  message: InboxMessage;
+  onLoad: () => void;
+}
+
+const MessageAttachmentActions: React.FC<MessageAttachmentActionsProps> = ({ message, onLoad }) => (
+  <div className="mt-2">
+    {!message.detailsLoaded ? (
+      <button type="button" onClick={onLoad} disabled={message.detailsLoading} className="text-xs font-semibold text-violet-800 disabled:opacity-50">
+        {message.detailsLoading ? 'Loading message…' : 'Load full message and attachments'}
+      </button>
+    ) : message.attachments?.length ? (
+      <ul className="mt-2 space-y-1">
+        {message.attachments.map((attachment, index) => (
+          <li key={`${attachment.name}-${index}`}>
+            <a
+              href={`data:application/octet-stream;base64,${attachment.content}`}
+              download={attachment.name}
+              className="text-xs font-semibold text-violet-800 underline"
+            >
+              Download {attachment.name}
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p className="text-xs text-slate-500">No attachments.</p>
+    )}
+  </div>
 );
 
 interface TrashFolderProps {

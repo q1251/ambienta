@@ -115,6 +115,10 @@ function data_ensure_schema(PDO $db): void
             body MEDIUMTEXT NOT NULL,
             status VARCHAR(16) NOT NULL DEFAULT 'Queued',
             sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            cc MEDIUMTEXT NULL,
+            bcc MEDIUMTEXT NULL,
+            thread_headers MEDIUMTEXT NULL,
+            attachments MEDIUMTEXT NULL,
             KEY email_activity_sent_at (sent_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -127,6 +131,10 @@ function data_ensure_schema(PDO $db): void
             deleted_at TIMESTAMP NULL DEFAULT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            cc MEDIUMTEXT NULL,
+            bcc MEDIUMTEXT NULL,
+            thread_headers MEDIUMTEXT NULL,
+            attachments MEDIUMTEXT NULL,
             KEY email_drafts_folder (deleted_at, updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -142,6 +150,8 @@ function data_ensure_schema(PDO $db): void
             sent_count INT UNSIGNED NOT NULL DEFAULT 0,
             failed_count INT UNSIGNED NOT NULL DEFAULT 0,
             unsubscribed_count INT UNSIGNED NOT NULL DEFAULT 0,
+            audience_filter MEDIUMTEXT NULL,
+            track_opens TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             completed_at DATETIME NULL,
@@ -157,11 +167,15 @@ function data_ensure_schema(PDO $db): void
             status VARCHAR(16) NOT NULL DEFAULT 'queued',
             unsubscribe_token_hash CHAR(64) NOT NULL,
             unsubscribe_token MEDIUMTEXT NOT NULL,
+            open_token_hash CHAR(64) NULL,
+            open_token MEDIUMTEXT NULL,
+            opened_at DATETIME NULL,
             claimed_at DATETIME NULL,
             sent_at DATETIME NULL,
             KEY email_campaign_recipients_queue (campaign_id, status, id),
             KEY email_campaign_recipients_lead (lead_id, status),
             KEY email_campaign_recipients_email (recipient_email, status),
+            KEY email_campaign_recipient_open_token (open_token_hash),
             UNIQUE KEY email_campaign_recipient_token (unsubscribe_token_hash),
             CONSTRAINT email_campaign_recipients_campaign_fk FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
@@ -169,12 +183,30 @@ function data_ensure_schema(PDO $db): void
     $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
     foreach ([
         ['email_activity', 'body', 'MEDIUMTEXT NULL'],
+        ['email_activity', 'cc', 'MEDIUMTEXT NULL'],
+        ['email_activity', 'bcc', 'MEDIUMTEXT NULL'],
+        ['email_activity', 'thread_headers', 'MEDIUMTEXT NULL'],
+        ['email_activity', 'attachments', 'MEDIUMTEXT NULL'],
+        ['email_drafts', 'cc', 'MEDIUMTEXT NULL'],
+        ['email_drafts', 'bcc', 'MEDIUMTEXT NULL'],
+        ['email_drafts', 'thread_headers', 'MEDIUMTEXT NULL'],
+        ['email_drafts', 'attachments', 'MEDIUMTEXT NULL'],
+        ['email_campaigns', 'audience_filter', 'MEDIUMTEXT NULL'],
+        ['email_campaigns', 'track_opens', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['email_campaign_recipients', 'open_token_hash', 'CHAR(64) NULL'],
+        ['email_campaign_recipients', 'open_token', 'MEDIUMTEXT NULL'],
+        ['email_campaign_recipients', 'opened_at', 'DATETIME NULL'],
     ] as [$table, $column, $definition]) {
         $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
         $columnExists->execute([$databaseName, $table, $column]);
         if ((int) $columnExists->fetchColumn() === 0) {
             $db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
         }
+    }
+    $openTokenIndex = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
+    $openTokenIndex->execute([$databaseName, 'email_campaign_recipients', 'email_campaign_recipient_open_token']);
+    if ((int) $openTokenIndex->fetchColumn() === 0) {
+        $db->exec('ALTER TABLE email_campaign_recipients ADD INDEX email_campaign_recipient_open_token (open_token_hash)');
     }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS products (
@@ -651,6 +683,62 @@ function data_mail_decrypt_content(?string $content): string
     return $decrypted;
 }
 
+function data_mail_address_list(mixed $value, string $field): array
+{
+    if ($value === null || $value === '') return [];
+    if (!is_string($value)) throw new RuntimeException('invalid_' . $field);
+    $addresses = preg_split('/[,;]+/', $value) ?: [];
+    $addresses = array_values(array_unique(array_filter(array_map(
+        static fn (string $address): string => strtolower(trim($address)),
+        $addresses
+    ), static fn (string $address): bool => $address !== '')));
+    if (count($addresses) > 10) throw new RuntimeException('too_many_' . $field);
+    foreach ($addresses as $address) {
+        if (!filter_var($address, FILTER_VALIDATE_EMAIL)) throw new RuntimeException('invalid_' . $field);
+    }
+    return $addresses;
+}
+
+function data_mail_attachments(mixed $value): array
+{
+    if ($value === null || $value === []) return [];
+    if (!is_array($value) || count($value) > 5) throw new RuntimeException('invalid_attachments');
+    $attachments = [];
+    $totalBytes = 0;
+    foreach ($value as $item) {
+        if (!is_array($item) || !is_string($item['name'] ?? null) || !is_string($item['contentType'] ?? null) || !is_string($item['content'] ?? null)) {
+            throw new RuntimeException('invalid_attachments');
+        }
+        $name = preg_replace('/[^A-Za-z0-9._ -]/', '_', basename($item['name']));
+        $contentType = preg_match('/^[A-Za-z0-9!#$&^_.+-]+\/[A-Za-z0-9!#$&^_.+-]+$/', $item['contentType']) === 1
+            ? $item['contentType'] : 'application/octet-stream';
+        $decoded = base64_decode($item['content'], true);
+        if (!is_string($name) || $name === '' || strlen($name) > 160 || !is_string($decoded)) {
+            throw new RuntimeException('invalid_attachments');
+        }
+        $totalBytes += strlen($decoded);
+        if ($totalBytes > 4 * 1024 * 1024) throw new RuntimeException('attachments_too_large');
+        $attachments[] = ['name' => $name, 'contentType' => $contentType, 'content' => base64_encode($decoded)];
+    }
+    return $attachments;
+}
+
+function data_mail_thread_headers(mixed $value): array
+{
+    if ($value === null || $value === []) return [];
+    if (!is_array($value)) throw new RuntimeException('invalid_thread_header');
+    $headers = [];
+    foreach (['In-Reply-To', 'References'] as $name) {
+        $header = $value[$name] ?? '';
+        if ($header === '') continue;
+        if (!is_string($header) || strlen($header) > 2000 || preg_match('/[\r\n\x00]/', $header) === 1) {
+            throw new RuntimeException('invalid_thread_header');
+        }
+        $headers[$name] = trim($header);
+    }
+    return $headers;
+}
+
 function data_mail_settings(): array
 {
     $path = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-settings.json';
@@ -848,31 +936,108 @@ function data_smtp_connect(array $settings)
     return $socket;
 }
 
-function data_mail_send(array $settings, string $recipient, string $subject, string $body, ?string $unsubscribeUrl = null): void
+function data_mail_send(
+    array $settings,
+    string $recipient,
+    string $subject,
+    string $body,
+    ?string $unsubscribeUrl = null,
+    array $ccRecipients = [],
+    array $bccRecipients = [],
+    array $threadHeaders = [],
+    array $attachments = [],
+    ?string $htmlBody = null
+): void
 {
+    $recipients = array_values(array_unique(array_merge([$recipient], $ccRecipients, $bccRecipients)));
     $socket = data_smtp_connect($settings);
     try {
         data_smtp_command($socket, 'MAIL FROM:<' . $settings['emailAccount'] . '>', ['250']);
-        data_smtp_command($socket, 'RCPT TO:<' . $recipient . '>', ['250', '251']);
+        foreach ($recipients as $envelopeRecipient) {
+            data_smtp_command($socket, 'RCPT TO:<' . $envelopeRecipient . '>', ['250', '251']);
+        }
         data_smtp_command($socket, 'DATA', ['354']);
         $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $encodedName = '=?UTF-8?B?' . base64_encode($settings['displayName']) . '?=';
         $headers = [
             'From: ' . $encodedName . ' <' . $settings['emailAccount'] . '>',
-            'To: <' . $recipient . '>',
+            'To: ' . implode(', ', array_map(static fn (string $address): string => '<' . $address . '>', [$recipient])),
             'Subject: ' . $encodedSubject,
             'Date: ' . date(DATE_RFC2822),
             'Message-ID: <' . bin2hex(random_bytes(16)) . '@ambienta.io>',
             'MIME-Version: 1.0',
-            'Content-Type: text/plain; charset=UTF-8',
-            'Content-Transfer-Encoding: base64',
         ];
+        if ($ccRecipients !== []) {
+            $headers[] = 'Cc: ' . implode(",\r\n ", array_map(static fn (string $address): string => '<' . $address . '>', $ccRecipients));
+        }
+        foreach (['In-Reply-To', 'References'] as $headerName) {
+            $headerValue = $threadHeaders[$headerName] ?? '';
+            if (is_string($headerValue) && $headerValue !== '') {
+                if (preg_match('/[\r\n\x00]/', $headerValue) === 1) {
+                    throw new RuntimeException('invalid_thread_header');
+                }
+                $headers[] = $headerName . ': ' . (preg_replace('/\s+/', "\r\n ", trim($headerValue)) ?? $headerValue);
+            }
+        }
         if ($unsubscribeUrl !== null) {
             $headers[] = 'List-Unsubscribe: <' . $unsubscribeUrl . '>';
             $headers[] = 'List-Unsubscribe-Post: List-Unsubscribe=One-Click';
             $body .= "\n\n---\nTo stop receiving marketing emails, unsubscribe here:\n" . $unsubscribeUrl;
+            if ($htmlBody !== null) {
+                $htmlBody .= '<p>To stop receiving marketing emails, <a href="' . htmlspecialchars($unsubscribeUrl, ENT_QUOTES, 'UTF-8') . '">unsubscribe here</a>.</p>';
+            }
         }
-        $message = implode("\r\n", $headers) . "\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n";
+        $bodyPart = '';
+        if ($htmlBody !== null) {
+            $alternativeBoundary = 'ambienta_alt_' . bin2hex(random_bytes(16));
+            $bodyPart = 'Content-Type: multipart/alternative; boundary="' . $alternativeBoundary . "\"\r\n\r\n"
+                . '--' . $alternativeBoundary . "\r\n"
+                . "Content-Type: text/plain; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($body), 76, "\r\n")
+                . '--' . $alternativeBoundary . "\r\n"
+                . "Content-Type: text/html; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($htmlBody), 76, "\r\n")
+                . '--' . $alternativeBoundary . "--\r\n";
+        } else {
+            $bodyPart = "Content-Type: text/plain; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($body), 76, "\r\n");
+        }
+        if ($attachments === [] && $htmlBody === null) {
+            $headers[] = 'Content-Type: text/plain; charset=UTF-8';
+            $headers[] = 'Content-Transfer-Encoding: base64';
+            $content = chunk_split(base64_encode($body), 76, "\r\n");
+        } elseif ($attachments === []) {
+            $boundary = 'ambienta_alt_' . bin2hex(random_bytes(16));
+            $headers[] = 'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
+            $content = '--' . $boundary . "\r\n"
+                . "Content-Type: text/plain; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($body), 76, "\r\n")
+                . '--' . $boundary . "\r\n"
+                . "Content-Type: text/html; charset=UTF-8\r\n"
+                . "Content-Transfer-Encoding: base64\r\n\r\n"
+                . chunk_split(base64_encode($htmlBody ?? ''), 76, "\r\n")
+                . '--' . $boundary . "--\r\n";
+        } else {
+            $boundary = 'ambienta_' . bin2hex(random_bytes(16));
+            $headers[] = 'Content-Type: multipart/mixed; boundary="' . $boundary . '"';
+            $parts = [
+                '--' . $boundary . "\r\n" . $bodyPart,
+            ];
+            foreach ($attachments as $attachment) {
+                $parts[] = '--' . $boundary . "\r\n"
+                    . 'Content-Type: ' . $attachment['contentType'] . '; name="' . addcslashes($attachment['name'], "\\\"") . "\"\r\n"
+                    . "Content-Transfer-Encoding: base64\r\n"
+                    . 'Content-Disposition: attachment; filename="' . addcslashes($attachment['name'], "\\\"") . "\"\r\n\r\n"
+                    . chunk_split($attachment['content'], 76, "\r\n");
+            }
+            $parts[] = '--' . $boundary . "--\r\n";
+            $content = implode('', $parts);
+        }
+        $message = implode("\r\n", $headers) . "\r\n\r\n" . $content . ".\r\n";
         data_smtp_write_all($socket, $message);
         data_smtp_read_response($socket, ['250']);
         try {
@@ -885,16 +1050,38 @@ function data_mail_send(array $settings, string $recipient, string $subject, str
     }
 }
 
-function data_campaign_recipient_snapshot(PDO $db): array
+function data_campaign_filters(mixed $value): array
 {
-    $rows = $db->query(
-        "SELECT MIN(id) AS lead_id, LOWER(TRIM(email)) AS recipient_email
-         FROM leads
-         WHERE marketing_consent = 1 AND TRIM(email) <> ''
-         GROUP BY LOWER(TRIM(email))
-         ORDER BY MIN(id)
-         LIMIT 5001"
-    )->fetchAll();
+    if ($value === null || $value === []) return ['country' => '', 'status' => '', 'source' => ''];
+    if (!is_array($value)) throw new RuntimeException('invalid_campaign_audience');
+    $filters = [];
+    foreach (['country', 'status', 'source'] as $key) {
+        $filter = $value[$key] ?? '';
+        if (!is_string($filter) || strlen($filter) > 100 || preg_match('/[\r\n\x00]/', $filter) === 1) {
+            throw new RuntimeException('invalid_campaign_audience');
+        }
+        $filters[$key] = trim($filter);
+    }
+    return $filters;
+}
+
+function data_campaign_recipient_snapshot(PDO $db, array $filters = []): array
+{
+    $where = ['marketing_consent = 1', "TRIM(email) <> ''"];
+    $parameters = [];
+    foreach (['country' => 'country', 'status' => 'status', 'source' => 'lead_source'] as $key => $column) {
+        if (($filters[$key] ?? '') !== '') {
+            $where[] = "{$column} = ?";
+            $parameters[] = $filters[$key];
+        }
+    }
+    $statement = $db->prepare(
+        'SELECT MIN(id) AS lead_id, LOWER(TRIM(email)) AS recipient_email
+         FROM leads WHERE ' . implode(' AND ', $where) . '
+         GROUP BY LOWER(TRIM(email)) ORDER BY MIN(id) LIMIT 5001'
+    );
+    $statement->execute($parameters);
+    $rows = $statement->fetchAll();
     if (count($rows) > 5000) {
         return array_slice($rows, 0, 5001);
     }
@@ -910,7 +1097,13 @@ function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $
         throw new RuntimeException('invalid_campaign_status');
     }
 
-    $recipients = data_campaign_recipient_snapshot($db);
+    $campaign = $db->prepare('SELECT audience_filter, track_opens FROM email_campaigns WHERE id = ?');
+    $campaign->execute([$campaignId]);
+    $campaignSettings = $campaign->fetch();
+    if (!is_array($campaignSettings)) throw new RuntimeException('campaign_not_found');
+    $filters = data_campaign_filters(json_decode(data_mail_decrypt_content($campaignSettings['audience_filter']), true) ?: []);
+    $trackOpens = (int) $campaignSettings['track_opens'] === 1;
+    $recipients = data_campaign_recipient_snapshot($db, $filters);
     if ($recipients === []) {
         throw new RuntimeException('campaign_audience_empty');
     }
@@ -927,11 +1120,12 @@ function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $
         }
         $db->prepare('DELETE FROM email_campaign_recipients WHERE campaign_id = ?')->execute([$campaignId]);
         $insert = $db->prepare(
-            'INSERT INTO email_campaign_recipients (campaign_id, lead_id, recipient_email, status, unsubscribe_token_hash, unsubscribe_token)
-             VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO email_campaign_recipients (campaign_id, lead_id, recipient_email, status, unsubscribe_token_hash, unsubscribe_token, open_token_hash, open_token)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
         foreach ($recipients as $recipient) {
             $token = bin2hex(random_bytes(32));
+            $openToken = $trackOpens ? bin2hex(random_bytes(32)) : null;
             $insert->execute([
                 $campaignId,
                 (int) $recipient['lead_id'],
@@ -939,6 +1133,8 @@ function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $
                 'queued',
                 hash('sha256', $token),
                 data_mail_encrypt_content($token),
+                $openToken === null ? null : hash('sha256', $openToken),
+                $openToken === null ? null : data_mail_encrypt_content($openToken),
             ]);
         }
         $db->prepare(
@@ -951,6 +1147,34 @@ function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $
     }
 
     return count($recipients);
+}
+
+function data_campaign_merge_fields(string $template, array $lead): string
+{
+    $values = [
+        '{{first_name}}' => $lead['first_name'] ?? '',
+        '{{last_name}}' => $lead['last_name'] ?? '',
+        '{{email}}' => $lead['email'] ?? '',
+        '{{country}}' => $lead['country'] ?? '',
+    ];
+    foreach ($values as $placeholder => $value) {
+        $safeValue = is_string($value) ? trim(preg_replace('/[\r\n\x00]/', ' ', $value) ?? '') : '';
+        $template = str_replace($placeholder, $safeValue, $template);
+    }
+    return $template;
+}
+
+function data_campaign_plain_text(string $message): string
+{
+    return preg_replace('/\*\*(.*?)\*\*|\*(.*?)\*/s', '$1$2', $message) ?? $message;
+}
+
+function data_campaign_html(string $message): string
+{
+    $html = htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $html = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $html) ?? $html;
+    $html = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $html) ?? $html;
+    return '<!doctype html><html><body>' . nl2br($html) . '</body></html>';
 }
 
 function data_campaign_process_batch(array $settings, int $limit = 5): array
@@ -971,9 +1195,12 @@ function data_campaign_process_batch(array $settings, int $limit = 5): array
         try {
             $statement = $db->query(
                 "SELECT r.id, r.campaign_id, r.lead_id, r.recipient_email, r.unsubscribe_token,
-                        c.subject, c.body, c.status AS campaign_status
+                        r.open_token, c.subject, c.body, c.track_opens,
+                        l.first_name, l.last_name, l.country,
+                        c.status AS campaign_status
                  FROM email_campaign_recipients r
                  INNER JOIN email_campaigns c ON c.id = r.campaign_id
+                 LEFT JOIN leads l ON l.id = r.lead_id
                  WHERE r.status = 'queued'
                    AND (c.status = 'sending' OR (c.status = 'scheduled' AND c.scheduled_at <= UTC_TIMESTAMP()))
                  ORDER BY COALESCE(c.scheduled_at, c.created_at), r.id
@@ -1012,17 +1239,41 @@ function data_campaign_process_batch(array $settings, int $limit = 5): array
 
         $token = data_mail_decrypt_content((string) $recipient['unsubscribe_token']);
         $unsubscribeUrl = 'https://ambienta.io/api/data.php?resource=email-unsubscribe&token=' . rawurlencode($token);
-        $message = data_mail_decrypt_content((string) $recipient['body']);
+        $leadFields = [
+            'first_name' => $recipient['first_name'],
+            'last_name' => $recipient['last_name'],
+            'email' => $recipient['recipient_email'],
+            'country' => $recipient['country'],
+        ];
+        $subject = data_campaign_merge_fields(data_mail_decrypt_content((string) $recipient['subject']), $leadFields);
+        $formattedMessage = data_campaign_merge_fields(data_mail_decrypt_content((string) $recipient['body']), $leadFields);
+        $message = data_campaign_plain_text($formattedMessage);
+        $openToken = data_mail_decrypt_content($recipient['open_token'] ?? null);
+        $openPixel = (int) $recipient['track_opens'] === 1 && $openToken !== ''
+            ? '<img src="https://ambienta.io/api/data.php?resource=email-open&amp;token=' . rawurlencode($openToken) . '" alt="" width="1" height="1" style="display:block;width:1px;height:1px">'
+            : '';
+        $htmlBody = substr(data_campaign_html($formattedMessage), 0, -14) . $openPixel . '</body></html>';
         $activityId = null;
         try {
             $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status) VALUES (?, ?, ?, ?)')->execute([
                 (string) $recipient['recipient_email'],
-                (string) $recipient['subject'],
+                $subject,
                 data_mail_encrypt_content($message . "\n\n---\nTo stop receiving marketing emails, unsubscribe here:\n" . $unsubscribeUrl),
                 'Queued',
             ]);
             $activityId = $db->lastInsertId();
-            data_mail_send($settings, (string) $recipient['recipient_email'], (string) $recipient['subject'], $message, $unsubscribeUrl);
+            data_mail_send(
+                $settings,
+                (string) $recipient['recipient_email'],
+                $subject,
+                $message,
+                $unsubscribeUrl,
+                [],
+                [],
+                [],
+                [],
+                $htmlBody
+            );
             $db->prepare("UPDATE email_campaign_recipients SET status = 'sent', sent_at = UTC_TIMESTAMP() WHERE id = ?")->execute([(int) $recipient['id']]);
             $db->prepare("UPDATE email_activity SET status = 'Sent' WHERE id = ?")->execute([$activityId]);
             $sent++;
@@ -1107,7 +1358,7 @@ function data_imap_command($socket, int &$commandNumber, string $command): array
         $lines[] = $line;
         if (preg_match('/\{(\d+)\+?\}\r?\n$/', $line, $matches) === 1) {
             $literalLength = (int) $matches[1];
-            if ($literalLength > 1048576) {
+            if ($literalLength > 6291456) {
                 throw new RuntimeException('imap_literal_too_large');
             }
             $literal = $literalLength === 0 ? '' : stream_get_contents($socket, $literalLength);
@@ -1242,12 +1493,17 @@ function data_imap_resolve_folder(array $folders, string $kind): ?string
     return null;
 }
 
-function data_imap_folder_messages(array $settings, string $folder, int $limit = 20): array
+function data_imap_folder_messages(array $settings, string $folder, int $page = 1, string $searchTerm = '', int $limit = 20): array
 {
     [$socket, $commandNumber] = data_imap_connect($settings);
     try {
         data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($folder));
-        $search = data_imap_command($socket, $commandNumber, 'UID SEARCH ALL');
+        $searchTerm = trim($searchTerm);
+        $search = data_imap_command(
+            $socket,
+            $commandNumber,
+            $searchTerm === '' ? 'UID SEARCH ALL' : 'UID SEARCH TEXT ' . data_imap_quote($searchTerm)
+        );
         $uidLine = '';
         foreach ($search['lines'] as $line) {
             if (preg_match('/^\* SEARCH(?:\s+(.*?))?\r?\n$/', $line, $matches) === 1) {
@@ -1257,7 +1513,8 @@ function data_imap_folder_messages(array $settings, string $folder, int $limit =
         }
         $uids = $uidLine === '' ? [] : preg_split('/\s+/', $uidLine);
         if (!is_array($uids)) $uids = [];
-        $uids = array_slice(array_reverse($uids), 0, max(1, min($limit, 50)));
+        $total = count($uids);
+        $uids = array_slice(array_reverse($uids), (max(1, $page) - 1) * $limit, max(1, min($limit, 50)));
         $messages = [];
 
         foreach ($uids as $uid) {
@@ -1265,7 +1522,7 @@ function data_imap_folder_messages(array $settings, string $folder, int $limit =
             $fetch = data_imap_command(
                 $socket,
                 $commandNumber,
-                'UID FETCH ' . $uid . ' (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE CONTENT-TYPE CONTENT-TRANSFER-ENCODING)] BODY.PEEK[TEXT]<0.8192>)'
+                'UID FETCH ' . $uid . ' (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CONTENT-TYPE CONTENT-TRANSFER-ENCODING)] BODY.PEEK[TEXT]<0.8192>)'
             );
             $header = $fetch['literals'][0] ?? '';
             $rawBody = $fetch['literals'][1] ?? '';
@@ -1297,11 +1554,125 @@ function data_imap_folder_messages(array $settings, string $folder, int $limit =
                 'date' => $fields['date'] ?? $internalDate,
                 'body' => data_imap_decode_body($contentType, $contentTransferEncoding, $rawBody),
                 'unread' => preg_match('/\bFLAGS\s+\([^)]*\\\\Seen/', $metadata) !== 1,
+                'messageId' => trim($fields['message-id'] ?? ''),
+                'inReplyTo' => trim($fields['in-reply-to'] ?? ''),
+                'references' => trim($fields['references'] ?? ''),
             ];
         }
 
         data_imap_command($socket, $commandNumber, 'LOGOUT');
-        return $messages;
+        return ['messages' => $messages, 'total' => $total];
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_imap_set_seen(array $settings, string $uid, string $folderKind, bool $seen): void
+{
+    if (!ctype_digit($uid) || !in_array($folderKind, ['inbox', 'sent', 'trash'], true)) {
+        throw new RuntimeException('imap_invalid_message_operation');
+    }
+    $folder = data_imap_resolve_folder(data_imap_folders($settings), $folderKind);
+    if ($folder === null) throw new RuntimeException('imap_mailbox_folder_unavailable');
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($folder));
+        data_imap_command(
+            $socket,
+            $commandNumber,
+            'UID STORE ' . $uid . ($seen ? ' +FLAGS.SILENT (\\Seen)' : ' -FLAGS.SILENT (\\Seen)')
+        );
+        data_imap_command($socket, $commandNumber, 'LOGOUT');
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_imap_extract_attachments(string $contentType, string $rawBody, int &$totalBytes): array
+{
+    if (preg_match('/^multipart\/[^;]+;\s*boundary="?([^";]+)"?/i', $contentType, $matches) !== 1) return [];
+    $attachments = [];
+    foreach (explode('--' . $matches[1], $rawBody) as $part) {
+        $part = ltrim($part, "\r\n");
+        if ($part === '' || str_starts_with($part, '--')) continue;
+        $sections = preg_split('/\r?\n\r?\n/', $part, 2);
+        if (!is_array($sections) || count($sections) !== 2) continue;
+        [$headerText, $partBody] = $sections;
+        $headers = [];
+        $currentHeader = '';
+        foreach (preg_split('/\r?\n/', $headerText) ?: [] as $line) {
+            if (preg_match('/^[ \t]/', $line) === 1 && $currentHeader !== '') {
+                $headers[$currentHeader] .= ' ' . trim($line);
+            } elseif (preg_match('/^([A-Za-z0-9-]+):\s*(.*)$/', $line, $headerMatch) === 1) {
+                $currentHeader = strtolower($headerMatch[1]);
+                $headers[$currentHeader] = trim($headerMatch[2]);
+            }
+        }
+        $partType = $headers['content-type'] ?? 'text/plain';
+        $partEncoding = strtolower(trim($headers['content-transfer-encoding'] ?? ''));
+        $disposition = $headers['content-disposition'] ?? '';
+        $fileName = '';
+        if (preg_match('/filename\*=(?:UTF-8\'\')?([^;\r\n]+)/i', $disposition, $fileNameMatch) === 1) {
+            $fileName = rawurldecode(trim($fileNameMatch[1], " \t\"'"));
+        } elseif (preg_match('/filename="?([^";\r\n]+)"?/i', $disposition, $fileNameMatch) === 1) {
+            $fileName = $fileNameMatch[1];
+        } elseif (preg_match('/\bname="?([^";\r\n]+)"?/i', $partType, $fileNameMatch) === 1) {
+            $fileName = $fileNameMatch[1];
+        }
+        $fileName = data_imap_decode_header(trim($fileName));
+        if ($fileName !== '') {
+            $fileName = preg_replace('/[^A-Za-z0-9._ -]/', '_', basename($fileName)) ?? '';
+            $decoded = match ($partEncoding) {
+                'base64' => base64_decode(preg_replace('/\s+/', '', $partBody) ?? '', true),
+                'quoted-printable' => quoted_printable_decode($partBody),
+                default => $partBody,
+            };
+            if (!is_string($decoded)) throw new RuntimeException('imap_attachment_decode_failed');
+            $totalBytes += strlen($decoded);
+            if ($totalBytes > 4 * 1024 * 1024) throw new RuntimeException('imap_attachments_too_large');
+            $attachments[] = [
+                'name' => $fileName,
+                'contentType' => trim(explode(';', $partType, 2)[0]),
+                'content' => base64_encode($decoded),
+            ];
+        } elseif (str_starts_with(strtolower($partType), 'multipart/')) {
+            $attachments = array_merge($attachments, data_imap_extract_attachments($partType, $partBody, $totalBytes));
+        }
+        if (count($attachments) > 10) throw new RuntimeException('imap_too_many_attachments');
+    }
+    return $attachments;
+}
+
+function data_imap_message_details(array $settings, string $uid, string $folderKind): array
+{
+    if (!ctype_digit($uid) || !in_array($folderKind, ['inbox', 'sent', 'trash'], true)) {
+        throw new RuntimeException('imap_invalid_message_operation');
+    }
+    $folder = data_imap_resolve_folder(data_imap_folders($settings), $folderKind);
+    if ($folder === null) throw new RuntimeException('imap_mailbox_folder_unavailable');
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($folder));
+        $fetch = data_imap_command(
+            $socket,
+            $commandNumber,
+            'UID FETCH ' . $uid . ' (BODY.PEEK[HEADER.FIELDS (CONTENT-TYPE CONTENT-TRANSFER-ENCODING)] BODY.PEEK[TEXT])'
+        );
+        $header = $fetch['literals'][0] ?? '';
+        $rawBody = $fetch['literals'][1] ?? '';
+        $fields = [];
+        foreach (preg_split('/\r?\n/', $header) ?: [] as $line) {
+            if (preg_match('/^([A-Za-z0-9-]+):\s*(.*)$/', $line, $fieldMatch) === 1) {
+                $fields[strtolower($fieldMatch[1])] = trim($fieldMatch[2]);
+            }
+        }
+        $contentType = $fields['content-type'] ?? 'text/plain';
+        $body = data_imap_decode_body($contentType, $fields['content-transfer-encoding'] ?? '', $rawBody);
+        $totalAttachmentBytes = 0;
+        return [
+            'body' => $body,
+            'attachments' => data_imap_extract_attachments($contentType, $rawBody, $totalAttachmentBytes),
+        ];
     } finally {
         if (is_resource($socket)) fclose($socket);
     }
@@ -1668,6 +2039,24 @@ if ($resource === 'email-unsubscribe') {
     data_respond(405, ['error' => 'method_not_allowed', 'message' => 'Use the unsubscribe confirmation form.']);
 }
 
+if ($resource === 'email-open' && $method === 'GET') {
+    $token = $_GET['token'] ?? '';
+    if (is_string($token) && preg_match('/^[a-f0-9]{64}$/', $token) === 1) {
+        try {
+            data_db()->prepare(
+                'UPDATE email_campaign_recipients SET opened_at = UTC_TIMESTAMP() WHERE open_token_hash = ? AND opened_at IS NULL'
+            )->execute([hash('sha256', $token)]);
+        } catch (Throwable $error) {
+            error_log('Ambients campaign open event could not be recorded: ' . $error->getMessage());
+        }
+    }
+    header('Content-Type: image/gif');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('X-Robots-Tag: noindex, nofollow');
+    echo base64_decode('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=');
+    exit;
+}
+
 if ($resource === 'email-campaign-process') {
     if ($method !== 'POST') {
         data_respond(405, ['error' => 'method_not_allowed', 'message' => 'The campaign worker accepts POST requests only.']);
@@ -1693,10 +2082,10 @@ if ($resource === 'email-campaign-process') {
 
 if (in_array($resource, [
     'email-settings', 'email-test', 'email-send', 'email-activity', 'email-inbox',
-    'email-message-trash', 'email-message-restore', 'email-message-purge',
+    'email-message-trash', 'email-message-restore', 'email-message-purge', 'email-message-seen', 'email-message-details',
     'email-drafts', 'email-draft', 'email-draft-trash', 'email-draft-restore',
     'email-draft-purge', 'email-draft-remove', 'email-campaigns',
-    'email-campaign-audience', 'email-campaign-save', 'email-campaign-launch',
+    'email-campaign-audience', 'email-campaign-save', 'email-campaign-test-send', 'email-campaign-launch',
     'email-campaign-schedule', 'email-campaign-cancel', 'email-campaign-worker-token',
 ], true)) {
     if ($method === 'GET' && $resource === 'email-settings') {
@@ -1777,15 +2166,71 @@ if (in_array($resource, [
         if (!is_string($folderKind) || !in_array($folderKind, ['inbox', 'sent', 'trash'], true)) {
             data_respond(400, ['error' => 'invalid_mail_folder', 'message' => 'The requested mailbox folder is invalid.']);
         }
+        $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
+        $searchTerm = $_GET['search'] ?? '';
+        if ($page === false || $page < 1 || $page > 100000 || !is_string($searchTerm) || strlen($searchTerm) > 128 || preg_match('/[\r\n\x00]/', $searchTerm) === 1) {
+            data_respond(400, ['error' => 'invalid_mail_query', 'message' => 'The mailbox search or page number is invalid.']);
+        }
         try {
             $folders = data_imap_folders($settings);
             $folder = data_imap_resolve_folder($folders, $folderKind);
-            $mailboxMessages = $folder === null ? [] : data_imap_folder_messages($settings, $folder);
-            data_respond(200, ['mailboxMessages' => $mailboxMessages, 'folderAvailable' => $folder !== null]);
+            $result = $folder === null ? ['messages' => [], 'total' => 0] : data_imap_folder_messages($settings, $folder, $page, $searchTerm);
+            data_respond(200, [
+                'mailboxMessages' => $result['messages'],
+                'total' => $result['total'],
+                'page' => $page,
+                'pageSize' => 20,
+                'folderAvailable' => $folder !== null,
+            ]);
         } catch (Throwable $error) {
             error_log('Ambients Hostinger IMAP inbox sync failed: ' . $error->getMessage());
             data_respond(502, ['error' => 'mail_inbox_unavailable', 'message' => 'The Hostinger inbox could not be synchronized. Verify the mailbox password and IMAP service.']);
         }
+    }
+
+    if ($resource === 'email-message-seen' && $method === 'POST') {
+        data_require_permission('integrations');
+        $body = data_read_json(2048);
+        $uid = $body['id'] ?? null;
+        $folder = $body['folder'] ?? null;
+        $seen = $body['seen'] ?? null;
+        if (!is_string($uid) || !ctype_digit($uid) || !is_string($folder) || !in_array($folder, ['inbox', 'sent', 'trash'], true) || !is_bool($seen)) {
+            data_respond(400, ['error' => 'invalid_message_update', 'message' => 'The mailbox message update is invalid.']);
+        }
+        $settings = data_mail_settings();
+        if ($settings === []) data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure the Hostinger mailbox before changing message status.']);
+        try {
+            data_imap_set_seen($settings, $uid, $folder, $seen);
+        } catch (Throwable $error) {
+            error_log('Ambients Hostinger message read status update failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'mail_message_update_failed', 'message' => 'The message read status could not be updated. Refresh the folder and try again.']);
+        }
+        data_respond(200, ['updated' => true]);
+    }
+
+    if ($resource === 'email-message-details' && $method === 'POST') {
+        data_require_permission('integrations');
+        $body = data_read_json(2048);
+        $uid = $body['id'] ?? null;
+        $folder = $body['folder'] ?? null;
+        if (!is_string($uid) || !ctype_digit($uid) || !is_string($folder) || !in_array($folder, ['inbox', 'sent', 'trash'], true)) {
+            data_respond(400, ['error' => 'invalid_message_id', 'message' => 'The selected mailbox message is invalid.']);
+        }
+        $settings = data_mail_settings();
+        if ($settings === []) data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure the Hostinger mailbox before opening message details.']);
+        try {
+            $details = data_imap_message_details($settings, $uid, $folder);
+        } catch (Throwable $error) {
+            error_log('Ambients Hostinger message details fetch failed: ' . $error->getMessage());
+            $message = match ($error->getMessage()) {
+                'imap_literal_too_large' => 'This message is too large to load in the CRM.',
+                'imap_attachments_too_large' => 'This message has more than 4 MB of attachments.',
+                'imap_too_many_attachments' => 'This message has more than ten attachments.',
+                default => 'The full message and its attachments could not be loaded.',
+            };
+            data_respond(502, ['error' => 'mail_message_details_failed', 'message' => $message]);
+        }
+        data_respond(200, $details);
     }
 
     if (in_array($resource, ['email-message-trash', 'email-message-restore', 'email-message-purge'], true) && in_array($method, ['POST', 'DELETE'], true)) {
@@ -1820,7 +2265,7 @@ if (in_array($resource, [
         data_require_permission('integrations');
         $deleted = $resource === 'email-draft-trash';
         $statement = data_db()->prepare(
-            'SELECT id, recipient_email, subject, body, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
+            'SELECT id, recipient_email, subject, body, cc, bcc, thread_headers, attachments, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
         );
         $statement->execute();
         $rows = $statement->fetchAll();
@@ -1829,13 +2274,17 @@ if (in_array($resource, [
             'recipientEmail' => $row['recipient_email'],
             'subject' => $row['subject'],
             'body' => data_mail_decrypt_content($row['body']),
+            'cc' => data_mail_decrypt_content($row['cc']),
+            'bcc' => data_mail_decrypt_content($row['bcc']),
+            'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
+            'attachments' => json_decode(data_mail_decrypt_content($row['attachments']), true) ?: [],
             'updatedAt' => $row['updated_at'],
         ], $rows)]);
     }
 
     if ($method === 'POST' && $resource === 'email-draft') {
         data_require_permission('integrations');
-        $body = data_read_json(32768);
+        $body = data_read_json(6 * 1024 * 1024);
         $recipient = strtolower(data_string($body, 'recipientEmail', 254, false));
         $subject = data_string($body, 'subject', 180, false);
         $draftBody = $body['body'] ?? '';
@@ -1845,12 +2294,34 @@ if (in_array($resource, [
         if ($recipient !== '' && !filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             data_respond(400, ['error' => 'invalid_recipient', 'message' => 'Enter a valid recipient email address.']);
         }
+        try {
+            $cc = data_mail_address_list($body['cc'] ?? '', 'cc');
+            $bcc = data_mail_address_list($body['bcc'] ?? '', 'bcc');
+            $attachments = data_mail_attachments($body['attachments'] ?? []);
+            $threadHeaders = data_mail_thread_headers($body['threadHeaders'] ?? []);
+        } catch (Throwable $error) {
+            $message = match ($error->getMessage()) {
+                'attachments_too_large' => 'Attachments must total 4 MB or less.',
+                'invalid_attachments' => 'Add up to five valid attachments, each with a supported file name.',
+                'too_many_cc', 'too_many_bcc' => 'Use no more than ten addresses in each CC or BCC field.',
+                'invalid_cc', 'invalid_bcc' => 'Check the email addresses in the CC and BCC fields.',
+                default => 'The reply thread metadata is invalid.',
+            };
+            data_respond(400, ['error' => 'invalid_draft', 'message' => $message]);
+        }
+        if (count($cc) + count($bcc) > 20) {
+            data_respond(400, ['error' => 'too_many_recipients', 'message' => 'Use no more than 20 total CC and BCC addresses.']);
+        }
         $db = data_db();
         $draftId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
         $encryptedBody = data_mail_encrypt_content($draftBody);
+        $encryptedCc = data_mail_encrypt_content(json_encode($cc, JSON_UNESCAPED_SLASHES) ?: '[]');
+        $encryptedBcc = data_mail_encrypt_content(json_encode($bcc, JSON_UNESCAPED_SLASHES) ?: '[]');
+        $encryptedThread = data_mail_encrypt_content(json_encode($threadHeaders, JSON_UNESCAPED_SLASHES) ?: '{}');
+        $encryptedAttachments = data_mail_encrypt_content(json_encode($attachments, JSON_UNESCAPED_SLASHES) ?: '[]');
         if ($draftId !== false && $draftId !== null && $draftId > 0) {
-            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, subject = ?, body = ? WHERE id = ? AND deleted_at IS NULL');
-            $update->execute([$recipient, $subject, $encryptedBody, $draftId]);
+            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, subject = ?, body = ?, cc = ?, bcc = ?, thread_headers = ?, attachments = ? WHERE id = ? AND deleted_at IS NULL');
+            $update->execute([$recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $draftId]);
             if ($update->rowCount() === 0) {
                 $exists = $db->prepare('SELECT id FROM email_drafts WHERE id = ? AND deleted_at IS NULL');
                 $exists->execute([$draftId]);
@@ -1859,10 +2330,15 @@ if (in_array($resource, [
                 }
             }
         } else {
-            $db->prepare('INSERT INTO email_drafts (recipient_email, subject, body) VALUES (?, ?, ?)')->execute([$recipient, $subject, $encryptedBody]);
+            $db->prepare('INSERT INTO email_drafts (recipient_email, subject, body, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)')->execute([
+                $recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments,
+            ]);
             $draftId = (int) $db->lastInsertId();
         }
-        data_respond(200, ['saved' => true, 'draft' => ['id' => (string) $draftId, 'recipientEmail' => $recipient, 'subject' => $subject, 'body' => $draftBody]]);
+        data_respond(200, ['saved' => true, 'draft' => [
+            'id' => (string) $draftId, 'recipientEmail' => $recipient, 'subject' => $subject, 'body' => $draftBody,
+            'cc' => $cc, 'bcc' => $bcc, 'threadHeaders' => $threadHeaders, 'attachments' => $attachments,
+        ]]);
     }
 
     if (in_array($resource, ['email-draft-trash', 'email-draft-restore', 'email-draft-purge', 'email-draft-remove'], true) && in_array($method, ['POST', 'DELETE'], true)) {
@@ -1893,7 +2369,7 @@ if (in_array($resource, [
 
     if ($method === 'POST' && $resource === 'email-send') {
         data_require_permission('integrations');
-        $body = data_read_json(32768);
+        $body = data_read_json(6 * 1024 * 1024);
         $recipient = strtolower(data_string($body, 'recipientEmail', 254));
         $subject = data_string($body, 'subject', 180);
         $message = $body['body'] ?? null;
@@ -1906,15 +2382,42 @@ if (in_array($resource, [
         if (preg_match('/[\r\n\x00]/', $subject) === 1 || preg_match('/\x00/', $message) === 1) {
             data_respond(400, ['error' => 'invalid_email_content', 'message' => 'The email subject or message contains unsupported characters.']);
         }
+        try {
+            $cc = data_mail_address_list($body['cc'] ?? '', 'cc');
+            $bcc = data_mail_address_list($body['bcc'] ?? '', 'bcc');
+            $attachments = data_mail_attachments($body['attachments'] ?? []);
+            $threadHeaders = data_mail_thread_headers($body['threadHeaders'] ?? []);
+        } catch (Throwable $error) {
+            $message = match ($error->getMessage()) {
+                'attachments_too_large' => 'Attachments must total 4 MB or less.',
+                'invalid_attachments' => 'Add up to five valid attachments, each with a supported file name.',
+                'too_many_cc', 'too_many_bcc' => 'Use no more than ten addresses in each CC or BCC field.',
+                'invalid_cc', 'invalid_bcc' => 'Check the email addresses in the CC and BCC fields.',
+                default => 'The reply thread metadata is invalid.',
+            };
+            data_respond(400, ['error' => 'invalid_email', 'message' => $message]);
+        }
+        if (count($cc) + count($bcc) > 20) {
+            data_respond(400, ['error' => 'too_many_recipients', 'message' => 'Use no more than 20 total CC and BCC addresses.']);
+        }
         $settings = data_mail_settings();
         if ($settings === [] || empty($settings['verified'])) {
             data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
         }
         $db = data_db();
-        $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status) VALUES (?, ?, ?, ?)')->execute([$recipient, $subject, data_mail_encrypt_content($message), 'Queued']);
+        $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
+            $recipient,
+            $subject,
+            data_mail_encrypt_content($message),
+            'Queued',
+            data_mail_encrypt_content(json_encode($cc, JSON_UNESCAPED_SLASHES) ?: '[]'),
+            data_mail_encrypt_content(json_encode($bcc, JSON_UNESCAPED_SLASHES) ?: '[]'),
+            data_mail_encrypt_content(json_encode($threadHeaders, JSON_UNESCAPED_SLASHES) ?: '{}'),
+            data_mail_encrypt_content(json_encode($attachments, JSON_UNESCAPED_SLASHES) ?: '[]'),
+        ]);
         $activityId = $db->lastInsertId();
         try {
-            data_mail_send($settings, $recipient, $subject, $message);
+            data_mail_send($settings, $recipient, $subject, $message, null, $cc, $bcc, $threadHeaders, $attachments);
         } catch (Throwable $error) {
             $settings['verified'] = false;
             try {
@@ -1946,12 +2449,15 @@ if (in_array($resource, [
 
     if ($method === 'GET' && $resource === 'email-activity') {
         data_require_permission('integrations');
-        $rows = data_db()->query('SELECT id, recipient_email, subject, body, status, sent_at FROM email_activity ORDER BY id DESC LIMIT 100')->fetchAll();
+        $rows = data_db()->query('SELECT id, recipient_email, subject, body, status, sent_at, cc, bcc, thread_headers FROM email_activity ORDER BY id DESC LIMIT 100')->fetchAll();
         data_respond(200, ['messages' => array_map(static fn (array $row): array => [
             'id' => (string) $row['id'],
             'recipientEmail' => $row['recipient_email'],
             'subject' => $row['subject'],
             'body' => data_mail_decrypt_content($row['body']),
+            'cc' => json_decode(data_mail_decrypt_content($row['cc']), true) ?: [],
+            'bcc' => json_decode(data_mail_decrypt_content($row['bcc']), true) ?: [],
+            'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
             'status' => $row['status'],
             'sentAt' => $row['sent_at'],
         ], $rows)]);
@@ -1974,14 +2480,36 @@ if (in_array($resource, [
 
     if ($method === 'GET' && $resource === 'email-campaign-audience') {
         data_require_admin('admin');
-        $recipients = data_campaign_recipient_snapshot(data_db());
-        data_respond(200, ['audienceCount' => count($recipients), 'audienceLimit' => 5000]);
+        $filters = [];
+        foreach (['country', 'status', 'source'] as $filter) {
+            $filters[$filter] = $_GET[$filter] ?? '';
+        }
+        try {
+            $filters = data_campaign_filters($filters);
+        } catch (Throwable $error) {
+            data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'The campaign audience filter is invalid.']);
+        }
+        $db = data_db();
+        $recipients = data_campaign_recipient_snapshot($db, $filters);
+        $facets = $db->query(
+            "SELECT DISTINCT country, status, lead_source
+             FROM leads WHERE marketing_consent = 1 AND TRIM(email) <> ''
+             ORDER BY country, status, lead_source"
+        )->fetchAll();
+        data_respond(200, [
+            'audienceCount' => count($recipients),
+            'audienceLimit' => 5000,
+            'countries' => array_values(array_unique(array_filter(array_column($facets, 'country'), static fn ($value): bool => is_string($value) && trim($value) !== ''))),
+            'statuses' => array_values(array_unique(array_filter(array_column($facets, 'status'), static fn ($value): bool => is_string($value) && trim($value) !== ''))),
+            'sources' => array_values(array_unique(array_filter(array_column($facets, 'lead_source'), static fn ($value): bool => is_string($value) && trim($value) !== ''))),
+        ]);
     }
 
     if ($method === 'GET' && $resource === 'email-campaigns') {
         data_require_admin('admin');
         $rows = data_db()->query(
-            'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, created_at, completed_at
+            'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, created_at, completed_at,
+                    (SELECT COUNT(*) FROM email_campaign_recipients r WHERE r.campaign_id = email_campaigns.id AND r.opened_at IS NOT NULL) AS open_count
              FROM email_campaigns ORDER BY id DESC LIMIT 100'
         )->fetchAll();
         data_respond(200, ['campaigns' => array_map(static fn (array $row): array => [
@@ -1995,6 +2523,9 @@ if (in_array($resource, [
             'sentCount' => (int) $row['sent_count'],
             'failedCount' => (int) $row['failed_count'],
             'unsubscribedCount' => (int) $row['unsubscribed_count'],
+            'openCount' => (int) $row['open_count'],
+            'audienceFilter' => data_campaign_filters(json_decode(data_mail_decrypt_content($row['audience_filter']), true) ?: []),
+            'trackOpens' => (bool) $row['track_opens'],
             'createdAt' => $row['created_at'],
             'completedAt' => $row['completed_at'],
         ], $rows)]);
@@ -2012,14 +2543,23 @@ if (in_array($resource, [
         if (preg_match('/[\r\n\x00]/', $name . $subject) === 1 || preg_match('/\x00/', $message) === 1) {
             data_respond(400, ['error' => 'invalid_campaign', 'message' => 'The campaign contains unsupported control characters.']);
         }
+        try {
+            $audienceFilter = data_campaign_filters($body['audienceFilter'] ?? []);
+        } catch (Throwable $error) {
+            data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'The campaign audience filters are invalid.']);
+        }
+        $trackOpens = $body['trackOpens'] ?? false;
+        if (!is_bool($trackOpens)) data_respond(400, ['error' => 'invalid_campaign_tracking', 'message' => 'Open tracking must be enabled or disabled.']);
         $db = data_db();
         $campaignId = $body['id'] ?? null;
         if ($campaignId === null) {
-            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status) VALUES (?, ?, ?, ?)')->execute([
+            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens) VALUES (?, ?, ?, ?, ?, ?)')->execute([
                 $name,
                 $subject,
                 data_mail_encrypt_content($message),
                 'draft',
+                data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
+                $trackOpens ? 1 : 0,
             ]);
             $campaignId = (string) $db->lastInsertId();
         } else {
@@ -2027,10 +2567,12 @@ if (in_array($resource, [
             if ($campaignId === false || $campaignId < 1) {
                 data_respond(400, ['error' => 'invalid_campaign_id', 'message' => 'The selected campaign is invalid.']);
             }
-            $db->prepare("UPDATE email_campaigns SET name = ?, subject = ?, body = ? WHERE id = ? AND status = 'draft'")->execute([
+            $db->prepare("UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ? WHERE id = ? AND status = 'draft'")->execute([
                 $name,
                 $subject,
                 data_mail_encrypt_content($message),
+                data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
+                $trackOpens ? 1 : 0,
                 $campaignId,
             ]);
             $exists = $db->prepare("SELECT COUNT(*) FROM email_campaigns WHERE id = ? AND status = 'draft'");
@@ -2040,6 +2582,43 @@ if (in_array($resource, [
             }
         }
         data_respond(200, ['saved' => true, 'campaignId' => (string) $campaignId]);
+    }
+
+    if ($method === 'POST' && $resource === 'email-campaign-test-send') {
+        data_require_admin('admin');
+        $body = data_read_json(32768);
+        $subject = $body['subject'] ?? null;
+        $message = $body['body'] ?? null;
+        if (!is_string($subject) || trim($subject) === '' || strlen($subject) > 180
+            || !is_string($message) || trim($message) === '' || strlen($message) > 20000
+            || preg_match('/[\r\n\x00]/', $subject) === 1 || preg_match('/\x00/', $message) === 1) {
+            data_respond(400, ['error' => 'invalid_campaign', 'message' => 'Enter a valid subject and message before sending a test.']);
+        }
+        $settings = data_mail_settings();
+        if ($settings === [] || empty($settings['verified'])) {
+            data_respond(409, ['error' => 'mail_not_verified', 'message' => 'Verify Hostinger SMTP and IMAP before sending a test email.']);
+        }
+        $sample = ['first_name' => 'Alex', 'last_name' => 'Morgan', 'email' => $settings['emailAccount'], 'country' => 'South Africa'];
+        try {
+            $renderedSubject = data_campaign_merge_fields($subject, $sample);
+            $formattedMessage = data_campaign_merge_fields($message, $sample);
+            data_mail_send(
+                $settings,
+                $settings['emailAccount'],
+                $renderedSubject,
+                data_campaign_plain_text($formattedMessage),
+                null,
+                [],
+                [],
+                [],
+                [],
+                data_campaign_html($formattedMessage)
+            );
+        } catch (Throwable $error) {
+            error_log('Ambients email campaign test send failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'campaign_test_failed', 'message' => 'The test email was not accepted by Hostinger. Check the mailbox connection and try again.']);
+        }
+        data_respond(200, ['sent' => true, 'recipient' => $settings['emailAccount'], 'message' => 'Hostinger accepted the test email for sending.']);
     }
 
     if (in_array($resource, ['email-campaign-launch', 'email-campaign-schedule', 'email-campaign-cancel'], true) && $method === 'POST') {
