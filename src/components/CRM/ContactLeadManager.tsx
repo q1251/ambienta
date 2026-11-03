@@ -521,7 +521,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-slate-700">Pipeline stage
+                  <label className="block text-sm font-medium text-slate-700">Status
                     <select
                       disabled={profileSaving || !onUpdateLead}
                       value={profile.lead.status}
