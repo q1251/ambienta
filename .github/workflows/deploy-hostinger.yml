@@ -36,6 +36,22 @@ jobs:
       - name: Build site
         run: npm run build
 
+      - name: Prepare private admin configuration
+        run: node scripts/write-admin-config.mjs
+        env:
+          ADMIN_EMAIL: afosterofficial@gmail.com
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+
+      - name: Deploy private admin configuration over FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.HOSTINGER_HOST }}
+          username: ${{ secrets.HOSTINGER_USERNAME }}
+          password: ${{ secrets.HOSTINGER_PASSWORD }}
+          protocol: ftps
+          server-dir: /domains/ambienta.io/private/
+          local-dir: ./private-deploy/
+
       - name: Deploy to Hostinger over FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:

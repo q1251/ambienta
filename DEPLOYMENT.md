@@ -29,31 +29,19 @@ login, expires idle sessions after eight hours, and rate-limits failed login
 attempts. Do not put an administrator password or its hash in this repository,
 the public web root, or GitHub Actions variables.
 
-Before using `/admin` on Hostinger:
+Before using `/admin` on Hostinger, set the GitHub Actions secret
+`ADMIN_PASSWORD_HASH`. On a trusted computer with Node.js and PHP installed,
+run `node scripts/create-admin-hash.mjs` in an interactive terminal and enter
+a unique password of at least 12 characters. The script does not echo the
+password. Add its generated hash as the repository Actions secret
+`ADMIN_PASSWORD_HASH`; never add the password or hash to source code or a
+workflow variable. The deployment workflow installs the config at
+`/domains/ambienta.io/private/admin-auth.php`, outside `public_html`.
 
-1. Confirm the hosting plan has PHP 8.1+ enabled and HTTPS is active for
-   `ambienta.io`.
-2. In Hostinger File Manager, create the directory
-   `/domains/ambienta.io/private/`, alongside `public_html` and outside the
-   public web root.
-3. On a trusted computer with Node.js and PHP installed, run
-   `node scripts/create-admin-hash.mjs` in an interactive terminal. Enter a
-   unique password of at least 12 characters. The script does not echo the
-   password; copy the resulting hash.
-4. Create `/domains/ambienta.io/private/admin-auth.php` with the following
-   contents, replacing the hash with the value from the previous step:
-
-   ```php
-   <?php
-   return [
-       'admin_email' => 'afosterofficial@gmail.com',
-       'password_hash' => 'PASTE_THE_GENERATED_HASH_HERE',
-   ];
-   ```
-
-5. Restrict the config file to the hosting account owner (for example, file
-   mode `600` if Hostinger exposes Unix permissions), then open
-   `https://ambienta.io/admin` and sign in.
+The configured administrator email is `afosterofficial@gmail.com`. Confirm
+that Hostinger PHP 8.1+ and HTTPS are active, then push to `main` or run the
+deployment workflow manually. After the private-config deployment succeeds,
+open `https://ambienta.io/admin` and sign in.
 
 The login is intentionally unavailable until this private server-side config
 exists. If the deployment is served without PHP, the API will not run and the
