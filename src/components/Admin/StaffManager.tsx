@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, KeyRound, LogIn, Mail, UserPlus, Users, UserX, X } from 'lucide-react';
+import { ArrowLeft, CalendarDays, KeyRound, LogIn, UserPlus, Users, UserX } from 'lucide-react';
 
 const availablePermissions = [
   { id: 'leads', label: 'Leads' },
@@ -53,6 +53,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [permissions, setPermissions] = useState<StaffPermission[]>(defaultPermissions);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [profileAccountId, setProfileAccountId] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<AgentProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
@@ -165,6 +166,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       setMessage(successMessage);
       setEditingId(null);
       await loadAccounts();
+      if (profileAccountId === account.id) await openProfile(account);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'The agent account could not be updated.');
     } finally {
@@ -210,6 +212,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   };
 
   const openProfile = async (account: StaffAccount) => {
+    setProfileAccountId(account.id);
     setSelectedProfile(null);
     setProfileError('');
     setProfileLoading(true);
@@ -242,12 +245,14 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Access control</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Agent management</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">Create accounts, grant operational access, assign leads from the Leads table, reset credentials, and securely enter an agent workspace.</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{profileAccountId === null ? 'Agent management' : 'Agent profile'}</h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">{profileAccountId === null ? 'Create accounts and select an agent to view their profile, manage access, update credentials, or enter their workspace.' : 'Review and manage this agent’s account, permissions, credentials, and assigned leads.'}</p>
         </div>
-        <button type="button" disabled={saving} onClick={() => void createDemoAgents()} className="rounded-xl border border-teal-800 px-4 py-2.5 text-sm font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-50">
-          {saving ? 'Working…' : 'Create five demo agents'}
-        </button>
+        {profileAccountId === null && (
+          <button type="button" disabled={saving} onClick={() => void createDemoAgents()} className="rounded-xl border border-teal-800 px-4 py-2.5 text-sm font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-50">
+            {saving ? 'Working…' : 'Create five demo agents'}
+          </button>
+        )}
       </header>
 
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
@@ -269,6 +274,97 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </section>
       )}
 
+      {profileAccountId !== null ? (
+        <section className="space-y-6">
+          <button type="button" onClick={() => { setProfileAccountId(null); setSelectedProfile(null); setProfileError(''); setEditingId(null); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowLeft className="h-4 w-4" />Back to agents
+          </button>
+          {profileLoading && <p role="status" className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">Loading agent profile…</p>}
+          {profileError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{profileError}</p>}
+          {selectedProfile && (
+            <>
+              <header className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent profile</p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{selectedProfile.display_name || selectedProfile.email}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{selectedProfile.email} · {selectedProfile.is_active ? 'Active' : 'Inactive'} agent</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProfile.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(selectedProfile)} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-4 w-4" />Enter account</button>}
+                  <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { resetPassword: true }, 'A new one-time password was generated.')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><KeyRound className="h-4 w-4" />Reset password</button>
+                  <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { isActive: !selectedProfile.is_active }, `Agent ${selectedProfile.is_active ? 'deactivated' : 'activated'}.`)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><UserX className="h-4 w-4" />{selectedProfile.is_active ? 'Deactivate' : 'Activate'}</button>
+                </div>
+              </header>
+
+              {editingId === selectedProfile.id ? (
+                <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+                  <h3 className="font-semibold text-slate-900">Edit agent account</h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700">Display name<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
+                    <label className="text-sm font-medium text-slate-700">Sign-in email<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} maxLength={254} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" /></label>
+                  </div>
+                  <fieldset>
+                    <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
+                    <div className="mt-2 flex flex-wrap gap-4">
+                      {availablePermissions.map((permission) => (
+                        <label key={permission.id} className="inline-flex items-center gap-2 text-sm text-slate-700">
+                          <input type="checkbox" checked={editPermissions.includes(permission.id)} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} />
+                          {permission.label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <div className="flex gap-2">
+                    <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { displayName: editName, email: editEmail, permissions: editPermissions }, 'Agent account details and permissions updated.')} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Save changes'}</button>
+                    <button type="button" disabled={saving} onClick={() => setEditingId(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                  </div>
+                </section>
+              ) : (
+                <>
+                  <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+                    <div>
+                      <h3 className="font-semibold text-slate-900">Account details & access</h3>
+                      <p className="mt-1 text-sm text-slate-600">Edit the agent’s name, sign-in email, and section permissions.</p>
+                    </div>
+                    <button type="button" onClick={() => startEditing(selectedProfile)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Edit profile</button>
+                    <div className="w-full border-t border-slate-100 pt-4">
+                      <div className="flex flex-wrap gap-2">
+                        {selectedProfile.permissions.map((permission) => <span key={permission} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium capitalize text-teal-900">{permission}</span>)}
+                        {!selectedProfile.permissions.length && <span className="text-sm text-slate-500">No operational permissions</span>}
+                      </div>
+                    </div>
+                  </section>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <h3 className="font-semibold text-slate-900">Account history</h3>
+                      <p className="mt-3 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-teal-800" />Created {new Date(selectedProfile.created_at).toLocaleString()}</p>
+                      <p className="mt-2 text-sm text-slate-600">Created by {selectedProfile.created_by}</p>
+                      <p className="mt-1 text-sm text-slate-600">Last updated {new Date(selectedProfile.updated_at).toLocaleString()}</p>
+                    </section>
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="font-semibold text-slate-900">Assigned leads</h3>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.assignedLeads.length}</span>
+                      </div>
+                      {selectedProfile.assignedLeads.length ? (
+                        <div className="mt-3 max-h-64 overflow-auto divide-y divide-slate-100">
+                          {selectedProfile.assignedLeads.map((lead) => (
+                            <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                              <div><p className="text-sm font-medium text-slate-900">{lead.firstName} {lead.lastName}</p><p className="text-xs text-slate-500">{lead.email}</p></div>
+                              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{lead.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No leads assigned yet. Assign leads from Contact Leads.</p>}
+                    </section>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </section>
+      ) : (
+      <>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="mb-4 flex items-center gap-2">
           <UserPlus className="h-5 w-5 text-teal-800" />
@@ -307,27 +403,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </div>
         <div className="divide-y divide-slate-100">
           {accounts.map((account) => (
-            <div key={account.id} className="px-5 py-4">
-              {editingId === account.id ? (
-                <div className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="text-sm font-medium text-slate-700">Display name<input value={editName} onChange={(event) => setEditName(event.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
-                    <label className="text-sm font-medium text-slate-700">Email<input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} maxLength={254} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
-                  </div>
-                  <div className="flex flex-wrap gap-4">
-                    {availablePermissions.map((permission) => (
-                      <label key={permission.id} className="inline-flex items-center gap-2 text-sm text-slate-700">
-                        <input type="checkbox" checked={editPermissions.includes(permission.id)} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} />
-                        {permission.label}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" disabled={saving} onClick={() => void updateAccount(account, { displayName: editName, email: editEmail, permissions: editPermissions }, 'Agent account details and permissions updated.')} className="rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Save changes</button>
-                    <button type="button" onClick={() => setEditingId(null)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Cancel</button>
-                  </div>
-                </div>
-              ) : (
+            <div key={account.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="min-w-[220px] flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -342,83 +418,15 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="button" onClick={() => void openProfile(account)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">View profile</button>
-                    {account.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-3.5 w-3.5" />Enter account</button>}
-                    <button type="button" disabled={saving} onClick={() => startEditing(account)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
-                    <button type="button" disabled={saving} onClick={() => void updateAccount(account, { resetPassword: true }, 'A new one-time password was generated.')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><KeyRound className="h-3.5 w-3.5" />Reset password</button>
-                    <button type="button" disabled={saving} onClick={() => void updateAccount(account, { isActive: !account.is_active }, `${account.email} ${account.is_active ? 'deactivated' : 'activated'}.`)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><UserX className="h-3.5 w-3.5" />{account.is_active ? 'Deactivate' : 'Activate'}</button>
                   </div>
                 </div>
-              )}
             </div>
           ))}
           {!loading && accounts.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">No agent accounts yet.</p>}
           {loading && <p className="px-5 py-10 text-center text-sm text-slate-500">Loading agent accounts…</p>}
         </div>
       </section>
-
-      {(profileLoading || profileError || selectedProfile) && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="agent-profile-title">
-          <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-slate-200 p-5 sm:p-6">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent account</p>
-                <h2 id="agent-profile-title" className="mt-1 text-xl font-semibold text-slate-950">
-                  {selectedProfile ? `${selectedProfile.display_name || selectedProfile.email} profile` : 'Agent profile'}
-                </h2>
-              </div>
-              <button type="button" onClick={() => { setSelectedProfile(null); setProfileError(''); }} aria-label="Close agent profile" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
-            </div>
-            {profileLoading && <p role="status" className="p-8 text-center text-sm text-slate-600">Loading agent profile…</p>}
-            {profileError && <p role="alert" className="m-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{profileError}</p>}
-            {selectedProfile && (
-              <div className="space-y-5 p-5 sm:p-6">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Contact & account</p>
-                    <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-900"><Mail className="h-4 w-4 text-teal-800" />{selectedProfile.email}</p>
-                    <p className="mt-2 text-sm text-slate-600">Status: {selectedProfile.is_active ? 'Active' : 'Inactive'}</p>
-                    <p className="mt-1 text-sm text-slate-600">Role: Agent</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Account history</p>
-                    <p className="mt-2 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-teal-800" />Created {new Date(selectedProfile.created_at).toLocaleString()}</p>
-                    <p className="mt-2 text-sm text-slate-600">Created by {selectedProfile.created_by}</p>
-                    <p className="mt-1 text-sm text-slate-600">Last updated {new Date(selectedProfile.updated_at).toLocaleString()}</p>
-                  </div>
-                </div>
-                <section>
-                  <h3 className="text-sm font-semibold text-slate-900">Permissions</h3>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedProfile.permissions.map((permission) => <span key={permission} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium capitalize text-teal-900">{permission}</span>)}
-                    {!selectedProfile.permissions.length && <span className="text-sm text-slate-500">No operational permissions</span>}
-                  </div>
-                </section>
-                <section>
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-slate-900">Assigned leads</h3>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.assignedLeads.length}</span>
-                  </div>
-                  {selectedProfile.assignedLeads.length ? (
-                    <div className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200">
-                      {selectedProfile.assignedLeads.map((lead) => (
-                        <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 last:border-0">
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{lead.firstName} {lead.lastName}</p>
-                            <p className="text-xs text-slate-500">{lead.email}</p>
-                          </div>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{lead.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p className="mt-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No leads are assigned to this agent yet. Assign leads from the Contact Leads page.</p>}
-                </section>
-                <div className="flex justify-end border-t border-slate-100 pt-4">
-                  <button type="button" onClick={() => { setSelectedProfile(null); setProfileError(''); }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Close profile</button>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
+      </>
       )}
     </div>
   );
