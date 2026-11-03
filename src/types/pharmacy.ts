@@ -245,6 +245,7 @@ export interface CatalogItem {
   sku: string;
   ndcCode?: string;
   image?: string;
+  images?: string[];
   lastRestocked?: string;
   isActive?: boolean;
   isFeatured?: boolean;

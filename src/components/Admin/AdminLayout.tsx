@@ -56,6 +56,7 @@ interface AdminLayoutProps {
   onAddCategory: (name: string) => Promise<string>;
   onBulkAddProducts: (products: ProductCsvItem[]) => Promise<CatalogItem[]>;
   onAddProduct: (item: CatalogItem) => Promise<CatalogItem>;
+  onUploadProductImages: (files: File[]) => Promise<string[]>;
   onUpdateProduct: (item: CatalogItem) => Promise<CatalogItem>;
   onDeleteProduct: (productId: string) => Promise<void>;
   onBulkPriceAdjust: (category: string, percentChange: number) => Promise<void>;
@@ -200,7 +201,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             />
           )}
           {activeTab === 'inventory' && (
-            <InventoryManager categories={props.categories} catalogItems={props.catalogItems} catalogError={props.catalogError} onAddCategory={props.onAddCategory} onBulkAddProducts={props.onBulkAddProducts} onAddProduct={props.onAddProduct} onUpdateProduct={props.onUpdateProduct} onDeleteProduct={props.onDeleteProduct} onBulkPriceAdjust={props.onBulkPriceAdjust} />
+            <InventoryManager categories={props.categories} catalogItems={props.catalogItems} catalogError={props.catalogError} onAddCategory={props.onAddCategory} onBulkAddProducts={props.onBulkAddProducts} onAddProduct={props.onAddProduct} onUploadProductImages={props.onUploadProductImages} onUpdateProduct={props.onUpdateProduct} onDeleteProduct={props.onDeleteProduct} onBulkPriceAdjust={props.onBulkPriceAdjust} />
           )}
           {activeTab === 'leads' && (
             <Suspense fallback={<p role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">Loading contact leads…</p>}>

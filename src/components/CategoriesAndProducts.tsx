@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Sparkles, AlertCircle, ShoppingCart, Star, CheckCircle, Moon, Flame, Zap, Heart, ShieldCheck } from 'lucide-react';
+import { Search, Sparkles, AlertCircle, ShoppingCart, Star, CheckCircle, Moon, Flame, Zap, Heart, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CatalogItem, StoreCategory } from '../types/pharmacy';
 
 interface CategoriesAndProductsProps {
@@ -21,6 +21,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
   searchQuery,
   setSearchQuery,
 }) => {
+  const [imageIndexes, setImageIndexes] = React.useState<Record<string, number>>({});
   const storeCategories: (StoreCategory | 'All Products')[] = ['All Products', ...categories];
   const filteredItems = catalogItems.filter((item) => {
     const matchesCategory =
@@ -118,6 +119,9 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
           {filteredItems.map((item) => {
             const isOutOfStock = !item.inStock || item.stockCount <= 0;
             const isLowStock = item.stockCount <= item.minStockThreshold && !isOutOfStock;
+            const images = item.images?.length ? item.images : item.image ? [item.image] : [];
+            const imageIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
+            const selectedImage = images[imageIndex];
 
             return (
               <div
@@ -127,9 +131,9 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                 <div>
                   {/* Product Image */}
                   <div className="relative aspect-[4/3] w-full overflow-hidden border-b border-blue-50 bg-[#edf4fb]">
-                    {item.image ? (
+                    {selectedImage ? (
                       <img
-                        src={item.image}
+                        src={selectedImage}
                         alt={item.name}
                         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                         referrerPolicy="no-referrer"
@@ -138,6 +142,48 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                       <div className="flex h-full w-full items-center justify-center bg-[#e8f2fb] text-blue-800">
                         {getCategoryIcon(item.category)}
                       </div>
+                    )}
+
+                    {images.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label={`Previous ${item.name} image`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setImageIndexes((current) => ({ ...current, [item.id]: (imageIndex - 1 + images.length) % images.length }));
+                          }}
+                          className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm transition hover:bg-white"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Next ${item.name} image`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setImageIndexes((current) => ({ ...current, [item.id]: (imageIndex + 1) % images.length }));
+                          }}
+                          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm transition hover:bg-white"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-slate-950/30 px-2 py-1">
+                          {images.map((image, index) => (
+                            <button
+                              key={`${image}-${index}`}
+                              type="button"
+                              aria-label={`Show ${item.name} image ${index + 1}`}
+                              aria-pressed={index === imageIndex}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setImageIndexes((current) => ({ ...current, [item.id]: index }));
+                              }}
+                              className={`h-1.5 w-1.5 rounded-full transition ${index === imageIndex ? 'bg-white' : 'bg-white/55 hover:bg-white/80'}`}
+                            />
+                          ))}
+                        </div>
+                      </>
                     )}
 
                     {/* Stock Overlay */}

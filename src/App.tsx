@@ -29,6 +29,21 @@ import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChang
 import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
 import type { ProductCsvItem } from './utils/productCsv';
 
+const mergeCatalogItem = (item: CatalogItem, seededItem?: CatalogItem): CatalogItem => {
+  const images = item.images ?? (item.image ? [item.image] : seededItem?.image ? [seededItem.image] : []);
+  const image = item.image || images[0];
+  return {
+    ...seededItem,
+    ...item,
+    ndcCode: item.ndcCode || undefined,
+    image,
+    images,
+    costPrice: item.costPrice ?? seededItem?.costPrice,
+    copayPrice: item.copayPrice ?? seededItem?.copayPrice,
+    lastRestocked: item.lastRestocked || undefined,
+  };
+};
+
 export default function App() {
   // Current route state: inspect window.location.pathname
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -76,15 +91,7 @@ export default function App() {
         }
         if (active) {
           const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
-          setCatalogItems(result.products.map((item) => ({
-            ...seededById.get(item.id),
-            ...item,
-            ndcCode: item.ndcCode || undefined,
-            image: item.image || seededById.get(item.id)?.image,
-            costPrice: item.costPrice ?? seededById.get(item.id)?.costPrice,
-            copayPrice: item.copayPrice ?? seededById.get(item.id)?.copayPrice,
-            lastRestocked: item.lastRestocked || undefined,
-          })));
+          setCatalogItems(result.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
           setCategories(result.categories);
           setCatalogError('');
         }
@@ -196,15 +203,7 @@ export default function App() {
         if (isCurrent) {
           setLeads(leadsResult.leads);
           const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
-          setCatalogItems(productsResult.products.map((item) => ({
-            ...seededById.get(item.id),
-            ...item,
-            ndcCode: item.ndcCode || undefined,
-            image: item.image || seededById.get(item.id)?.image,
-            costPrice: item.costPrice ?? seededById.get(item.id)?.costPrice,
-            copayPrice: item.copayPrice ?? seededById.get(item.id)?.copayPrice,
-            lastRestocked: item.lastRestocked || undefined,
-          })));
+          setCatalogItems(productsResult.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
         }
       } catch (error) {
         if (!isCurrent) return;
@@ -421,6 +420,22 @@ export default function App() {
     return savedProduct;
   };
 
+  const handleUploadProductImages = async (files: File[]): Promise<string[]> => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('images[]', file));
+    const response = await fetch('/api/data.php?resource=product-images', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      body: formData,
+    });
+    const result = await response.json() as { images?: string[]; message?: string };
+    if (!response.ok || !Array.isArray(result.images) || result.images.some((image) => typeof image !== 'string')) {
+      throw new Error(result.message || 'Product images could not be uploaded.');
+    }
+    return result.images;
+  };
+
   const handleBulkAddProducts = async (products: ProductCsvItem[]): Promise<CatalogItem[]> => {
     const now = new Date().toISOString().slice(0, 10);
     const payload = products.map((product) => ({
@@ -480,7 +495,12 @@ export default function App() {
     }
     const savedProduct = result.product;
     setCatalogItems((prev) => prev.map((item) => item.id === updatedProduct.id
-      ? { ...item, ...savedProduct, image: savedProduct.image || item.image }
+      ? {
+          ...item,
+          ...savedProduct,
+          image: savedProduct.image || undefined,
+          images: savedProduct.images ?? (savedProduct.image ? [savedProduct.image] : []),
+        }
       : item));
     return savedProduct;
   };
@@ -700,6 +720,7 @@ export default function App() {
         onAddCategory={handleAddCategory}
         onBulkAddProducts={handleBulkAddProducts}
         onAddProduct={handleAddProduct}
+        onUploadProductImages={handleUploadProductImages}
         onUpdateProduct={handleUpdateProduct}
         onDeleteProduct={handleDeleteProduct}
         onBulkPriceAdjust={handleBulkPriceAdjust}

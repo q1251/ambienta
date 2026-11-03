@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Package,
   Plus,
@@ -19,6 +19,8 @@ import {
   Eye,
   EyeOff,
   Star,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { CatalogItem } from '../../types/pharmacy';
 import { generateProductTemplateCsv, parseProductsCsv } from '../../utils/productCsv';
@@ -31,10 +33,19 @@ interface InventoryManagerProps {
   onAddCategory: (name: string) => Promise<string>;
   onBulkAddProducts: (products: ProductCsvItem[]) => Promise<CatalogItem[]>;
   onAddProduct: (item: CatalogItem) => Promise<CatalogItem>;
+  onUploadProductImages: (files: File[]) => Promise<string[]>;
   onUpdateProduct: (item: CatalogItem) => Promise<CatalogItem>;
   onDeleteProduct: (productId: string) => Promise<void>;
   onBulkPriceAdjust: (category: string, percentChange: number) => Promise<void>;
 }
+
+interface PendingProductImage {
+  file: File;
+  previewUrl: string;
+}
+
+const getProductImages = (item: CatalogItem): string[] =>
+  item.images?.length ? item.images : item.image ? [item.image] : [];
 
 export const InventoryManager: React.FC<InventoryManagerProps> = ({
   catalogItems,
@@ -43,6 +54,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   onAddCategory,
   onBulkAddProducts,
   onAddProduct,
+  onUploadProductImages,
   onUpdateProduct,
   onDeleteProduct,
   onBulkPriceAdjust,
@@ -55,6 +67,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [previewItem, setPreviewItem] = useState<CatalogItem | null>(null);
+  const [previewImageIndex, setPreviewImageIndex] = useState(0);
   const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false);
   const [isProductCsvOpen, setIsProductCsvOpen] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('All');
@@ -78,14 +91,81 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [ndcCode, setNdcCode] = useState('');
   const [description, setDescription] = useState('');
   const [rxRequired, setRxRequired] = useState(false);
-  const [imageOption, setImageOption] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
   const [isPublished, setIsPublished] = useState(true);
+  const [newProductImages, setNewProductImages] = useState<PendingProductImage[]>([]);
+  const [editingProductImages, setEditingProductImages] = useState<PendingProductImage[]>([]);
+  const previewUrls = useRef(new Set<string>());
+  useEffect(() => () => {
+    previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
   const productCsvPreview = parseProductsCsv(
     productCsv,
     catalogItems.map((item) => item.sku),
     categories,
   );
+
+  const handleProductImageSelection = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    existingCount: number,
+    pending: PendingProductImage[],
+    setPending: React.Dispatch<React.SetStateAction<PendingProductImage[]>>,
+  ) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
+    const remainingSlots = Math.max(0, 10 - existingCount - pending.length);
+    if (files.length > remainingSlots) {
+      setActionError(`A product can have up to 10 images. You can add ${remainingSlots} more.`);
+      return;
+    }
+
+    const invalidFile = files.find((file) => {
+      const allowedType = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type);
+      return !allowedType || file.size > 5 * 1024 * 1024 || file.size === 0;
+    });
+    if (invalidFile) {
+      setActionError('Choose JPEG, PNG, WebP, or GIF images no larger than 5 MB each.');
+      return;
+    }
+
+    setActionError('');
+    const selectedImages = files.map((file) => {
+      const previewUrl = URL.createObjectURL(file);
+      previewUrls.current.add(previewUrl);
+      return { file, previewUrl };
+    });
+    setPending((current) => [...current, ...selectedImages]);
+  };
+
+  const removePendingProductImage = (
+    image: PendingProductImage,
+    setPending: React.Dispatch<React.SetStateAction<PendingProductImage[]>>,
+  ) => {
+    URL.revokeObjectURL(image.previewUrl);
+    previewUrls.current.delete(image.previewUrl);
+    setPending((current) => current.filter((entry) => entry.previewUrl !== image.previewUrl));
+  };
+
+  const clearPendingProductImages = (
+    pending: PendingProductImage[],
+    setPending: React.Dispatch<React.SetStateAction<PendingProductImage[]>>,
+  ) => {
+    pending.forEach((image) => {
+      URL.revokeObjectURL(image.previewUrl);
+      previewUrls.current.delete(image.previewUrl);
+    });
+    setPending([]);
+  };
+
+  const closeAddModal = () => {
+    clearPendingProductImages(newProductImages, setNewProductImages);
+    setIsAddModalOpen(false);
+  };
+
+  const closeEditModal = () => {
+    clearPendingProductImages(editingProductImages, setEditingProductImages);
+    setEditingItem(null);
+  };
 
   // Stats calculation
   const totalProducts = catalogItems.length;
@@ -184,16 +264,22 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       isActive: isPublished,
       isFeatured,
       inStock: parsedStock > 0,
-      image: imageOption || catalogItems.find((item) => item.image)?.image || '',
+      image: undefined,
+      images: [],
       lastRestocked: new Date().toISOString().slice(0, 10),
     };
 
     setActionError('');
     setIsSaving(true);
     try {
-      await onAddProduct(newItem);
+      const uploadedImages = newProductImages.length
+        ? await onUploadProductImages(newProductImages.map(({ file }) => file))
+        : [];
+      const images = uploadedImages;
+      await onAddProduct({ ...newItem, image: images[0], images });
       setNotification(`Successfully added product: ${newItem.name}`);
       setIsAddModalOpen(false);
+      clearPendingProductImages(newProductImages, setNewProductImages);
       setName('');
       setDescription('');
       setDosage('');
@@ -214,9 +300,14 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     setActionError('');
     setIsSaving(true);
     try {
-      await onUpdateProduct(editingItem);
+      const uploadedImages = editingProductImages.length
+        ? await onUploadProductImages(editingProductImages.map(({ file }) => file))
+        : [];
+      const images = [...(editingItem.images ?? []), ...uploadedImages];
+      await onUpdateProduct({ ...editingItem, image: images[0], images });
       setNotification(`Saved changes for ${editingItem.name}.`);
       setEditingItem(null);
+      clearPendingProductImages(editingProductImages, setEditingProductImages);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The product update could not be saved.');
     } finally {
@@ -292,6 +383,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  const previewImages = previewItem ? getProductImages(previewItem) : [];
+  const activePreviewImage = previewImages[Math.min(previewImageIndex, Math.max(0, previewImages.length - 1))];
 
   return (
     <div className="space-y-6">
@@ -622,7 +716,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => setPreviewItem(item)}
+                        onClick={() => {
+                          setPreviewImageIndex(0);
+                          setPreviewItem(item);
+                        }}
                         className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-800"
                         title="Preview storefront card"
                         aria-label={`Preview ${item.name} storefront card`}
@@ -632,7 +729,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => setEditingItem(item)}
+                        onClick={() => {
+                          clearPendingProductImages(editingProductImages, setEditingProductImages);
+                          setEditingItem({ ...item, images: getProductImages(item) });
+                        }}
                         className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded-md transition-colors"
                         title="Edit Price & Details"
                       >
@@ -685,14 +785,33 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             </div>
             <div className="p-5">
               <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-2xl bg-slate-100">
-                {previewItem.image ? (
-                  <img src={previewItem.image} alt={previewItem.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                {activePreviewImage ? (
+                  <img src={activePreviewImage} alt={previewItem.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-slate-400"><Package className="h-12 w-12" /></div>
+                )}
+                {previewImages.length > 1 && (
+                  <>
+                    <button type="button" aria-label="Previous preview image" onClick={() => setPreviewImageIndex((index) => (index - 1 + previewImages.length) % previewImages.length)} className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm">
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button type="button" aria-label="Next preview image" onClick={() => setPreviewImageIndex((index) => (index + 1) % previewImages.length)} className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm">
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </>
                 )}
                 {previewItem.isFeatured && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-amber-700 shadow-sm"><Star className="h-3 w-3 fill-current" /> Featured</span>}
                 {previewItem.isActive === false && <span className="absolute right-3 top-3 rounded-full bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-white">Hidden</span>}
               </div>
+              {previewImages.length > 1 && (
+                <div className="mb-4 flex gap-2 overflow-x-auto">
+                  {previewImages.map((image, index) => (
+                    <button key={`${image}-${index}`} type="button" onClick={() => setPreviewImageIndex(index)} aria-label={`Preview image ${index + 1}`} aria-pressed={index === previewImageIndex} className={`h-12 w-12 shrink-0 overflow-hidden rounded-lg border-2 ${index === previewImageIndex ? 'border-teal-700' : 'border-transparent'}`}>
+                      <img src={image} alt="" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="text-xs font-medium text-teal-800">{previewItem.category}{previewItem.rxRequired ? ' · Prescription required' : ''}</p>
               <h4 className="mt-1 text-lg font-semibold leading-snug text-slate-900">{previewItem.name}</h4>
               <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600">{previewItem.description || 'Product description will appear here.'}</p>
@@ -780,7 +899,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 <p className="text-xs text-slate-500">Create the product listing and choose its storefront placement.</p>
               </div>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={closeAddModal}
                 className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
@@ -920,22 +1039,28 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   <p className="mt-1 text-[11px] text-slate-500">Choose the image and how this product appears to customers.</p>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Product image
-                  </label>
-                  <select
-                    value={imageOption}
-                    onChange={(e) => setImageOption(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900"
-                  >
-                    <option value="">Use the default catalog image</option>
-                    {Array.from(new Map(catalogItems
-                      .filter((item): item is CatalogItem & { image: string } => Boolean(item.image))
-                      .map(({ image, name }) => [image, name] as const)))
-                      .map(([image, productName]) => (
-                        <option key={image} value={image}>{productName}</option>
+                  <label className="block font-semibold text-slate-700 mb-1">Product images</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    disabled={newProductImages.length >= 10}
+                    onChange={(event) => handleProductImageSelection(event, 0, newProductImages, setNewProductImages)}
+                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-teal-50 file:px-3 file:py-1.5 file:font-semibold file:text-teal-800"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Upload up to 10 JPEG, PNG, WebP, or GIF images; 5 MB maximum per image.</p>
+                  {newProductImages.length > 0 && (
+                    <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                      {newProductImages.map((image) => (
+                        <div key={image.previewUrl} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
+                          <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
+                          <button type="button" onClick={() => removePendingProductImage(image, setNewProductImages)} aria-label={`Remove ${image.file.name}`} className="absolute right-1 top-1 rounded-full bg-slate-950/75 p-1 text-white hover:bg-rose-700">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
                       ))}
-                  </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="sm:col-span-2">
@@ -970,7 +1095,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               <div className="pt-3 border-t border-slate-200 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={closeAddModal}
                   className="px-4 py-2 font-medium text-slate-600 hover:text-slate-800"
                 >
                   Cancel
@@ -1000,7 +1125,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 <p className="text-xs text-slate-500 font-mono">SKU: {editingItem.sku}</p>
               </div>
               <button
-                onClick={() => setEditingItem(null)}
+                onClick={closeEditModal}
                 className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
@@ -1063,18 +1188,42 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   />
                 </div>
                 <div className="col-span-full">
-                  <label className="block font-semibold text-slate-700 mb-1">Product image</label>
-                  <select
-                    value={editingItem.image || ''}
-                    onChange={(event) => setEditingItem({ ...editingItem, image: event.target.value || undefined })}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
-                  >
-                    <option value="">Use default catalog image</option>
-                    {Array.from(new Map(catalogItems
-                      .filter((item): item is CatalogItem & { image: string } => Boolean(item.image))
-                      .map(({ image, name }) => [image, name] as const)))
-                      .map(([image, productName]) => <option key={image} value={image}>{productName}</option>)}
-                  </select>
+                  <label className="block font-semibold text-slate-700 mb-1">Product images</label>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    disabled={getProductImages(editingItem).length + editingProductImages.length >= 10}
+                    onChange={(event) => handleProductImageSelection(event, getProductImages(editingItem).length, editingProductImages, setEditingProductImages)}
+                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-teal-50 file:px-3 file:py-1.5 file:font-semibold file:text-teal-800"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Up to 10 images per product; JPEG, PNG, WebP, or GIF, maximum 5 MB each.</p>
+                  <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    {getProductImages(editingItem).map((image, index) => (
+                      <div key={`${image}-${index}`} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
+                        <img src={image} alt={`${editingItem.name} image ${index + 1}`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const images = getProductImages(editingItem).filter((_, imageIndex) => imageIndex !== index);
+                            setEditingItem({ ...editingItem, images, image: images[0] });
+                          }}
+                          aria-label={`Remove product image ${index + 1}`}
+                          className="absolute right-1 top-1 rounded-full bg-slate-950/75 p-1 text-white hover:bg-rose-700"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {editingProductImages.map((image) => (
+                      <div key={image.previewUrl} className="relative aspect-square overflow-hidden rounded-lg border border-teal-300">
+                        <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
+                        <button type="button" onClick={() => removePendingProductImage(image, setEditingProductImages)} aria-label={`Remove ${image.file.name}`} className="absolute right-1 top-1 rounded-full bg-slate-950/75 p-1 text-white hover:bg-rose-700">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="col-span-full">
                   <label className="block font-semibold text-slate-700 mb-1">Product description</label>
@@ -1202,7 +1351,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               <div className="pt-3 border-t border-slate-200 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setEditingItem(null)}
+                  onClick={closeEditModal}
                   className="px-4 py-2 font-medium text-slate-600 hover:text-slate-800"
                 >
                   Cancel

@@ -62,3 +62,11 @@ jobs:
           protocol: ftps
           server-dir: /domains/ambienta.io/public_html/
           local-dir: ./dist/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/uploads/products/*.jpg
+            **/uploads/products/*.png
+            **/uploads/products/*.webp
+            **/uploads/products/*.gif

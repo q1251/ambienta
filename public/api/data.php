@@ -119,6 +119,7 @@ function data_ensure_schema(PDO $db): void
             sku VARCHAR(80) NOT NULL DEFAULT '',
             ndc_code VARCHAR(32) NULL,
             image VARCHAR(500) NULL,
+            images TEXT NULL,
             min_stock_threshold INT UNSIGNED NOT NULL DEFAULT 0,
             cost_price DECIMAL(10,2) NULL,
             copay_price DECIMAL(10,2) NULL,
@@ -248,6 +249,7 @@ function data_ensure_schema(PDO $db): void
         'sku' => "VARCHAR(80) NOT NULL DEFAULT ''",
         'ndc_code' => 'VARCHAR(32) NULL',
         'image' => 'VARCHAR(500) NULL',
+        'images' => 'TEXT NULL',
         'min_stock_threshold' => 'INT UNSIGNED NOT NULL DEFAULT 0',
         'cost_price' => 'DECIMAL(10,2) NULL',
         'copay_price' => 'DECIMAL(10,2) NULL',
@@ -503,6 +505,14 @@ function data_lead_activities(PDO $db, int $leadId): array
 function data_product_row(array $row): array
 {
     $stock = (int) $row['stock_count'];
+    $images = json_decode((string) ($row['images'] ?? ''), true);
+    if (!is_array($images)) {
+        $images = [];
+    }
+    $images = array_values(array_filter($images, static fn ($image): bool => is_string($image) && $image !== ''));
+    if ($images === [] && is_string($row['image'] ?? null) && $row['image'] !== '') {
+        $images = [$row['image']];
+    }
     return [
         'id' => $row['id'],
         'name' => $row['name'],
@@ -512,7 +522,8 @@ function data_product_row(array $row): array
         'dosage' => $row['dosage'],
         'sku' => $row['sku'],
         'ndcCode' => $row['ndc_code'],
-        'image' => $row['image'],
+        'image' => $images[0] ?? $row['image'],
+        'images' => $images,
         'price' => (float) $row['price'],
         'costPrice' => $row['cost_price'] === null ? null : (float) $row['cost_price'],
         'copayPrice' => $row['copay_price'] === null ? null : (float) $row['copay_price'],
@@ -547,6 +558,28 @@ function data_product_input(PDO $db, array $body, bool $isUpdate): array
     $sku = data_string($body, 'sku', 80);
     $ndc = data_string($body, 'ndcCode', 32, false);
     $image = data_string($body, 'image', 500, false);
+    $images = $body['images'] ?? null;
+    if ($images !== null && (!is_array($images) || count($images) > 10)) {
+        data_respond(400, ['error' => 'invalid_product_images', 'message' => 'A product can have up to 10 images.']);
+    }
+    if ($images === null) {
+        $images = $image === '' ? [] : [$image];
+    }
+    $validatedImages = [];
+    foreach ($images as $productImage) {
+        if (!is_string($productImage) || $productImage === '' || strlen($productImage) > 500) {
+            data_respond(400, ['error' => 'invalid_product_images', 'message' => 'A product image URL is invalid.']);
+        }
+        if (!in_array($productImage, $validatedImages, true)) {
+            $validatedImages[] = $productImage;
+        }
+    }
+    if ($image !== '' && !in_array($image, $validatedImages, true)) {
+        array_unshift($validatedImages, $image);
+    }
+    if (count($validatedImages) > 10) {
+        data_respond(400, ['error' => 'invalid_product_images', 'message' => 'A product can have up to 10 images.']);
+    }
     $price = $body['price'] ?? null;
     $stock = $body['stockCount'] ?? null;
     $minimum = $body['minStockThreshold'] ?? 0;
@@ -588,7 +621,8 @@ function data_product_input(PDO $db, array $body, bool $isUpdate): array
         'dosage' => $dosage,
         'sku' => $sku,
         'ndcCode' => $ndc === '' ? null : $ndc,
-        'image' => $image === '' ? null : $image,
+        'image' => $validatedImages[0] ?? null,
+        'images' => $validatedImages,
         'price' => round((float) $price, 2),
         'costPrice' => $cost === null ? null : round((float) $cost, 2),
         'copayPrice' => $copay === null ? null : round((float) $copay, 2),
@@ -801,6 +835,101 @@ if ($method === 'GET') {
     data_respond(404, ['error' => 'not_found', 'message' => 'The requested resource was not found.']);
 }
 
+if ($method === 'POST' && $resource === 'product-images') {
+    data_require_admin();
+    $files = $_FILES['images'] ?? null;
+    if (!is_array($files) || !isset($files['name'], $files['type'], $files['tmp_name'], $files['error'], $files['size'])) {
+        $contentLength = filter_var($_SERVER['CONTENT_LENGTH'] ?? null, FILTER_VALIDATE_INT);
+        if ($contentLength !== false && $contentLength > 0) {
+            data_respond(413, ['error' => 'product_images_too_large', 'message' => 'The upload request exceeded the server limit. Try fewer or smaller images.']);
+        }
+        data_respond(400, ['error' => 'missing_product_images', 'message' => 'Choose one or more product images to upload.']);
+    }
+    $names = is_array($files['name']) ? $files['name'] : [$files['name']];
+    $types = is_array($files['type']) ? $files['type'] : [$files['type']];
+    $temporaryPaths = is_array($files['tmp_name']) ? $files['tmp_name'] : [$files['tmp_name']];
+    $errors = is_array($files['error']) ? $files['error'] : [$files['error']];
+    $sizes = is_array($files['size']) ? $files['size'] : [$files['size']];
+    if (count($names) < 1 || count($names) > 10) {
+        data_respond(400, ['error' => 'invalid_product_images', 'message' => 'Upload between 1 and 10 product images at a time.']);
+    }
+
+    $allowedTypes = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+    ];
+    $validatedFiles = [];
+    $totalSize = 0;
+    foreach ($names as $index => $originalName) {
+        $uploadError = $errors[$index] ?? UPLOAD_ERR_NO_FILE;
+        if ($uploadError !== UPLOAD_ERR_OK) {
+            $message = in_array($uploadError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+                ? 'Each product image must be no larger than 5 MB.'
+                : 'One of the selected product images could not be uploaded.';
+            data_respond(400, ['error' => 'product_image_upload_failed', 'message' => $message]);
+        }
+        $temporaryPath = $temporaryPaths[$index] ?? '';
+        $size = $sizes[$index] ?? 0;
+        if (!is_string($temporaryPath) || !is_uploaded_file($temporaryPath) || !is_int($size) || $size < 1 || $size > 5242880) {
+            data_respond(400, ['error' => 'invalid_product_image', 'message' => 'Each product image must be a valid image no larger than 5 MB.']);
+        }
+        $totalSize += $size;
+        if ($totalSize > 20971520) {
+            data_respond(413, ['error' => 'product_images_too_large', 'message' => 'The total size of product images must be no more than 20 MB.']);
+        }
+        $imageInfo = getimagesize($temporaryPath);
+        $mimeType = is_array($imageInfo) ? ($imageInfo['mime'] ?? null) : null;
+        if (
+            !is_string($mimeType)
+            || !isset($allowedTypes[$mimeType])
+            || !is_array($imageInfo)
+            || ($imageInfo['mime'] ?? null) !== $mimeType
+            || !isset($imageInfo[0], $imageInfo[1])
+            || $imageInfo[0] < 1
+            || $imageInfo[1] < 1
+            || $imageInfo[0] > 8000
+            || $imageInfo[1] > 8000
+            || $imageInfo[0] * $imageInfo[1] > 30000000
+        ) {
+            data_respond(400, ['error' => 'invalid_product_image', 'message' => 'Use a valid JPEG, PNG, WebP, or GIF image (maximum dimensions 8000 × 8000).']);
+        }
+        $validatedFiles[] = [
+            'temporaryPath' => $temporaryPath,
+            'extension' => $allowedTypes[$mimeType],
+        ];
+    }
+
+    $uploadDirectory = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'products';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0755, true) && !is_dir($uploadDirectory)) {
+        error_log('Ambients product image directory could not be created.');
+        data_respond(500, ['error' => 'product_image_storage_failed', 'message' => 'Product image storage is unavailable.']);
+    }
+    $uploadedUrls = [];
+    $uploadedPaths = [];
+    try {
+        foreach ($validatedFiles as $validatedFile) {
+            $fileName = bin2hex(random_bytes(16)) . '.' . $validatedFile['extension'];
+            $destination = $uploadDirectory . DIRECTORY_SEPARATOR . $fileName;
+            if (!move_uploaded_file($validatedFile['temporaryPath'], $destination)) {
+                throw new RuntimeException('Product image could not be moved into storage.');
+            }
+            $uploadedPaths[] = $destination;
+            $uploadedUrls[] = '/uploads/products/' . $fileName;
+        }
+    } catch (Throwable $error) {
+        foreach ($uploadedPaths as $uploadedPath) {
+            if (is_file($uploadedPath) && !unlink($uploadedPath)) {
+                error_log('Ambients partial product image cleanup failed.');
+            }
+        }
+        error_log('Ambients product image upload failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'product_image_upload_failed', 'message' => 'The product images could not be stored.']);
+    }
+    data_respond(201, ['images' => $uploadedUrls]);
+}
+
 if ($method === 'POST' && $resource === 'products') {
     data_require_admin();
     $body = data_read_json(4194304);
@@ -833,14 +962,14 @@ if ($method === 'POST' && $resource === 'products') {
     $db->beginTransaction();
     try {
         $insert = $db->prepare(
-            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, price, cost_price, copay_price, stock_count, min_stock_threshold, is_active, is_featured, last_restocked)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, images, price, cost_price, copay_price, stock_count, min_stock_threshold, is_active, is_featured, last_restocked)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         foreach ($products as $product) {
             $insert->execute([
                 $product['id'], $product['name'], $product['category'], $product['description'],
                 (int) $product['rxRequired'], $product['dosage'], $product['sku'], $product['ndcCode'],
-                $product['image'], $product['price'], $product['costPrice'], $product['copayPrice'],
+                $product['image'], json_encode($product['images'], JSON_UNESCAPED_SLASHES), $product['price'], $product['costPrice'], $product['copayPrice'],
                 $product['stockCount'], $product['minStockThreshold'], (int) $product['isActive'], (int) $product['isFeatured'],
                 $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
             ]);
@@ -996,13 +1125,14 @@ if ($method === 'PATCH' && $resource === 'products') {
     $db->beginTransaction();
     try {
         $update = $db->prepare(
-            'UPDATE products SET name = ?, category = ?, description = ?, rx_required = ?, dosage = ?, sku = ?, ndc_code = ?, image = ?,
+            'UPDATE products SET name = ?, category = ?, description = ?, rx_required = ?, dosage = ?, sku = ?, ndc_code = ?, image = ?, images = ?,
              price = ?, cost_price = ?, copay_price = ?, stock_count = ?, min_stock_threshold = ?, is_active = ?, is_featured = ?,
              last_restocked = IF(stock_count < ?, CURDATE(), last_restocked) WHERE id = ? AND is_archived = 0'
         );
         $update->execute([
             $product['name'], $product['category'], $product['description'], (int) $product['rxRequired'],
-            $product['dosage'], $product['sku'], $product['ndcCode'], $product['image'], $product['price'],
+            $product['dosage'], $product['sku'], $product['ndcCode'], $product['image'],
+            json_encode($product['images'], JSON_UNESCAPED_SLASHES), $product['price'],
             $product['costPrice'], $product['copayPrice'], $product['stockCount'], $product['minStockThreshold'],
             (int) $product['isActive'], (int) $product['isFeatured'],
             $product['stockCount'], $product['id'],
