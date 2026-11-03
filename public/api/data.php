@@ -180,6 +180,41 @@ function data_ensure_schema(PDO $db): void
             CONSTRAINT email_campaign_recipients_campaign_fk FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS chat_conversations (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            visitor_name VARCHAR(100) NOT NULL,
+            visitor_email VARCHAR(254) NOT NULL DEFAULT '',
+            visitor_token_hash CHAR(64) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'open',
+            last_visitor_message_at DATETIME NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY chat_conversations_token (visitor_token_hash),
+            KEY chat_conversations_status_updated (status, updated_at, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS chat_messages (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            conversation_id BIGINT UNSIGNED NOT NULL,
+            sender_type VARCHAR(16) NOT NULL,
+            sender_name VARCHAR(100) NOT NULL,
+            body TEXT NOT NULL,
+            read_at DATETIME NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY chat_messages_conversation (conversation_id, id),
+            KEY chat_messages_unread (conversation_id, sender_type, read_at),
+            CONSTRAINT chat_messages_conversation_fk FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS chat_rate_limits (
+            bucket_hash CHAR(64) NOT NULL PRIMARY KEY,
+            window_started_at DATETIME NOT NULL,
+            request_count INT UNSIGNED NOT NULL DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
     foreach ([
         ['email_activity', 'body', 'MEDIUMTEXT NULL'],
@@ -518,7 +553,7 @@ function data_require_admin(string $requiredRole = 'operator'): void
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $permissions = json_decode((string) $staff['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
     }
     if ($requiredRole === 'admin' && $_SESSION['admin_role'] !== 'admin') {
@@ -552,7 +587,7 @@ function data_require_lead_access(PDO $db, int $leadId): void
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'orders', 'products', 'integrations'];
+    $validPermissions = ['leads', 'orders', 'products', 'integrations', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
@@ -588,6 +623,68 @@ function data_string(array $source, string $key, int $maxLength, bool $required 
         data_respond(400, ['error' => 'invalid_field', 'message' => 'A required field is missing or too long.']);
     }
     return $value;
+}
+
+function data_chat_rate_limit(PDO $db, string $scope, int $limit, int $windowSeconds): void
+{
+    $clientAddress = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    $config = data_config();
+    $bucketHash = hash_hmac(
+        'sha256',
+        gmdate('Y-m-d') . '|' . $scope . '|' . $clientAddress,
+        (string) $config['db_password']
+    );
+
+    $db->beginTransaction();
+    try {
+        $db->prepare(
+            'INSERT IGNORE INTO chat_rate_limits (bucket_hash, window_started_at, request_count) VALUES (?, UTC_TIMESTAMP(), 0)'
+        )->execute([$bucketHash]);
+        $find = $db->prepare('SELECT window_started_at, request_count FROM chat_rate_limits WHERE bucket_hash = ? FOR UPDATE');
+        $find->execute([$bucketHash]);
+        $bucket = $find->fetch();
+        if (!is_array($bucket)) {
+            throw new RuntimeException('The chat rate-limit bucket could not be loaded.');
+        }
+
+        $expired = strtotime((string) $bucket['window_started_at'] . ' UTC') < time() - $windowSeconds;
+        if ($expired) {
+            $update = $db->prepare('UPDATE chat_rate_limits SET window_started_at = UTC_TIMESTAMP(), request_count = 1 WHERE bucket_hash = ?');
+            $update->execute([$bucketHash]);
+            $count = 1;
+        } else {
+            $count = (int) $bucket['request_count'] + 1;
+            $update = $db->prepare('UPDATE chat_rate_limits SET request_count = ? WHERE bucket_hash = ?');
+            $update->execute([$count, $bucketHash]);
+        }
+        if ($scope === 'start') {
+            $db->exec('DELETE FROM chat_rate_limits WHERE window_started_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY)');
+        }
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients live-chat rate limiting failed: ' . $error->getMessage());
+        data_respond(503, ['error' => 'chat_rate_limit_unavailable', 'message' => 'Chat is temporarily unavailable. Please try again shortly.']);
+    }
+
+    if ($count > $limit) {
+        data_respond(429, ['error' => 'chat_rate_limited', 'message' => 'You have sent several chat requests. Please wait a little and try again.']);
+    }
+}
+
+function data_chat_message_rows(PDO $db, int $conversationId): array
+{
+    $query = $db->prepare(
+        'SELECT id, sender_type, sender_name, body, created_at FROM chat_messages WHERE conversation_id = ? ORDER BY id ASC LIMIT 500'
+    );
+    $query->execute([$conversationId]);
+    return array_map(static fn (array $row): array => [
+        'id' => (int) $row['id'],
+        'sender' => $row['sender_type'],
+        'senderName' => $row['sender_name'],
+        'body' => $row['body'],
+        'createdAt' => $row['created_at'],
+    ], $query->fetchAll());
 }
 
 function data_mail_directory(): string
@@ -1987,6 +2084,148 @@ if (!is_string($resource)) {
     data_respond(400, ['error' => 'invalid_resource', 'message' => 'The requested resource is invalid.']);
 }
 
+if ($resource === 'chat') {
+    if ($method === 'POST') {
+        $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+        if ($origin !== '') {
+            $originParts = parse_url($origin);
+            $requestHostHeader = (string) ($_SERVER['HTTP_HOST'] ?? '');
+            $requestHost = parse_url('//' . $requestHostHeader, PHP_URL_HOST);
+            $requestPort = parse_url('//' . $requestHostHeader, PHP_URL_PORT);
+            $requestScheme = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+            if ($requestScheme === '') {
+                $https = (string) ($_SERVER['HTTPS'] ?? '');
+                $requestScheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'http';
+            }
+            $originScheme = is_array($originParts) ? strtolower((string) ($originParts['scheme'] ?? '')) : '';
+            $originHost = is_array($originParts) ? ($originParts['host'] ?? null) : null;
+            $originPort = is_array($originParts) ? ($originParts['port'] ?? null) : null;
+            $effectiveRequestPort = $requestPort ?? ($requestScheme === 'https' ? 443 : 80);
+            $effectiveOriginPort = $originPort ?? ($originScheme === 'https' ? 443 : 80);
+            if (!is_string($originHost) || !is_string($requestHost)
+                || strcasecmp($originHost, $requestHost) !== 0
+                || $originScheme !== $requestScheme
+                || $effectiveOriginPort !== $effectiveRequestPort) {
+                data_respond(403, ['error' => 'chat_origin_rejected', 'message' => 'This chat request could not be verified. Reload the page and try again.']);
+            }
+        }
+
+        $body = data_read_json(8192);
+        if (data_string($body, 'website', 200, false) !== '') {
+            data_respond(400, ['error' => 'chat_request_rejected', 'message' => 'The chat request could not be accepted.']);
+        }
+        $action = data_string($body, 'action', 16);
+        $db = data_db();
+
+        if ($action === 'read') {
+            $conversationId = filter_var($body['conversation'] ?? null, FILTER_VALIDATE_INT);
+            $token = data_string($body, 'token', 64);
+            if ($conversationId === false || $conversationId < 1 || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) {
+                data_respond(400, ['error' => 'invalid_chat_link', 'message' => 'This chat session is invalid. Start a new conversation.']);
+            }
+            $find = $db->prepare('SELECT id, status FROM chat_conversations WHERE id = ? AND visitor_token_hash = ? LIMIT 1');
+            $find->execute([(int) $conversationId, hash('sha256', $token)]);
+            $conversation = $find->fetch();
+            if (!is_array($conversation)) {
+                data_respond(404, ['error' => 'chat_not_found', 'message' => 'This chat session could not be found. Start a new conversation.']);
+            }
+            $db->prepare(
+                "UPDATE chat_messages SET read_at = UTC_TIMESTAMP() WHERE conversation_id = ? AND sender_type = 'staff' AND read_at IS NULL"
+            )->execute([(int) $conversationId]);
+            data_respond(200, [
+                'conversation' => ['id' => (int) $conversation['id'], 'status' => $conversation['status']],
+                'messages' => data_chat_message_rows($db, (int) $conversationId),
+            ]);
+        }
+
+        if ($action === 'start') {
+            $visitorName = data_string($body, 'name', 100);
+            $visitorEmail = strtolower(data_string($body, 'email', 254, false));
+            if ($visitorEmail !== '' && filter_var($visitorEmail, FILTER_VALIDATE_EMAIL) === false) {
+                data_respond(400, ['error' => 'invalid_chat_email', 'message' => 'Enter a valid email address or leave it blank.']);
+            }
+            $message = data_string($body, 'message', 2000);
+            data_chat_rate_limit($db, 'start', 10, 3600);
+
+            $token = bin2hex(random_bytes(32));
+            $db->beginTransaction();
+            try {
+                $create = $db->prepare(
+                    "INSERT INTO chat_conversations (visitor_name, visitor_email, visitor_token_hash, last_visitor_message_at)
+                     VALUES (?, ?, ?, UTC_TIMESTAMP())"
+                );
+                $create->execute([$visitorName, $visitorEmail, hash('sha256', $token)]);
+                $conversationId = (int) $db->lastInsertId();
+                $db->prepare(
+                    "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                     VALUES (?, 'visitor', ?, ?)"
+                )->execute([$conversationId, $visitorName, $message]);
+                $db->commit();
+            } catch (Throwable $error) {
+                if ($db->inTransaction()) $db->rollBack();
+                error_log('Ambients live-chat conversation could not be created: ' . $error->getMessage());
+                data_respond(503, ['error' => 'chat_create_failed', 'message' => 'Your conversation could not be started. Please try again.']);
+            }
+            data_respond(201, [
+                'token' => $token,
+                'conversation' => ['id' => $conversationId, 'status' => 'open'],
+                'messages' => data_chat_message_rows($db, $conversationId),
+            ]);
+        }
+
+        if ($action === 'message') {
+            $conversationId = filter_var($body['conversation'] ?? null, FILTER_VALIDATE_INT);
+            $token = data_string($body, 'token', 64);
+            $message = data_string($body, 'message', 2000);
+            if ($conversationId === false || $conversationId < 1 || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) {
+                data_respond(400, ['error' => 'invalid_chat_link', 'message' => 'This chat session is invalid. Start a new conversation.']);
+            }
+            data_chat_rate_limit($db, 'message', 60, 60);
+            $db->beginTransaction();
+            try {
+                $find = $db->prepare(
+                    'SELECT id, visitor_name, status, last_visitor_message_at FROM chat_conversations WHERE id = ? AND visitor_token_hash = ? FOR UPDATE'
+                );
+                $find->execute([(int) $conversationId, hash('sha256', $token)]);
+                $conversation = $find->fetch();
+                if (!is_array($conversation)) {
+                    $db->rollBack();
+                    data_respond(404, ['error' => 'chat_not_found', 'message' => 'This chat session could not be found. Start a new conversation.']);
+                }
+                if ($conversation['status'] !== 'open') {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'chat_closed', 'message' => 'This conversation is closed. Start a new chat if you need more help.']);
+                }
+                if (is_string($conversation['last_visitor_message_at'])
+                    && strtotime((string) $conversation['last_visitor_message_at'] . ' UTC') > time() - 2) {
+                    $db->rollBack();
+                    data_respond(429, ['error' => 'chat_message_too_fast', 'message' => 'Please wait a moment before sending another message.']);
+                }
+                $db->prepare(
+                    "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                     VALUES (?, 'visitor', ?, ?)"
+                )->execute([(int) $conversationId, $conversation['visitor_name'], $message]);
+                $db->prepare(
+                    'UPDATE chat_conversations SET last_visitor_message_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP() WHERE id = ?'
+                )->execute([(int) $conversationId]);
+                $db->commit();
+            } catch (Throwable $error) {
+                if ($db->inTransaction()) $db->rollBack();
+                error_log('Ambients live-chat message could not be saved: ' . $error->getMessage());
+                data_respond(503, ['error' => 'chat_message_failed', 'message' => 'Your message could not be sent. Please try again.']);
+            }
+            data_respond(200, [
+                'conversation' => ['id' => (int) $conversationId, 'status' => 'open'],
+                'messages' => data_chat_message_rows($db, (int) $conversationId),
+            ]);
+        }
+
+        data_respond(400, ['error' => 'invalid_chat_action', 'message' => 'Choose whether to start a conversation or send a message.']);
+    }
+
+    data_respond(405, ['error' => 'method_not_allowed', 'message' => 'Use POST to access or send a chat message.']);
+}
+
 if ($resource === 'email-unsubscribe') {
     $token = $_GET['token'] ?? ($_POST['token'] ?? '');
     if ($method === 'POST' && $token === '') {
@@ -2751,7 +2990,7 @@ if ($method === 'POST' && $resource === 'staff-session') {
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $permissions = json_decode((string) $staff['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
         $_SESSION['last_activity'] = time();
         data_respond(200, [
@@ -2792,7 +3031,7 @@ if ($method === 'POST' && $resource === 'staff-session') {
             'role' => 'admin',
             'email' => $_SESSION['admin_email'],
             'displayName' => $_SESSION['admin_display_name'],
-            'permissions' => ['leads', 'orders', 'products', 'integrations'],
+            'permissions' => ['leads', 'orders', 'products', 'integrations', 'chat'],
             'impersonating' => false,
             'mustChangePassword' => false,
         ]);
@@ -2810,6 +3049,77 @@ if ($method === 'GET' && $resource === 'catalog') {
 if ($method === 'GET') {
     data_require_admin();
     $db = data_db();
+    if ($resource === 'chat-admin') {
+        data_require_permission('chat');
+        $conversationValue = data_string($_GET, 'conversation', 20, false);
+        if ($conversationValue !== '') {
+            $conversationId = filter_var($conversationValue, FILTER_VALIDATE_INT);
+            if ($conversationId === false || $conversationId < 1) {
+                data_respond(400, ['error' => 'invalid_chat_id', 'message' => 'The conversation identifier is invalid.']);
+            }
+            $find = $db->prepare(
+                'SELECT id, visitor_name, visitor_email, status, created_at, updated_at
+                 FROM chat_conversations WHERE id = ? LIMIT 1'
+            );
+            $find->execute([(int) $conversationId]);
+            $conversation = $find->fetch();
+            if (!is_array($conversation)) {
+                data_respond(404, ['error' => 'chat_not_found', 'message' => 'The conversation could not be found.']);
+            }
+            $db->prepare(
+                "UPDATE chat_messages SET read_at = UTC_TIMESTAMP() WHERE conversation_id = ? AND sender_type = 'visitor' AND read_at IS NULL"
+            )->execute([(int) $conversationId]);
+            data_respond(200, [
+                'conversation' => [
+                    'id' => (int) $conversation['id'],
+                    'visitorName' => $conversation['visitor_name'],
+                    'visitorEmail' => $conversation['visitor_email'],
+                    'status' => $conversation['status'],
+                    'createdAt' => $conversation['created_at'],
+                    'updatedAt' => $conversation['updated_at'],
+                ],
+                'messages' => data_chat_message_rows($db, (int) $conversationId),
+            ]);
+        }
+
+        $status = data_string($_GET, 'status', 8, false);
+        if ($status === '') $status = 'open';
+        if (!in_array($status, ['open', 'closed', 'all'], true)) {
+            data_respond(400, ['error' => 'invalid_chat_status', 'message' => 'Choose open, closed, or all conversations.']);
+        }
+        $search = data_string($_GET, 'q', 100, false);
+        $where = [];
+        $parameters = [];
+        if ($status !== 'all') {
+            $where[] = 'c.status = ?';
+            $parameters[] = $status;
+        }
+        if ($search !== '') {
+            $where[] = '(c.visitor_name LIKE ? OR c.visitor_email LIKE ?)';
+            $parameters[] = '%' . $search . '%';
+            $parameters[] = '%' . $search . '%';
+        }
+        $whereSql = $where === [] ? '' : ' WHERE ' . implode(' AND ', $where);
+        $query = $db->prepare(
+            'SELECT c.id, c.visitor_name, c.visitor_email, c.status, c.created_at, c.updated_at,
+                    (SELECT body FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
+                    (SELECT sender_type FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_sender,
+                    (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id AND sender_type = \'visitor\' AND read_at IS NULL) AS unread_count
+             FROM chat_conversations c' . $whereSql . ' ORDER BY c.updated_at DESC, c.id DESC LIMIT 100'
+        );
+        $query->execute($parameters);
+        data_respond(200, ['conversations' => array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
+            'visitorName' => $row['visitor_name'],
+            'visitorEmail' => $row['visitor_email'],
+            'status' => $row['status'],
+            'createdAt' => $row['created_at'],
+            'updatedAt' => $row['updated_at'],
+            'lastMessage' => $row['last_message'],
+            'lastSender' => $row['last_sender'],
+            'unreadCount' => (int) $row['unread_count'],
+        ], $query->fetchAll())]);
+    }
     if ($resource === 'products') {
         data_require_permission('products');
         $rows = $db->query('SELECT * FROM products WHERE is_archived = 0 ORDER BY is_featured DESC, name')->fetchAll();
@@ -3022,6 +3332,60 @@ if ($method === 'GET') {
     data_respond(404, ['error' => 'not_found', 'message' => 'The requested resource was not found.']);
 }
 
+if ($method === 'POST' && $resource === 'chat-admin') {
+    data_require_permission('chat');
+    $body = data_read_json(4096);
+    $action = data_string($body, 'action', 16);
+    $conversationId = filter_var($body['conversation'] ?? null, FILTER_VALIDATE_INT);
+    if ($conversationId === false || $conversationId < 1) {
+        data_respond(400, ['error' => 'invalid_chat_id', 'message' => 'The conversation identifier is invalid.']);
+    }
+
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT id, status FROM chat_conversations WHERE id = ? FOR UPDATE');
+        $find->execute([(int) $conversationId]);
+        $conversation = $find->fetch();
+        if (!is_array($conversation)) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'chat_not_found', 'message' => 'The conversation could not be found.']);
+        }
+
+        if ($action === 'reply') {
+            $message = data_string($body, 'message', 2000);
+            if ($conversation['status'] !== 'open') {
+                $db->rollBack();
+                data_respond(409, ['error' => 'chat_closed', 'message' => 'Reopen this conversation before replying.']);
+            }
+            $staffName = trim((string) ($_SESSION['admin_display_name'] ?? ''));
+            if ($staffName === '') $staffName = (string) ($_SESSION['admin_email'] ?? 'Ambients team');
+            $db->prepare(
+                "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                 VALUES (?, 'staff', ?, ?)"
+            )->execute([(int) $conversationId, $staffName, $message]);
+            $db->prepare('UPDATE chat_conversations SET updated_at = UTC_TIMESTAMP() WHERE id = ?')
+                ->execute([(int) $conversationId]);
+            data_audit($db, 'chat.replied', 'chat', (string) $conversationId);
+        } elseif ($action === 'close' || $action === 'reopen') {
+            $nextStatus = $action === 'close' ? 'closed' : 'open';
+            $db->prepare('UPDATE chat_conversations SET status = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?')
+                ->execute([$nextStatus, (int) $conversationId]);
+            data_audit($db, 'chat.' . $action, 'chat', (string) $conversationId);
+        } else {
+            $db->rollBack();
+            data_respond(400, ['error' => 'invalid_chat_action', 'message' => 'Choose reply, close, or reopen.']);
+        }
+
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients CRM chat action failed: ' . $error->getMessage());
+        data_respond(503, ['error' => 'chat_action_failed', 'message' => 'The chat update could not be saved. Please try again.']);
+    }
+    data_respond(200, ['status' => $action === 'close' ? 'closed' : ($action === 'reopen' ? 'open' : 'open')]);
+}
+
 if ($method === 'POST' && $resource === 'product-images') {
     data_require_permission('products');
     $files = $_FILES['images'] ?? null;
@@ -3227,7 +3591,7 @@ if ($method === 'POST' && $resource === 'staff') {
             ['Agent Four', 'agent.four@example.com'],
             ['Agent Five', 'agent.five@example.com'],
         ];
-        $permissionsJson = json_encode(['leads', 'orders', 'products', 'integrations']);
+        $permissionsJson = json_encode(['leads', 'orders', 'products', 'integrations', 'chat']);
         $created = [];
         $db->beginTransaction();
         try {

@@ -6,6 +6,7 @@ const availablePermissions = [
   { id: 'orders', label: 'Orders' },
   { id: 'products', label: 'Products' },
   { id: 'integrations', label: 'Integrations' },
+  { id: 'chat', label: 'Live chat' },
 ] as const;
 type StaffPermission = (typeof availablePermissions)[number]['id'];
 
@@ -44,7 +45,7 @@ interface StaffManagerProps {
   }) => void;
 }
 
-const defaultPermissions: StaffPermission[] = ['leads', 'orders', 'products', 'integrations'];
+const defaultPermissions: StaffPermission[] = ['leads', 'orders', 'products', 'integrations', 'chat'];
 
 export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) => {
   const [accounts, setAccounts] = useState<StaffAccount[]>([]);

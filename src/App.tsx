@@ -26,6 +26,7 @@ import {
 } from './types/pharmacy';
 import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
 import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChange';
+import { ChatWidget } from './components/ChatWidget';
 import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
 import type { ProductCsvItem } from './utils/productCsv';
 
@@ -61,7 +62,7 @@ export default function App() {
   const [adminRole, setAdminRole] = useState<'admin' | 'operator'>('admin');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminDisplayName, setAdminDisplayName] = useState('');
-  const [adminPermissions, setAdminPermissions] = useState<string[]>(['leads', 'orders', 'products', 'integrations']);
+  const [adminPermissions, setAdminPermissions] = useState<string[]>(['leads', 'orders', 'products', 'integrations', 'chat']);
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedBy, setImpersonatedBy] = useState('');
   const [mustChangePassword, setMustChangePassword] = useState(false);
@@ -363,7 +364,7 @@ export default function App() {
     setAdminRole('admin');
     setAdminEmail(result.email);
     setAdminDisplayName(result.displayName || result.email);
-    setAdminPermissions(result.permissions || ['leads', 'orders', 'products', 'integrations']);
+    setAdminPermissions(result.permissions || ['leads', 'orders', 'products', 'integrations', 'chat']);
     setIsImpersonating(false);
     setImpersonatedBy('');
     setMustChangePassword(false);
@@ -986,6 +987,7 @@ export default function App() {
         onOrderSuccess={handleOrderCreated}
         onClearCart={handleClearCart}
       />
+      <ChatWidget />
     </div>
   );
 }
