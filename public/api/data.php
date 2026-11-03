@@ -2073,8 +2073,10 @@ if ($method === 'PATCH' && $resource === 'orders') {
     if (!in_array($status, $allowedStatuses, true)) {
         data_respond(400, ['error' => 'invalid_status', 'message' => 'The order status is invalid.']);
     }
-    $carrier = data_string($body, 'carrier', 120, false);
-    $trackingNumber = data_string($body, 'trackingNumber', 180, false);
+    $carrierProvided = array_key_exists('carrier', $body);
+    $trackingNumberProvided = array_key_exists('trackingNumber', $body);
+    $carrier = $carrierProvided ? data_string($body, 'carrier', 120, false) : null;
+    $trackingNumber = $trackingNumberProvided ? data_string($body, 'trackingNumber', 180, false) : null;
     $db = data_db();
     $db->beginTransaction();
     try {
@@ -2085,33 +2087,43 @@ if ($method === 'PATCH' && $resource === 'orders') {
             $db->rollBack();
             data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
         }
-        $allowedTransitions = [
-            'Pending' => ['Pending', 'Pharmacist Review', 'Dispensing', 'Cancelled'],
-            'Submitted' => ['Submitted', 'Pharmacist Review', 'Dispensing', 'Cancelled'],
-            'Pharmacist Review' => ['Pharmacist Review', 'Dispensing', 'Cancelled'],
-            'Dispensing' => ['Dispensing', 'Ready for Pickup', 'Shipped', 'Cancelled'],
-            'Ready for Pickup' => ['Ready for Pickup', 'Delivered', 'Cancelled'],
-            'Shipped' => ['Shipped', 'Delivered'],
-            'Delivered' => ['Delivered', 'Completed'],
-            'Completed' => ['Completed'],
-            'Cancelled' => ['Cancelled'],
-        ];
-        if (!in_array($status, $allowedTransitions[$current['status']] ?? [], true)) {
-            $db->rollBack();
-            data_respond(409, ['error' => 'invalid_transition', 'message' => 'The order cannot move from its current status to the selected status.']);
-        }
-        $update = $db->prepare('UPDATE orders SET status = ?, carrier = ?, tracking_number = ? WHERE id = ?');
-        $update->execute([$status, $carrier === '' ? null : $carrier, $trackingNumber === '' ? null : $trackingNumber, $id]);
+        $nextCarrier = $carrierProvided ? ($carrier === '' ? null : $carrier) : $current['carrier'];
+        $nextTrackingNumber = $trackingNumberProvided ? ($trackingNumber === '' ? null : $trackingNumber) : $current['tracking_number'];
         if ($current['status'] !== 'Cancelled' && $status === 'Cancelled') {
             $restock = $db->prepare(
                 'UPDATE products p INNER JOIN order_items i ON i.product_id = p.id SET p.stock_count = p.stock_count + i.quantity WHERE i.order_id = ?'
             );
             $restock->execute([$id]);
+        } elseif ($current['status'] === 'Cancelled' && $status !== 'Cancelled') {
+            $items = $db->prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ? ORDER BY product_id FOR UPDATE');
+            $items->execute([$id]);
+            $quantities = [];
+            foreach ($items->fetchAll() as $item) {
+                $productId = (string) $item['product_id'];
+                $quantities[$productId] = ($quantities[$productId] ?? 0) + (int) $item['quantity'];
+            }
+            $productStock = $db->prepare('SELECT stock_count FROM products WHERE id = ? FOR UPDATE');
+            $reserveStock = $db->prepare('UPDATE products SET stock_count = stock_count - ? WHERE id = ? AND stock_count >= ?');
+            foreach ($quantities as $productId => $quantity) {
+                $productStock->execute([$productId]);
+                $availableStock = $productStock->fetchColumn();
+                if ($availableStock === false || (int) $availableStock < $quantity) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'insufficient_stock', 'message' => 'This cancelled order cannot be reopened because one or more items no longer have enough stock.']);
+                }
+                $reserveStock->execute([$quantity, $productId, $quantity]);
+                if ($reserveStock->rowCount() !== 1) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'insufficient_stock', 'message' => 'This cancelled order cannot be reopened because stock changed. Refresh and try again.']);
+                }
+            }
         }
+        $update = $db->prepare('UPDATE orders SET status = ?, carrier = ?, tracking_number = ? WHERE id = ?');
+        $update->execute([$status, $nextCarrier, $nextTrackingNumber, $id]);
         if ($current['status'] !== $status) {
             data_audit($db, 'order.status_changed', 'order', $id, ['from' => $current['status'], 'to' => $status]);
         }
-        if ($current['carrier'] !== ($carrier === '' ? null : $carrier) || $current['tracking_number'] !== ($trackingNumber === '' ? null : $trackingNumber)) {
+        if ($current['carrier'] !== $nextCarrier || $current['tracking_number'] !== $nextTrackingNumber) {
             data_audit($db, 'order.tracking_updated', 'order', $id);
         }
         $db->commit();

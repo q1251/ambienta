@@ -76,7 +76,7 @@ interface AdminLayoutProps {
   orderPagination: OrderPagination;
   ordersLoading: boolean;
   onLoadOrders: (search: OrderSearch) => void;
-  onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
+  onUpdateOrderStatus: (order: OnlineOrder, newStatus: OnlineOrder['status']) => Promise<void>;
   onUpdateOrderTracking: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
   onAddOrderInternalNote: (orderId: string, note: string) => Promise<string>;
   onCreateManualOrder: (data: {

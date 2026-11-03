@@ -17,7 +17,7 @@ interface OrdersManagerProps {
   pagination: OrderPagination;
   isLoading: boolean;
   onLoadOrders: (search: OrderSearch) => void;
-  onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
+  onUpdateOrderStatus: (order: OnlineOrder, newStatus: OnlineOrder['status']) => Promise<void>;
   onUpdateOrderTracking: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
   onAddOrderInternalNote: (orderId: string, note: string) => Promise<string>;
   onCreateManualOrder: (data: {
@@ -32,17 +32,17 @@ interface OrdersManagerProps {
   catalogItems?: CatalogItem[];
 }
 
-const allowedStatusTransitions: Record<OnlineOrder['status'], OnlineOrder['status'][]> = {
-  Pending: ['Pharmacist Review', 'Dispensing', 'Cancelled'],
-  Submitted: ['Pharmacist Review', 'Dispensing', 'Cancelled'],
-  'Pharmacist Review': ['Dispensing', 'Cancelled'],
-  Dispensing: ['Ready for Pickup', 'Shipped', 'Cancelled'],
-  'Ready for Pickup': ['Delivered', 'Cancelled'],
-  Shipped: ['Delivered'],
-  Delivered: ['Completed'],
-  Completed: [],
-  Cancelled: [],
-};
+const orderStatuses: OnlineOrder['status'][] = [
+  'Pending',
+  'Submitted',
+  'Pharmacist Review',
+  'Dispensing',
+  'Ready for Pickup',
+  'Shipped',
+  'Delivered',
+  'Completed',
+  'Cancelled',
+];
 
 export const OrdersManager: React.FC<OrdersManagerProps> = ({
   orders,
@@ -176,12 +176,12 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     });
   };
 
-  const handleStatusChange = async (orderId: string, status: OnlineOrder['status']) => {
+  const handleStatusChange = async (order: OnlineOrder, status: OnlineOrder['status']) => {
     setOrderSaveError('');
     setIsSavingStatus(true);
     try {
-      await onUpdateOrderStatus(orderId, status);
-      setSelectedOrder((current) => current?.id === orderId ? { ...current, status } : current);
+      await onUpdateOrderStatus(order, status);
+      setSelectedOrder((current) => current?.id === order.id ? { ...current, status } : current);
       setReloadCounter((counter) => counter + 1);
     } catch (error) {
       setOrderSaveError(error instanceof Error ? error.message : 'Order status could not be saved.');
@@ -196,7 +196,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       select.value = order.status;
       return;
     }
-    void handleStatusChange(order.id, status);
+    void handleStatusChange(order, status);
   };
 
   // Add internal staff note
@@ -515,7 +515,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
                       >
                         <option value={ord.status}>{ord.status}</option>
-                        {allowedStatusTransitions[ord.status].map((status) => <option key={status} value={status}>{status}</option>)}
+                        {orderStatuses.filter((status) => status !== ord.status).map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
 
                       <button
@@ -586,14 +586,34 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </div>
                 <p className="mt-2 text-sm text-slate-500">Placed {selectedOrder.placedAt} <span className="mx-1.5">·</span> {selectedOrder.patientName}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 sm:self-auto"
-              >
-                <Printer className="h-4 w-4" />Print order
-              </button>
+              <div className="flex flex-col gap-3 self-start sm:items-end">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  Change order status
+                  <select
+                    aria-label={`Change order status for ${selectedOrder.orderNumber}`}
+                    value={selectedOrder.status}
+                    disabled={isSavingStatus}
+                    onChange={(event) => requestStatusChange(selectedOrder, event.currentTarget.value as OnlineOrder['status'], event.currentTarget)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-700 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {orderStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                </label>
+                <div className="flex items-center gap-3">
+                  {isSavingStatus && <span role="status" className="text-xs text-slate-500">Saving status…</span>}
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                  >
+                    <Printer className="h-4 w-4" />Print order
+                  </button>
+                </div>
+              </div>
             </div>
+          )}
+          {orderPageId && orderSaveError && (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{orderSaveError}</p>
           )}
           <div className={orderPageId ? 'w-full' : 'bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200'}>
             {/* Header */}
@@ -748,29 +768,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     <Truck className="w-4 h-4 text-teal-700" />
                     <span>Fulfillment &amp; Tracking</span>
                   </span>
-                  <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-700">
-                    Order status
-                    <select
-                      aria-label={`Change order status for ${selectedOrder.orderNumber}`}
-                      value={selectedOrder.status}
-                      disabled={isSavingStatus || allowedStatusTransitions[selectedOrder.status].length === 0}
-                      onChange={(event) => {
-                        const nextStatus = event.currentTarget.value as OnlineOrder['status'];
-                        requestStatusChange(selectedOrder, nextStatus, event.currentTarget);
-                      }}
-                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value={selectedOrder.status}>{selectedOrder.status}</option>
-                      {allowedStatusTransitions[selectedOrder.status].map((status) => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
-                    {isSavingStatus && <span role="status" className="font-normal text-slate-500">Saving…</span>}
-                  </label>
                 </div>
-                {orderSaveError && (
-                  <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{orderSaveError}</p>
-                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>

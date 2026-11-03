@@ -626,9 +626,8 @@ export default function App() {
     );
   };
 
-  const handleUpdateOrderStatus = async (orderId: string, newStatus: OnlineOrder['status']) => {
-    const order = orders.find((item) => item.id === orderId);
-    if (!order) throw new Error('The order is no longer on this page. Refresh the order list and try again.');
+  const handleUpdateOrderStatus = async (order: OnlineOrder, newStatus: OnlineOrder['status']) => {
+    const orderId = order.id;
     try {
       const response = await fetch('/api/data.php?resource=orders', {
         method: 'PATCH',
@@ -647,8 +646,15 @@ export default function App() {
         setCatalogItems((prev) => prev.map((product) => {
           const orderedItem = order.items?.find((item) => item.productId === product.id);
           return orderedItem
-            ? { ...product, stockCount: product.stockCount + orderedItem.quantity, inStock: true }
+            ? { ...product, stockCount: product.stockCount + orderedItem.quantity, inStock: product.isActive !== false }
             : product;
+        }));
+      } else if (order.status === 'Cancelled' && newStatus !== 'Cancelled') {
+        setCatalogItems((prev) => prev.map((product) => {
+          const orderedItem = order.items?.find((item) => item.productId === product.id);
+          if (!orderedItem) return product;
+          const stockCount = product.stockCount - orderedItem.quantity;
+          return { ...product, stockCount, inStock: product.isActive !== false && stockCount > 0 };
         }));
       }
       setAdminDataError('');
