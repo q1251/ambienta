@@ -35,6 +35,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [profile, setProfile] = useState<LeadProfile | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -111,6 +112,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const openProfile = async (lead: ContactLead) => {
     if (!onLoadLeadProfile) return;
     const requestId = ++profileRequestId.current;
+    setProfileOpen(true);
     setProfile(null);
     setProfileError('');
     setProfileLoading(true);
@@ -128,6 +130,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
   const closeProfile = () => {
     profileRequestId.current += 1;
+    setProfileOpen(false);
     setProfile(null);
     setProfileError('');
     setProfileLoading(false);
@@ -246,13 +249,24 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Stage</th><th className="py-3">Orders</th><th className="py-3">Marketing consent</th><th className="py-3">Source</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
-                <tr key={lead.id} className="border-t border-slate-100 hover:bg-slate-50">
+                <tr
+                  key={lead.id}
+                  className={`border-t border-slate-100 hover:bg-slate-50 ${onLoadLeadProfile ? 'cursor-pointer' : ''}`}
+                  role={onLoadLeadProfile ? 'button' : undefined}
+                  tabIndex={onLoadLeadProfile ? 0 : undefined}
+                  aria-label={onLoadLeadProfile ? `Open profile for ${lead.firstName} ${lead.lastName}` : undefined}
+                  onClick={() => void openProfile(lead)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      void openProfile(lead);
+                    }
+                  }}
+                >
                   <td className="px-5 py-3">
-                    {onLoadLeadProfile ? (
-                      <button type="button" onClick={() => void openProfile(lead)} className="font-semibold text-teal-800 underline-offset-2 hover:underline">
-                        {lead.firstName} {lead.lastName}
-                      </button>
-                    ) : `${lead.firstName} ${lead.lastName}`}
+                    <span className={onLoadLeadProfile ? 'font-semibold text-teal-800 underline-offset-2 hover:underline' : ''}>
+                      {lead.firstName} {lead.lastName}
+                    </span>
                   </td>
                   <td className="py-3">{lead.email}</td>
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
@@ -267,7 +281,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
       </div>
 
-      {(profileLoading || profileError || profile) && (
+      {profileOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-label="Lead profile">
           <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-200 p-5">
