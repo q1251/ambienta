@@ -553,7 +553,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'uncalled_repeat_buyers' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
             title="Leads with no recorded call and at least two non-cancelled orders"
           >
-            Not called, repeat buyers ({uncalledRepeatBuyers.length})
+            Active ({uncalledRepeatBuyers.length})
           </button>
         </div>
         <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-4">
