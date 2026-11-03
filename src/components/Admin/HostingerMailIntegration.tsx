@@ -464,7 +464,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       </section>}
 
       {mode === 'mailbox' && <section className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-xs font-medium text-slate-500">Sent from CRM</p>
             <p className="mt-1 text-2xl font-semibold text-slate-950">{messages.filter((item) => item.status === 'Sent').length}</p>
