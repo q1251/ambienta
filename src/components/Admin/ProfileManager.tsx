@@ -63,7 +63,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="flex min-h-[calc(100vh-11rem)] w-full flex-col gap-6">
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Account settings</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Profile &amp; security</h1>
@@ -73,8 +73,8 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
       {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{message}</p>}
 
-      <form onSubmit={saveProfile} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-        <section>
+      <form onSubmit={saveProfile} className="grid flex-1 grid-cols-1 content-start gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 lg:grid-cols-2 lg:gap-6 lg:p-8">
+        <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <UserRound className="h-5 w-5 text-teal-800" />
             <h2 className="font-semibold text-slate-900">Account details</h2>
@@ -89,7 +89,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
           </div>
         </section>
 
-        <section className="border-t border-slate-100 pt-5">
+        <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-teal-800" />
             <h2 className="font-semibold text-slate-900">Change password</h2>
@@ -105,7 +105,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
           </label>
         </section>
 
-        <div className="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
           <p className="flex gap-2 text-xs leading-5 text-slate-500"><ShieldCheck className="h-4 w-4 shrink-0 text-teal-800" /> Passwords are stored as secure hashes. Email changes take effect for your next sign-in.</p>
           <button type="submit" disabled={saving} className="shrink-0 rounded-xl bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
         </div>
