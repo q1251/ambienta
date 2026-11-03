@@ -174,6 +174,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
   return (
     <div className="space-y-5">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">Communications</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Email</h1>
+        <p className="mt-2 text-sm text-slate-600">Connect customersupport@ambienta.io and manage customer-support messages from the CRM.</p>
+      </header>
       <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">

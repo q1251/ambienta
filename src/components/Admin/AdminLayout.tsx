@@ -5,6 +5,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   LogOut,
+  Mail,
   Package,
   Settings2,
   ShieldCheck,
@@ -14,6 +15,7 @@ import {
 import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadProfile, OnlineOrder } from '../../types/pharmacy';
 import type { ProductCsvItem } from '../../utils/productCsv';
 import { AuditLogView } from './AuditLogView';
+import { HostingerMailIntegration } from './HostingerMailIntegration';
 import { IntegrationStatus } from './IntegrationStatus';
 import { InventoryManager } from './InventoryManager';
 import { OperationsOverview } from './OperationsOverview';
@@ -23,7 +25,7 @@ import { ProfileManager } from './ProfileManager';
 
 const ContactLeadManager = React.lazy(() => import('../CRM/ContactLeadManager').then((module) => ({ default: module.ContactLeadManager })));
 
-export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'integrations' | 'profile' | 'staff' | 'audit';
+export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'email' | 'integrations' | 'profile' | 'staff' | 'audit';
 export interface OrderSearch {
   query: string;
   status: string;
@@ -94,6 +96,7 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
   { id: 'overview', label: 'Overview', icon: LayoutDashboard, group: 'Workspace' },
   { id: 'orders', label: 'Orders', icon: ClipboardList, group: 'Workspace' },
   { id: 'leads', label: 'Contact leads', icon: FileSpreadsheet, group: 'Workspace' },
+  { id: 'email', label: 'Email', icon: Mail, group: 'Workspace' },
   { id: 'inventory', label: 'Products & stock', icon: Package, group: 'Workspace' },
   { id: 'staff', label: 'Agent management', icon: Users, group: 'Administration' },
   { id: 'audit', label: 'Audit log', icon: ShieldCheck, group: 'Administration' },
@@ -102,6 +105,7 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
 ];
 const permissionForTab: Partial<Record<AdminTab, string>> = {
   leads: 'leads',
+  email: 'integrations',
   orders: 'orders',
   inventory: 'products',
   integrations: 'integrations',
@@ -112,10 +116,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('leadId')) return 'leads';
     const requestedTab = params.get('section');
-    const validTabs: AdminTab[] = ['overview', 'orders', 'inventory', 'leads', 'integrations', 'profile', 'staff', 'audit'];
+    const validTabs: AdminTab[] = ['overview', 'orders', 'inventory', 'leads', 'email', 'integrations', 'profile', 'staff', 'audit'];
     if (!requestedTab || !validTabs.includes(requestedTab as AdminTab)) return 'overview';
     if (props.role !== 'admin' && (requestedTab === 'staff' || requestedTab === 'audit'
       || (requestedTab === 'leads' && !props.permissions.includes('leads'))
+      || (requestedTab === 'email' && !props.permissions.includes('integrations'))
       || (requestedTab === 'orders' && !props.permissions.includes('orders'))
       || (requestedTab === 'inventory' && !props.permissions.includes('products'))
       || (requestedTab === 'integrations' && !props.permissions.includes('integrations')))) return 'overview';
@@ -127,7 +132,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     const neededPermission = tab === 'leads' ? 'leads'
       : tab === 'orders' ? 'orders'
         : tab === 'inventory' ? 'products'
-          : tab === 'integrations' ? 'integrations'
+          : tab === 'email' || tab === 'integrations' ? 'integrations'
             : null;
     if (props.role !== 'admin' && (
       tab === 'staff'
@@ -269,7 +274,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               <ContactLeadManager role={props.role} leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
             </Suspense>
           )}
-          {activeTab === 'integrations' && <IntegrationStatus role={props.role} />}
+          {activeTab === 'email' && <HostingerMailIntegration role={props.role} />}
+          {activeTab === 'integrations' && <IntegrationStatus />}
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
           {activeTab === 'staff' && props.role === 'admin' && <StaffManager onEnterAccount={props.onEnterAccount} />}
           {activeTab === 'audit' && props.role === 'admin' && <AuditLogView />}
