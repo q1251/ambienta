@@ -108,6 +108,16 @@ function data_ensure_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
+        "CREATE TABLE IF NOT EXISTS email_activity (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            recipient_email VARCHAR(254) NOT NULL,
+            subject VARCHAR(998) NOT NULL,
+            status VARCHAR(16) NOT NULL DEFAULT 'Queued',
+            sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY email_activity_sent_at (sent_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
         "CREATE TABLE IF NOT EXISTS products (
             id VARCHAR(64) NOT NULL PRIMARY KEY,
             name VARCHAR(180) NOT NULL,
@@ -489,6 +499,278 @@ function data_string(array $source, string $key, int $maxLength, bool $required 
     return $value;
 }
 
+function data_mail_directory(): string
+{
+    return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'private';
+}
+
+function data_mail_key(): string
+{
+    if (!function_exists('openssl_encrypt') || !function_exists('openssl_decrypt')) {
+        data_respond(503, ['error' => 'mail_crypto_unavailable', 'message' => 'Secure mail credential storage is unavailable on this server.']);
+    }
+
+    $keyPath = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-encryption-key.bin';
+    if (is_file($keyPath)) {
+        if (!chmod($keyPath, 0600)) {
+            error_log('Ambients mail encryption key permissions could not be restricted.');
+            data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Secure mail storage permissions could not be set.']);
+        }
+        $key = file_get_contents($keyPath);
+        if ($key === false || strlen($key) !== 32) {
+            error_log('Ambients mail encryption key is invalid.');
+            data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Secure mail settings could not be loaded. Contact the administrator.']);
+        }
+        return $key;
+    }
+
+    try {
+        $key = random_bytes(32);
+    } catch (Throwable $error) {
+        error_log('Ambients mail encryption key generation failed.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Secure mail settings could not be initialized.']);
+    }
+
+    $handle = @fopen($keyPath, 'x+b');
+    if ($handle === false) {
+        if (is_file($keyPath)) return data_mail_key();
+        error_log('Ambients private mail storage is not writable.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Secure mail settings could not be stored on this server.']);
+    }
+
+    if (!chmod($keyPath, 0600)) {
+        fclose($handle);
+        @unlink($keyPath);
+        error_log('Ambients mail encryption key permissions could not be restricted.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Secure mail storage permissions could not be set.']);
+    }
+    $written = fwrite($handle, $key);
+    fflush($handle);
+    fclose($handle);
+    if ($written !== 32) {
+        @unlink($keyPath);
+        error_log('Ambients mail encryption key could not be written.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Secure mail settings could not be initialized.']);
+    }
+    return $key;
+}
+
+function data_mail_settings(): array
+{
+    $path = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-settings.json';
+    if (!is_file($path)) return [];
+
+    $contents = file_get_contents($path);
+    $settings = $contents === false ? null : json_decode($contents, true);
+    if (
+        !is_array($settings)
+        || !isset($settings['emailAccount'], $settings['displayName'], $settings['password'], $settings['nonce'], $settings['tag'])
+        || !is_string($settings['emailAccount'])
+        || !is_string($settings['displayName'])
+        || !is_string($settings['password'])
+        || !is_string($settings['nonce'])
+        || !is_string($settings['tag'])
+        || $settings['emailAccount'] !== 'customersupport@ambienta.io'
+        || !filter_var($settings['emailAccount'], FILTER_VALIDATE_EMAIL)
+        || preg_match('/[\r\n\x00]/', $settings['displayName']) === 1
+        || !is_string(base64_decode($settings['password'], true))
+        || strlen((string) base64_decode($settings['nonce'], true)) !== 12
+        || strlen((string) base64_decode($settings['tag'], true)) !== 16
+    ) {
+        error_log('Ambients private mail settings are invalid.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Saved mail settings could not be loaded. Contact the administrator.']);
+    }
+    return $settings;
+}
+
+function data_mail_password(array $settings): string
+{
+    $password = openssl_decrypt(
+        base64_decode($settings['password'], true) ?: '',
+        'aes-256-gcm',
+        data_mail_key(),
+        OPENSSL_RAW_DATA,
+        base64_decode($settings['nonce'], true) ?: '',
+        base64_decode($settings['tag'], true) ?: ''
+    );
+    if (!is_string($password) || $password === '') {
+        error_log('Ambients saved mail credential could not be decrypted.');
+        data_respond(503, ['error' => 'mail_credential_unavailable', 'message' => 'Saved mail credentials could not be read. Re-enter the mailbox password in Integrations.']);
+    }
+    return $password;
+}
+
+function data_mail_save_settings(string $email, string $displayName, string $password): void
+{
+    $existing = data_mail_settings();
+    if ($password === '' && $existing === []) {
+        data_respond(400, ['error' => 'mail_password_required', 'message' => 'Enter the Hostinger mailbox password.']);
+    }
+
+    if ($password === '') {
+        $settings = [
+            'emailAccount' => $email,
+            'displayName' => $displayName,
+            'password' => $existing['password'],
+            'nonce' => $existing['nonce'],
+            'tag' => $existing['tag'],
+        ];
+    } else {
+        $nonce = random_bytes(12);
+        $tag = '';
+        $ciphertext = openssl_encrypt($password, 'aes-256-gcm', data_mail_key(), OPENSSL_RAW_DATA, $nonce, $tag);
+        if (!is_string($ciphertext) || $tag === '') {
+            error_log('Ambients mail credential encryption failed.');
+            data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'The mailbox password could not be secured.']);
+        }
+        $settings = [
+            'emailAccount' => $email,
+            'displayName' => $displayName,
+            'password' => base64_encode($ciphertext),
+            'nonce' => base64_encode($nonce),
+            'tag' => base64_encode($tag),
+        ];
+    }
+
+    $encodedSettings = json_encode($settings, JSON_UNESCAPED_SLASHES);
+    if (!is_string($encodedSettings)) {
+        data_respond(500, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be saved.']);
+    }
+
+    $path = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-settings.json';
+    $temporaryPath = $path . '.' . bin2hex(random_bytes(8)) . '.tmp';
+    $written = @file_put_contents($temporaryPath, $encodedSettings, LOCK_EX);
+    if ($written === false || $written !== strlen($encodedSettings)) {
+        @unlink($temporaryPath);
+        error_log('Ambients encrypted mail settings could not be written.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be stored on this server.']);
+    }
+    if (!chmod($temporaryPath, 0600)) {
+        @unlink($temporaryPath);
+        error_log('Ambients encrypted mail settings permissions could not be restricted.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings permissions could not be set.']);
+    }
+    if (!@rename($temporaryPath, $path)) {
+        @unlink($temporaryPath);
+        error_log('Ambients encrypted mail settings could not be installed.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be stored on this server.']);
+    }
+}
+
+function data_smtp_read_response($socket, array $expectedCodes): string
+{
+    $response = '';
+    $code = '';
+    $complete = false;
+    for ($lineNumber = 0; $lineNumber < 50; $lineNumber++) {
+        $line = fgets($socket, 2048);
+        if ($line === false) {
+            throw new RuntimeException('smtp_response_unavailable');
+        }
+        $response .= $line;
+        if (preg_match('/^(\d{3})([ -])/', $line, $matches) !== 1) {
+            throw new RuntimeException('smtp_invalid_response');
+        }
+        $code = $matches[1];
+        if ($matches[2] === ' ') {
+            $complete = true;
+            break;
+        }
+    }
+    if (!$complete || !in_array($code, $expectedCodes, true)) {
+        throw new RuntimeException('smtp_unexpected_response_' . $code);
+    }
+    return $response;
+}
+
+function data_smtp_write_all($socket, string $data): void
+{
+    $offset = 0;
+    $length = strlen($data);
+    while ($offset < $length) {
+        $written = fwrite($socket, substr($data, $offset));
+        if ($written === false || $written === 0) {
+            throw new RuntimeException('smtp_write_failed');
+        }
+        $offset += $written;
+    }
+}
+
+function data_smtp_command($socket, string $command, array $expectedCodes): string
+{
+    $command .= "\r\n";
+    data_smtp_write_all($socket, $command);
+    return data_smtp_read_response($socket, $expectedCodes);
+}
+
+function data_smtp_connect(array $settings)
+{
+    $context = stream_context_create([
+        'ssl' => [
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'peer_name' => 'smtp.hostinger.com',
+            'SNI_enabled' => true,
+        ],
+    ]);
+    $socket = @stream_socket_client(
+        'ssl://smtp.hostinger.com:465',
+        $errorNumber,
+        $errorMessage,
+        15,
+        STREAM_CLIENT_CONNECT,
+        $context
+    );
+    if ($socket === false) {
+        throw new RuntimeException('smtp_connection_failed');
+    }
+    stream_set_timeout($socket, 15);
+
+    try {
+        data_smtp_read_response($socket, ['220']);
+        data_smtp_command($socket, 'EHLO ambienta.io', ['250']);
+        data_smtp_command($socket, 'AUTH LOGIN', ['334']);
+        data_smtp_command($socket, base64_encode($settings['emailAccount']), ['334']);
+        data_smtp_command($socket, base64_encode(data_mail_password($settings)), ['235']);
+    } catch (Throwable $error) {
+        fclose($socket);
+        throw $error;
+    }
+
+    return $socket;
+}
+
+function data_mail_send(array $settings, string $recipient, string $subject, string $body): void
+{
+    $socket = data_smtp_connect($settings);
+    try {
+        data_smtp_command($socket, 'MAIL FROM:<' . $settings['emailAccount'] . '>', ['250']);
+        data_smtp_command($socket, 'RCPT TO:<' . $recipient . '>', ['250', '251']);
+        data_smtp_command($socket, 'DATA', ['354']);
+        $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        $encodedName = '=?UTF-8?B?' . base64_encode($settings['displayName']) . '?=';
+        $message = implode("\r\n", [
+            'From: ' . $encodedName . ' <' . $settings['emailAccount'] . '>',
+            'To: <' . $recipient . '>',
+            'Subject: ' . $encodedSubject,
+            'Date: ' . date(DATE_RFC2822),
+            'Message-ID: <' . bin2hex(random_bytes(16)) . '@ambienta.io>',
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=UTF-8',
+            'Content-Transfer-Encoding: base64',
+        ]) . "\r\n\r\n" . chunk_split(base64_encode($body), 76, "\r\n") . ".\r\n";
+        data_smtp_write_all($socket, $message);
+        data_smtp_read_response($socket, ['250']);
+        try {
+            data_smtp_command($socket, 'QUIT', ['221']);
+        } catch (Throwable $error) {
+            error_log('Ambients SMTP session could not be closed cleanly after server acceptance.');
+        }
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
 function data_lead_row(array $row): array
 {
     $lead = [
@@ -758,6 +1040,120 @@ $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? ''));
 $resource = $_GET['resource'] ?? '';
 if (!is_string($resource)) {
     data_respond(400, ['error' => 'invalid_resource', 'message' => 'The requested resource is invalid.']);
+}
+
+if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-activity'], true)) {
+    if ($method === 'GET' && $resource === 'email-settings') {
+        data_require_permission('integrations');
+        $settings = data_mail_settings();
+        data_respond(200, [
+            'configured' => $settings !== [],
+            'emailAccount' => $settings['emailAccount'] ?? 'customersupport@ambienta.io',
+            'displayName' => $settings['displayName'] ?? 'Ambienta Customer Support',
+            'smtpHost' => 'smtp.hostinger.com',
+            'smtpPort' => 465,
+        ]);
+    }
+
+    if ($method === 'POST' && $resource === 'email-settings') {
+        data_require_admin('admin');
+        $body = data_read_json(4096);
+        $email = strtolower(data_string($body, 'emailAccount', 254));
+        $displayName = data_string($body, 'displayName', 120);
+        $password = $body['password'] ?? '';
+        if (!is_string($password) || strlen($password) > 1024) {
+            data_respond(400, ['error' => 'invalid_mail_settings', 'message' => 'The mailbox password is invalid.']);
+        }
+        if ($email !== 'customersupport@ambienta.io' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            data_respond(400, ['error' => 'invalid_mail_account', 'message' => 'Use the Hostinger mailbox customersupport@ambienta.io.']);
+        }
+        if (preg_match('/[\r\n\x00]/', $displayName) === 1) {
+            data_respond(400, ['error' => 'invalid_mail_settings', 'message' => 'The sender display name is invalid.']);
+        }
+        data_mail_save_settings($email, $displayName, $password);
+        data_respond(200, ['configured' => true, 'emailAccount' => $email, 'displayName' => $displayName]);
+    }
+
+    if ($method === 'POST' && $resource === 'email-test') {
+        data_require_permission('integrations');
+        data_read_json(1024);
+        $settings = data_mail_settings();
+        if ($settings === []) {
+            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Save the Hostinger mailbox password before testing the connection.']);
+        }
+        $socket = null;
+        try {
+            $socket = data_smtp_connect($settings);
+            data_smtp_command($socket, 'QUIT', ['221']);
+        } catch (Throwable $error) {
+            error_log('Ambients Hostinger SMTP connection test failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'mail_connection_failed', 'message' => 'Hostinger SMTP authentication failed. Verify the mailbox password and try again.']);
+        } finally {
+            if (is_resource($socket)) fclose($socket);
+        }
+        data_respond(200, ['connected' => true, 'message' => 'Hostinger SMTP authentication succeeded.']);
+    }
+
+    if ($method === 'POST' && $resource === 'email-send') {
+        data_require_permission('integrations');
+        $body = data_read_json(32768);
+        $recipient = strtolower(data_string($body, 'recipientEmail', 254));
+        $subject = data_string($body, 'subject', 180);
+        $message = $body['body'] ?? null;
+        if (!is_string($message) || trim($message) === '' || strlen($message) > 24000) {
+            data_respond(400, ['error' => 'invalid_email_content', 'message' => 'Enter a message of 24,000 bytes or less.']);
+        }
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            data_respond(400, ['error' => 'invalid_recipient', 'message' => 'Enter a valid recipient email address.']);
+        }
+        if (preg_match('/[\r\n\x00]/', $subject) === 1 || preg_match('/\x00/', $message) === 1) {
+            data_respond(400, ['error' => 'invalid_email_content', 'message' => 'The email subject or message contains unsupported characters.']);
+        }
+        $settings = data_mail_settings();
+        if ($settings === []) {
+            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
+        }
+        $db = data_db();
+        $db->prepare('INSERT INTO email_activity (recipient_email, subject, status) VALUES (?, ?, ?)')->execute([$recipient, $subject, 'Queued']);
+        $activityId = $db->lastInsertId();
+        try {
+            data_mail_send($settings, $recipient, $subject, $message);
+        } catch (Throwable $error) {
+            try {
+                $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Failed', $activityId]);
+            } catch (Throwable $updateError) {
+                error_log('Ambients failed email activity status could not be updated.');
+            }
+            error_log('Ambients Hostinger email send failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'mail_send_failed', 'message' => 'Hostinger did not accept the email. Verify the connection and try again.']);
+        }
+
+        try {
+            $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Sent', $activityId]);
+            data_respond(201, ['sent' => true, 'logged' => true, 'message' => 'Hostinger accepted the email for sending.']);
+        } catch (Throwable $error) {
+            error_log('Ambients email activity could not be saved after SMTP acceptance: ' . $error->getMessage());
+            data_respond(201, [
+                'sent' => true,
+                'logged' => false,
+                'message' => 'Hostinger accepted the email, but CRM activity could not be saved. Do not retry unless necessary.',
+            ]);
+        }
+    }
+
+    if ($method === 'GET' && $resource === 'email-activity') {
+        data_require_permission('integrations');
+        $rows = data_db()->query('SELECT id, recipient_email, subject, status, sent_at FROM email_activity ORDER BY id DESC LIMIT 100')->fetchAll();
+        data_respond(200, ['messages' => array_map(static fn (array $row): array => [
+            'id' => (string) $row['id'],
+            'recipientEmail' => $row['recipient_email'],
+            'subject' => $row['subject'],
+            'status' => $row['status'],
+            'sentAt' => $row['sent_at'],
+        ], $rows)]);
+    }
+
+    data_respond(405, ['error' => 'method_not_allowed', 'message' => 'The requested mail operation is not allowed.']);
 }
 
 if ($method === 'POST' && $resource === 'staff-session') {
