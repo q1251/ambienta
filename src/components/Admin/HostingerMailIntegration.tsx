@@ -463,8 +463,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-3 lg:sticky lg:top-4">
+      {mode === 'mailbox' && <section className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-3">
           <button
             type="button"
             onClick={() => setActiveFolder('compose')}
