@@ -663,7 +663,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
         <div className="grid items-stretch gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className={`rounded-2xl border border-slate-200 bg-white p-3 ${
-          activeFolder === 'compose' ? 'h-fit self-start' : 'h-full self-stretch'
+          activeFolder === 'compose' || activeFolder === 'campaigns' ? 'h-fit self-start' : 'h-full self-stretch'
         }`}>
           <button
             type="button"
