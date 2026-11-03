@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Check, Copy, Download, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, Copy, Download, Mail, MessageSquare, Package, Pencil, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, getLeadCountry, parseLeadsCsv } from '../../utils/pharmacyLogic';
 import { CountrySelect, PhoneCountryInput } from './PhoneCountryInput';
@@ -54,6 +54,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [contactDetailsEditing, setContactDetailsEditing] = useState(false);
   const [activityNote, setActivityNote] = useState('');
   const [activitySaving, setActivitySaving] = useState(false);
   const [emailSubject, setEmailSubject] = useState('');
@@ -171,7 +172,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }]);
   };
 
-  const openProfile = async (lead: ContactLead) => {
+  const openProfile = async (lead: ContactLead, beginEditing = false) => {
     if (!onLoadLeadProfile) return;
     const requestId = ++profileRequestId.current;
     const url = new URL(window.location.href);
@@ -181,6 +182,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfile(null);
     setProfileError('');
     setProfileSaving(false);
+    setContactDetailsEditing(beginEditing);
     setActivitySaving(false);
     setActivityNote('');
     setEmailSubject('');
@@ -221,20 +223,21 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setSelectedLeadId(null);
     setProfile(null);
     setProfileError('');
+    setContactDetailsEditing(false);
     setProfileLoading(false);
     setProfileSaving(false);
     setActivitySaving(false);
   };
 
-  const updateProfile = async (update: ContactLeadUpdate) => {
-    if (!profile || !onUpdateLead) return;
+  const updateProfile = async (update: ContactLeadUpdate): Promise<boolean> => {
+    if (!profile || !onUpdateLead) return false;
     const requestId = profileRequestId.current;
     const leadId = profile.lead.id;
     setProfileSaving(true);
     setProfileError('');
     try {
       const lead = await onUpdateLead(leadId, update);
-      if (requestId !== profileRequestId.current) return;
+      if (requestId !== profileRequestId.current) return false;
       setProfile((current) => current?.lead.id === leadId ? { ...current, lead } : current);
       if (update.firstName !== undefined) setProfileFirstName(lead.firstName);
       if (update.lastName !== undefined) setProfileLastName(lead.lastName);
@@ -246,14 +249,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           const refreshed = await onLoadLeadProfile(lead.id);
           if (requestId === profileRequestId.current) setProfile(refreshed);
         } catch (error) {
-          if (requestId !== profileRequestId.current) return;
+          if (requestId !== profileRequestId.current) return false;
           const reason = error instanceof Error ? ` ${error.message}` : '';
           setProfileError(`The change was saved, but the activity timeline could not be refreshed. Reload the profile to see the latest history.${reason}`);
         }
       }
+      return true;
     } catch (error) {
-      if (requestId !== profileRequestId.current) return;
+      if (requestId !== profileRequestId.current) return false;
       setProfileError(error instanceof Error ? error.message : 'The contact profile could not be updated.');
+      return false;
     } finally {
       if (requestId === profileRequestId.current) setProfileSaving(false);
     }
@@ -267,7 +272,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       email: profileEmail.trim(),
       phone: profilePhone.trim(),
       country: profileCountry.trim(),
+    }).then((saved) => {
+      if (saved) setContactDetailsEditing(false);
     });
+  };
+
+  const cancelContactDetailsEdit = () => {
+    if (!profile) return;
+    setProfileFirstName(profile.lead.firstName);
+    setProfileLastName(profile.lead.lastName);
+    setProfileEmail(profile.lead.email);
+    setProfilePhone(profile.lead.phone);
+    setProfileCountry(profile.lead.country || getLeadCountry(profile.lead.phone));
+    setContactDetailsEditing(false);
   };
 
   const saveActivity = async (event: React.FormEvent) => {
@@ -371,7 +388,20 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         {profile && (
           <>
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <h3 className="text-base font-bold text-slate-900">Contact details</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-base font-bold text-slate-900">Contact details</h3>
+                {isSuperadmin && (
+                  <button
+                    type="button"
+                    aria-expanded={contactDetailsEditing}
+                    onClick={() => contactDetailsEditing ? cancelContactDetailsEdit() : setContactDetailsEditing(true)}
+                    className="inline-flex items-center gap-2 rounded-md border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+                  >
+                    {contactDetailsEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                    {contactDetailsEditing ? 'Cancel editing' : 'Edit contact details'}
+                  </button>
+                )}
+              </div>
               <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 <div><p className="text-xs font-medium uppercase text-slate-500">Email</p><p className="mt-1 break-all text-sm text-slate-900">{profile.lead.email}</p></div>
                 <div>
@@ -397,7 +427,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </div>
                 </div>
               </div>
-              {isSuperadmin && (
+              {isSuperadmin && contactDetailsEditing && (
                 <form onSubmit={saveContactDetails} className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
                   <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                   <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
@@ -407,6 +437,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <div className="flex items-end sm:col-span-2">
                     <button type="submit" disabled={profileSaving || !onUpdateLead} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
                       {profileSaving ? 'Saving contact details…' : 'Save contact details'}
+                    </button>
+                    <button type="button" disabled={profileSaving} onClick={cancelContactDetailsEdit} className="ml-2 rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
+                      Cancel
                     </button>
                   </div>
                 </form>
@@ -553,6 +586,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       {dataError && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
       {requestError && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
       {success && <p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{success}</p>}
+      {!isSuperadmin && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Existing lead contact details are read-only for your role. A superadmin can edit them from this table or the lead profile.</p>}
 
       {mode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => {
@@ -670,26 +704,18 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th></tr></thead>
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th><th className="py-3">Actions</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
                 <tr
                   key={lead.id}
-                  className={`border-t border-slate-100 hover:bg-slate-50 ${onLoadLeadProfile ? 'cursor-pointer' : ''}`}
-                  role={onLoadLeadProfile ? 'button' : undefined}
-                  tabIndex={onLoadLeadProfile ? 0 : undefined}
-                  aria-label={onLoadLeadProfile ? `Open profile for ${lead.firstName} ${lead.lastName}` : undefined}
-                  onClick={() => void openProfile(lead)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      void openProfile(lead);
-                    }
-                  }}
+                  className="border-t border-slate-100 hover:bg-slate-50"
                 >
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center">
-                      <span className={onLoadLeadProfile ? 'font-semibold text-teal-800 underline-offset-2 hover:underline' : ''}>{lead.firstName} {lead.lastName}</span>
+                      {onLoadLeadProfile
+                        ? <button type="button" onClick={() => void openProfile(lead)} className="font-semibold text-teal-800 underline-offset-2 hover:underline">{lead.firstName} {lead.lastName}</button>
+                        : <span>{lead.firstName} {lead.lastName}</span>}
                       {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
                     </span>
                   </td>
@@ -711,9 +737,20 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>
+                  <td className="py-3 pr-3">
+                    {isSuperadmin && onLoadLeadProfile && (
+                      <button
+                        type="button"
+                        onClick={() => void openProfile(lead, true)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-teal-700 px-2.5 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
-              {!filteredLeads.length && <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
+              {!filteredLeads.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
             </tbody>
           </table>
         </div>

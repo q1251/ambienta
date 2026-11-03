@@ -117,20 +117,21 @@ email address. Lead profiles support manual stages (Cold, Contacted, Qualified,
 Customer, Inactive), consent changes, and order history matched by email,
 including fulfillment status and tracking details. Order activity does not
 change the manually managed lead stage; update it from the profile when
-appropriate. Profiles also allow staff to add or correct a phone number, open
-the phone dialer with click-to-call, and add internal comments. Stage changes
-save immediately and appear in a dedicated history with the previous and new
-stage, acting staff member, and timestamp. Phone edits are also audited;
-comments retain their author and timestamp. Notes are operational only: never
-enter health, prescription, insurance, payment-card, or other sensitive
-personal information.
+appropriate. Profiles show the phone dialer with click-to-call and allow staff
+to add internal comments. Stage changes save immediately and appear in a
+dedicated history with the previous and new stage, acting staff member, and
+timestamp. Contact edits are audited; comments retain their author and
+timestamp. Notes are operational only: never enter health, prescription,
+insurance, payment-card, or other sensitive personal information.
 
 Only the primary administrator (the `admin` role / superadmin) can edit a
 lead's name, email, phone number, or country. This is enforced by the data API;
 operators can view those details and manage stages and comments. Phone entry
-offers international calling codes and flags, and country entry uses the
-country selector. Operator CSV imports cannot overwrite contact details on
-existing leads.
+offers searchable international calling codes with bundled flag images, and
+country entry uses the same searchable country picker. Superadmins can edit a
+lead from the table's **Edit** action or from **Edit contact details** in the
+profile. Operator CSV imports cannot overwrite contact details on existing
+leads.
 
 The Leads table includes a **Not called, repeat buyers** view for contacts with
 no recorded call activity and at least two non-cancelled orders. Its order
