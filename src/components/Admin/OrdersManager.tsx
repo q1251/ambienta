@@ -535,7 +535,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       </div>
 
       {orderPageId && !selectedOrder && (
-        <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <div className="w-full space-y-5">
+          <div>
+            <button type="button" onClick={handleCloseOrderPage} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-teal-800">
+              <ArrowLeft className="h-4 w-4" />Orders
+            </button>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950">Order details</h1>
+            <p className="mt-1 text-sm text-slate-500">Review customer, payment, and fulfillment information.</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           {orderPageLoading ? (
             <p role="status" className="text-sm text-slate-600">Loading order…</p>
           ) : (
@@ -546,15 +554,37 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </button>
             </>
           )}
+          </div>
         </div>
       )}
 
       {/* Comprehensive Order Detail Modal / Order Page */}
       {selectedOrder && (
-        <div className={orderPageId ? 'mx-auto w-full max-w-5xl' : 'fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4'}>
-          <div className={orderPageId ? 'w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm' : 'bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200'}>
+        <div className={orderPageId ? 'w-full space-y-6' : 'fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4'}>
+          {orderPageId && (
+            <div className="flex flex-col gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <button type="button" onClick={handleCloseOrderPage} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-teal-800">
+                  <ArrowLeft className="h-4 w-4" />Orders
+                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Order #{selectedOrder.orderNumber}</h1>
+                  <span className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-bold text-teal-900">{selectedOrder.status}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-500">Placed {selectedOrder.placedAt} <span className="mx-1.5">·</span> {selectedOrder.patientName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center justify-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 sm:self-auto"
+              >
+                <Printer className="h-4 w-4" />Print order
+              </button>
+            </div>
+          )}
+          <div className={orderPageId ? 'w-full' : 'bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200'}>
             {/* Header */}
-            <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
+            {!orderPageId && <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-teal-700 flex items-center justify-center font-bold text-white text-xs">
                   ORD
@@ -593,14 +623,14 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   </button>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* Modal Body */}
-            <div className={orderPageId ? 'p-6 space-y-6 text-xs' : 'p-6 overflow-y-auto space-y-6 text-xs'}>
+            <div className={orderPageId ? 'grid grid-cols-1 items-start gap-5 text-xs lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.9fr)]' : 'p-6 overflow-y-auto space-y-6 text-xs'}>
               {/* Top Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={orderPageId ? 'grid grid-cols-1 gap-4 lg:col-start-2 lg:row-start-1' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
                 {/* Customer Info */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5">
+                <div className={orderPageId ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-2' : 'bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5'}>
                   <span className="font-bold text-slate-800 text-xs block">Customer Information</span>
                   <p className="font-semibold text-slate-900">{selectedOrder.patientName}</p>
                   <p className="text-slate-600 font-mono text-[11px]">{selectedOrder.email}</p>
@@ -612,7 +642,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </div>
 
                 {/* Payment & Audit Info */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5">
+                <div className={orderPageId ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-2' : 'bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5'}>
                   <span className="font-bold text-slate-800 text-xs block">Payment status</span>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Method:</span>
@@ -630,7 +660,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>
 
               {/* Items List */}
-              <div className="space-y-3">
+              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-1' : 'space-y-3'}>
                 <span className="font-bold text-slate-800 text-xs block">Order Line Items</span>
                 <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
                   {selectedOrder.items && selectedOrder.items.length > 0 ? (
@@ -699,7 +729,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>
 
               {/* Fulfillment & Tracking Section */}
-              <div className="bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3">
+              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-teal-200 bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-2' : 'bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3'}>
                 <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
                   <Truck className="w-4 h-4 text-teal-700" />
                   <span>Fulfillment &amp; Tracking</span>
@@ -744,7 +774,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>
 
               {/* Internal Notes Log */}
-              <div className="space-y-2">
+              <div className={orderPageId ? 'space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-start-2 lg:row-start-2' : 'space-y-2'}>
                 <span className="font-bold text-slate-800 text-xs block">Internal Staff Notes</span>
                 <div className="flex gap-2">
                   <input
