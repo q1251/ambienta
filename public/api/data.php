@@ -125,6 +125,8 @@ function data_ensure_schema(PDO $db): void
             price DECIMAL(10,2) NOT NULL,
             stock_count INT UNSIGNED NOT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
+            is_featured TINYINT(1) NOT NULL DEFAULT 0,
+            is_archived TINYINT(1) NOT NULL DEFAULT 0,
             last_restocked DATE NULL,
             UNIQUE KEY products_sku (sku)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
@@ -250,12 +252,17 @@ function data_ensure_schema(PDO $db): void
         'cost_price' => 'DECIMAL(10,2) NULL',
         'copay_price' => 'DECIMAL(10,2) NULL',
         'last_restocked' => 'DATE NULL',
+        'is_featured' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'is_archived' => 'TINYINT(1) NOT NULL DEFAULT 0',
     ];
     foreach ($legacyColumns as $column => $definition) {
         $check = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
         $check->execute([$databaseName, 'products', $column]);
         if ((int) $check->fetchColumn() === 0) {
             $db->exec("ALTER TABLE products ADD COLUMN `$column` $definition");
+            if ($column === 'is_archived') {
+                $db->exec('UPDATE products SET is_archived = 1 WHERE is_active = 0');
+            }
         }
     }
     foreach (['products', 'order_items'] as $table) {
@@ -512,6 +519,8 @@ function data_product_row(array $row): array
         'stockCount' => $stock,
         'minStockThreshold' => (int) $row['min_stock_threshold'],
         'inStock' => $stock > 0 && (bool) $row['is_active'],
+        'isActive' => (bool) $row['is_active'],
+        'isFeatured' => (bool) ($row['is_featured'] ?? false),
         'lastRestocked' => $row['last_restocked'],
     ];
 }
@@ -565,6 +574,11 @@ function data_product_input(PDO $db, array $body, bool $isUpdate): array
         data_respond(400, ['error' => 'invalid_category', 'message' => 'Choose an existing active product category.']);
     }
     $category = (string) $savedCategory;
+    $isActive = $body['isActive'] ?? true;
+    $isFeatured = $body['isFeatured'] ?? false;
+    if (!is_bool($isActive) || !is_bool($isFeatured)) {
+        data_respond(400, ['error' => 'invalid_product', 'message' => 'Storefront visibility and featured status must be true or false.']);
+    }
     return [
         'id' => $id,
         'name' => $name,
@@ -581,6 +595,8 @@ function data_product_input(PDO $db, array $body, bool $isUpdate): array
         'stockCount' => $stock,
         'minStockThreshold' => $minimum,
         'inStock' => $stock > 0,
+        'isActive' => $isActive,
+        'isFeatured' => $isFeatured,
     ];
 }
 
@@ -644,7 +660,7 @@ if (!is_string($resource)) {
 
 if ($method === 'GET' && $resource === 'catalog') {
     $db = data_db();
-    $rows = $db->query('SELECT * FROM products WHERE is_active = 1 ORDER BY name')->fetchAll();
+    $rows = $db->query('SELECT * FROM products WHERE is_active = 1 AND is_archived = 0 ORDER BY is_featured DESC, name')->fetchAll();
     $categories = $db->query('SELECT name FROM product_categories WHERE is_active = 1 ORDER BY name')->fetchAll(PDO::FETCH_COLUMN);
     data_respond(200, ['products' => array_map('data_product_row', $rows), 'categories' => $categories]);
 }
@@ -652,6 +668,10 @@ if ($method === 'GET' && $resource === 'catalog') {
 if ($method === 'GET') {
     data_require_admin();
     $db = data_db();
+    if ($resource === 'products') {
+        $rows = $db->query('SELECT * FROM products WHERE is_archived = 0 ORDER BY is_featured DESC, name')->fetchAll();
+        data_respond(200, ['products' => array_map('data_product_row', $rows)]);
+    }
     if ($resource === 'leads') {
         $leadId = $_GET['id'] ?? null;
         if ($leadId !== null) {
@@ -813,15 +833,16 @@ if ($method === 'POST' && $resource === 'products') {
     $db->beginTransaction();
     try {
         $insert = $db->prepare(
-            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, price, cost_price, copay_price, stock_count, min_stock_threshold, is_active, last_restocked)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, price, cost_price, copay_price, stock_count, min_stock_threshold, is_active, is_featured, last_restocked)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         foreach ($products as $product) {
             $insert->execute([
                 $product['id'], $product['name'], $product['category'], $product['description'],
                 (int) $product['rxRequired'], $product['dosage'], $product['sku'], $product['ndcCode'],
                 $product['image'], $product['price'], $product['costPrice'], $product['copayPrice'],
-                $product['stockCount'], $product['minStockThreshold'], $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
+                $product['stockCount'], $product['minStockThreshold'], (int) $product['isActive'], (int) $product['isFeatured'],
+                $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
             ]);
             data_audit($db, 'product.created', 'product', $product['id'], ['sku' => $product['sku']]);
         }
@@ -976,17 +997,18 @@ if ($method === 'PATCH' && $resource === 'products') {
     try {
         $update = $db->prepare(
             'UPDATE products SET name = ?, category = ?, description = ?, rx_required = ?, dosage = ?, sku = ?, ndc_code = ?, image = ?,
-             price = ?, cost_price = ?, copay_price = ?, stock_count = ?, min_stock_threshold = ?, is_active = 1,
-             last_restocked = IF(stock_count < ?, CURDATE(), last_restocked) WHERE id = ? AND is_active = 1'
+             price = ?, cost_price = ?, copay_price = ?, stock_count = ?, min_stock_threshold = ?, is_active = ?, is_featured = ?,
+             last_restocked = IF(stock_count < ?, CURDATE(), last_restocked) WHERE id = ? AND is_archived = 0'
         );
         $update->execute([
             $product['name'], $product['category'], $product['description'], (int) $product['rxRequired'],
             $product['dosage'], $product['sku'], $product['ndcCode'], $product['image'], $product['price'],
             $product['costPrice'], $product['copayPrice'], $product['stockCount'], $product['minStockThreshold'],
+            (int) $product['isActive'], (int) $product['isFeatured'],
             $product['stockCount'], $product['id'],
         ]);
         if ($update->rowCount() === 0) {
-            $check = $db->prepare('SELECT id FROM products WHERE id = ? AND is_active = 1');
+            $check = $db->prepare('SELECT id FROM products WHERE id = ? AND is_archived = 0');
             $check->execute([$product['id']]);
             if (!$check->fetch()) {
                 $db->rollBack();
@@ -1014,7 +1036,7 @@ if ($method === 'DELETE' && $resource === 'products') {
     $db = data_db();
     $db->beginTransaction();
     try {
-        $update = $db->prepare('UPDATE products SET is_active = 0 WHERE id = ? AND is_active = 1');
+        $update = $db->prepare('UPDATE products SET is_active = 0, is_archived = 1 WHERE id = ? AND is_archived = 0');
         $update->execute([$id]);
         if ($update->rowCount() === 0) {
             $db->rollBack();

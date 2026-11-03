@@ -16,6 +16,9 @@ import {
   FileSpreadsheet,
   Layers,
   ArrowUpDown,
+  Eye,
+  EyeOff,
+  Star,
 } from 'lucide-react';
 import { CatalogItem } from '../../types/pharmacy';
 import { generateProductTemplateCsv, parseProductsCsv } from '../../utils/productCsv';
@@ -51,6 +54,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<CatalogItem | null>(null);
   const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false);
   const [isProductCsvOpen, setIsProductCsvOpen] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('All');
@@ -75,6 +79,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [description, setDescription] = useState('');
   const [rxRequired, setRxRequired] = useState(false);
   const [imageOption, setImageOption] = useState('');
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
   const productCsvPreview = parseProductsCsv(
     productCsv,
     catalogItems.map((item) => item.sku),
@@ -86,7 +92,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const lowStockCount = catalogItems.filter(
     (i) => i.stockCount <= i.minStockThreshold && i.stockCount > 0
   ).length;
-  const outOfStockCount = catalogItems.filter((i) => i.stockCount <= 0 || !i.inStock).length;
+  const outOfStockCount = catalogItems.filter((i) => i.stockCount <= 0).length;
   const totalInventoryValuation = catalogItems.reduce(
     (sum, i) => sum + i.price * i.stockCount,
     0
@@ -105,9 +111,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     if (stockStatusFilter === 'Low') {
       matchesStock = item.stockCount <= item.minStockThreshold && item.stockCount > 0;
     } else if (stockStatusFilter === 'Out') {
-      matchesStock = item.stockCount <= 0 || !item.inStock;
+      matchesStock = item.stockCount <= 0;
     } else if (stockStatusFilter === 'InStock') {
-      matchesStock = item.stockCount > item.minStockThreshold && item.inStock;
+      matchesStock = item.stockCount > item.minStockThreshold;
     }
 
     return matchesSearch && matchesCategory && matchesStock;
@@ -127,6 +133,24 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       setNotification(`Updated stock for ${item.name} to ${newCount} units.`);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Inventory update could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleListing = async (item: CatalogItem, field: 'isActive' | 'isFeatured') => {
+    const currentlyEnabled = field === 'isActive' ? item.isActive !== false : item.isFeatured === true;
+    setActionError('');
+    setIsSaving(true);
+    try {
+      const savedItem = await onUpdateProduct({ ...item, [field]: !currentlyEnabled });
+      setNotification(
+        field === 'isActive'
+          ? `${savedItem.name} is now ${savedItem.isActive === false ? 'hidden from' : 'visible on'} the storefront.`
+          : `${savedItem.name} ${savedItem.isFeatured ? 'added to' : 'removed from'} featured products.`,
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The storefront setting could not be saved.');
     } finally {
       setIsSaving(false);
     }
@@ -157,6 +181,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       ndcCode: ndcCode.trim() || undefined,
       description: description.trim() || 'Verified pharmaceutical formulation.',
       rxRequired,
+      isActive: isPublished,
+      isFeatured,
       inStock: parsedStock > 0,
       image: imageOption || catalogItems.find((item) => item.image)?.image || '',
       lastRestocked: new Date().toISOString().slice(0, 10),
@@ -168,18 +194,18 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       await onAddProduct(newItem);
       setNotification(`Successfully added product: ${newItem.name}`);
       setIsAddModalOpen(false);
+      setName('');
+      setDescription('');
+      setDosage('');
+      setSku('');
+      setNdcCode('');
+      setIsFeatured(false);
+      setIsPublished(true);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The product could not be saved.');
     } finally {
       setIsSaving(false);
     }
-
-    // Reset form
-    setName('');
-    setDescription('');
-    setDosage('');
-    setSku('');
-    setNdcCode('');
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -278,10 +304,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             <span>Dispensary Catalog &amp; Formulations</span>
           </div>
           <h3 className="text-base font-bold text-slate-900">
-            Product Upload, Stock Tracking &amp; Price Adjustments
+            Product catalog
           </h3>
           <p className="text-xs text-slate-500">
-            Manage public pharmacy catalog, NDC codes, copay formulas, and real-time inventory counts
+            Manage product details, storefront placement, pricing, and catalog presentation
           </p>
         </div>
 
@@ -437,13 +463,14 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 <th className="py-3 px-3 text-center">Stock Level</th>
                 <th className="py-3 px-3 text-center">Quick Stock Adjust</th>
                 <th className="py-3 px-3 text-center">Status</th>
+                <th className="py-3 px-3 text-center">Storefront</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredProducts.map((item) => {
                 const isLow = item.stockCount <= item.minStockThreshold && item.stockCount > 0;
-                const isOut = item.stockCount <= 0 || !item.inStock;
+                const isOut = item.stockCount <= 0;
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
@@ -558,8 +585,52 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       </span>
                     </td>
 
+                    <td className="py-3 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => void handleToggleListing(item, 'isFeatured')}
+                          title={item.isFeatured ? 'Remove from featured products' : 'Feature this product'}
+                          aria-label={item.isFeatured ? `Unfeature ${item.name}` : `Feature ${item.name}`}
+                          aria-pressed={item.isFeatured === true}
+                          className={`rounded-md p-1.5 transition-colors ${item.isFeatured ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'text-slate-400 hover:bg-slate-100 hover:text-amber-600'}`}
+                        >
+                          <Star className={`h-4 w-4 ${item.isFeatured ? 'fill-current' : ''}`} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => void handleToggleListing(item, 'isActive')}
+                          title={item.isActive === false ? 'Show on storefront' : 'Hide from storefront'}
+                          aria-label={item.isActive === false ? `Show ${item.name} on storefront` : `Hide ${item.name} from storefront`}
+                          aria-pressed={item.isActive !== false}
+                          className={`rounded-md p-1.5 transition-colors ${item.isActive === false ? 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700' : 'bg-emerald-50 text-emerald-700 hover:bg-amber-50 hover:text-amber-700'}`}
+                        >
+                          {item.isActive === false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <div className="mt-1 flex justify-center gap-1">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {item.isActive === false ? 'Hidden' : 'Published'}
+                        </span>
+                        {item.isFeatured && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Featured</span>}
+                      </div>
+                    </td>
+
                     <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
                       <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => setPreviewItem(item)}
+                        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-800"
+                        title="Preview storefront card"
+                        aria-label={`Preview ${item.name} storefront card`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
                         disabled={isSaving}
                         onClick={() => setEditingItem(item)}
                         className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded-md transition-colors"
@@ -568,6 +639,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
+                        type="button"
                         disabled={isSaving}
                         onClick={() => {
                           if (window.confirm(`Archive "${item.name}"? It will disappear from the storefront, but old order records will remain.`)) {
@@ -598,6 +670,40 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           </div>
         )}
       </div>
+
+      {previewItem && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`${previewItem.name} storefront preview`} onClick={() => setPreviewItem(null)}>
+          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <h3 className="font-semibold text-slate-900">Storefront preview</h3>
+                <p className="text-xs text-slate-500">Product card appearance</p>
+              </div>
+              <button type="button" onClick={() => setPreviewItem(null)} aria-label="Close preview" className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-2xl bg-slate-100">
+                {previewItem.image ? (
+                  <img src={previewItem.image} alt={previewItem.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-slate-400"><Package className="h-12 w-12" /></div>
+                )}
+                {previewItem.isFeatured && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-amber-700 shadow-sm"><Star className="h-3 w-3 fill-current" /> Featured</span>}
+                {previewItem.isActive === false && <span className="absolute right-3 top-3 rounded-full bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-white">Hidden</span>}
+              </div>
+              <p className="text-xs font-medium text-teal-800">{previewItem.category}{previewItem.rxRequired ? ' · Prescription required' : ''}</p>
+              <h4 className="mt-1 text-lg font-semibold leading-snug text-slate-900">{previewItem.name}</h4>
+              <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600">{previewItem.description || 'Product description will appear here.'}</p>
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+                <span className="text-lg font-semibold text-slate-900">${previewItem.price.toFixed(2)}</span>
+                <span className="text-xs text-slate-500">{previewItem.dosage || 'Product details'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isProductCsvOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
@@ -670,8 +776,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Upload &amp; Add New Medication</h3>
-                <p className="text-xs text-slate-500">Configure pharmacy catalog item, inventory &amp; pricing</p>
+                <h3 className="text-lg font-bold text-slate-900">Add a product</h3>
+                <p className="text-xs text-slate-500">Create the product listing and choose its storefront placement.</p>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
@@ -683,6 +789,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
             <form onSubmit={handleAddSubmit} className="p-6 space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2 border-b border-slate-200 pb-2">
+                  <h4 className="font-bold text-slate-900">Product details</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">The information customers see in the catalog.</p>
+                </div>
                 <div className="sm:col-span-2">
                   <label className="block font-semibold text-slate-700 mb-1">
                     Medication / Product Name <span className="text-rose-500">*</span>
@@ -725,6 +835,31 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 </div>
 
                 <div>
+                  <label className="block font-semibold text-slate-700 mb-1">SKU Code</label>
+                  <input
+                    type="text"
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    placeholder="e.g. RX-AMX-500"
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">National Drug Code (NDC)</label>
+                  <input
+                    type="text"
+                    value={ndcCode}
+                    onChange={(e) => setNdcCode(e.target.value)}
+                    placeholder="e.g. NDC 0093-3109-01"
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 border-b border-slate-200 pb-2 pt-2">
+                  <h4 className="font-bold text-slate-900">Pricing</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Set the customer-facing price and optional copay estimate.</p>
+                </div>
+                <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Retail Price ($) <span className="text-rose-500">*</span>
                   </label>
@@ -751,6 +886,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   />
                 </div>
 
+                <div className="sm:col-span-2 border-b border-slate-200 pb-2 pt-2">
+                  <h4 className="font-bold text-slate-900">Stock settings</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Maintain the existing stock count and alert threshold.</p>
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Initial Stock Count (Units) <span className="text-rose-500">*</span>
@@ -776,33 +915,13 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">SKU Code</label>
-                  <input
-                    type="text"
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                    placeholder="e.g. RX-AMX-500"
-                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
-                  />
+                <div className="sm:col-span-2 border-b border-slate-200 pb-2 pt-2">
+                  <h4 className="font-bold text-slate-900">Storefront listing</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Choose the image and how this product appears to customers.</p>
                 </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    National Drug Code (NDC)
-                  </label>
-                  <input
-                    type="text"
-                    value={ndcCode}
-                    onChange={(e) => setNdcCode(e.target.value)}
-                    placeholder="e.g. NDC 0093-3109-01"
-                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
-                  />
-                </div>
-
                 <div className="sm:col-span-2">
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Product Photography Asset
+                    Product image
                   </label>
                   <select
                     value={imageOption}
@@ -821,7 +940,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
                 <div className="sm:col-span-2">
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Clinical Description &amp; Usage
+                    Product description
                   </label>
                   <textarea
                     rows={3}
@@ -832,16 +951,18 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   ></textarea>
                 </div>
 
-                <div className="sm:col-span-2 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="rxRequired"
-                    checked={rxRequired}
-                    onChange={(e) => setRxRequired(e.target.checked)}
-                    className="rounded text-teal-700 focus:ring-teal-700"
-                  />
-                  <label htmlFor="rxRequired" className="font-semibold text-slate-800 cursor-pointer">
-                    Clinical Grade Formula (Doctor Verification Required)
+                <div className="sm:col-span-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+                  <label className="flex items-start gap-2 font-semibold text-slate-800">
+                    <input type="checkbox" checked={rxRequired} onChange={(e) => setRxRequired(e.target.checked)} className="mt-0.5 rounded text-teal-700 focus:ring-teal-700" />
+                    <span>Prescription required</span>
+                  </label>
+                  <label className="flex items-start gap-2 font-semibold text-slate-800">
+                    <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="mt-0.5 rounded text-teal-700 focus:ring-teal-700" />
+                    <span>Show on storefront</span>
+                  </label>
+                  <label className="flex items-start gap-2 font-semibold text-slate-800 sm:col-span-2">
+                    <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} className="mt-0.5 rounded text-teal-700 focus:ring-teal-700" />
+                    <span>Feature this product in the storefront</span>
                   </label>
                 </div>
               </div>
@@ -859,7 +980,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   disabled={isSaving}
                   className="px-5 py-2.5 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
                 >
-                  {isSaving ? 'Saving…' : 'Save &amp; Publish to Public Catalog'}
+                  {isSaving ? 'Saving…' : 'Save product'}
                 </button>
               </div>
             </form>
@@ -870,11 +991,11 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       {/* MODAL 2: EDIT PRODUCT DETAILS & PRICING */}
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  Edit Pricing &amp; Details: {editingItem.name}
+                  Edit product: {editingItem.name}
                 </h3>
                 <p className="text-xs text-slate-500 font-mono">SKU: {editingItem.sku}</p>
               </div>
@@ -887,8 +1008,12 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             </div>
 
             <form onSubmit={handleEditSubmit} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="col-span-full border-b border-slate-200 pb-2">
+                  <h4 className="font-bold text-slate-900">Product details</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Name, category, identifiers, image, and customer-facing description.</p>
+                </div>
+                <div className="col-span-full">
                   <label className="block font-semibold text-slate-700 mb-1">Product Title</label>
                   <input
                     type="text"
@@ -899,7 +1024,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   />
                 </div>
 
-                <div className="col-span-2">
+                <div className="col-span-full">
                   <label className="block font-semibold text-slate-700 mb-1">Category</label>
                   <select
                     value={editingItem.category}
@@ -910,6 +1035,61 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   </select>
                 </div>
 
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Dosage &amp; Packaging</label>
+                  <input
+                    type="text"
+                    value={editingItem.dosage}
+                    onChange={(event) => setEditingItem({ ...editingItem, dosage: event.target.value })}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">SKU</label>
+                  <input
+                    type="text"
+                    value={editingItem.sku}
+                    onChange={(event) => setEditingItem({ ...editingItem, sku: event.target.value })}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-slate-900"
+                  />
+                </div>
+                <div className="col-span-full">
+                  <label className="block font-semibold text-slate-700 mb-1">National Drug Code (NDC)</label>
+                  <input
+                    type="text"
+                    value={editingItem.ndcCode || ''}
+                    onChange={(event) => setEditingItem({ ...editingItem, ndcCode: event.target.value || undefined })}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-slate-900"
+                  />
+                </div>
+                <div className="col-span-full">
+                  <label className="block font-semibold text-slate-700 mb-1">Product image</label>
+                  <select
+                    value={editingItem.image || ''}
+                    onChange={(event) => setEditingItem({ ...editingItem, image: event.target.value || undefined })}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                  >
+                    <option value="">Use default catalog image</option>
+                    {Array.from(new Map(catalogItems
+                      .filter((item): item is CatalogItem & { image: string } => Boolean(item.image))
+                      .map(({ image, name }) => [image, name] as const)))
+                      .map(([image, productName]) => <option key={image} value={image}>{productName}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-full">
+                  <label className="block font-semibold text-slate-700 mb-1">Product description</label>
+                  <textarea
+                    rows={3}
+                    value={editingItem.description}
+                    onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                    className="w-full rounded-md border border-slate-300 bg-white p-3 text-slate-900"
+                  />
+                </div>
+
+                <div className="col-span-full border-b border-slate-200 pb-2 pt-2">
+                  <h4 className="font-bold text-slate-900">Pricing</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Adjust customer-facing price information.</p>
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Retail Price ($)
@@ -944,6 +1124,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   />
                 </div>
 
+                <div className="col-span-full border-b border-slate-200 pb-2 pt-2">
+                  <h4 className="font-bold text-slate-900">Stock settings</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Existing stock counts and threshold controls are unchanged.</p>
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Stock Count (Units)
@@ -980,16 +1164,38 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   />
                 </div>
 
-                <div className="col-span-2">
-                  <label className="block font-semibold text-slate-700 mb-1">Description</label>
-                  <textarea
-                    rows={3}
-                    value={editingItem.description}
-                    onChange={(e) =>
-                      setEditingItem({ ...editingItem, description: e.target.value })
-                    }
-                    className="w-full bg-white border border-slate-300 rounded-md p-3 text-slate-900"
-                  ></textarea>
+                <div className="col-span-full border-b border-slate-200 pb-2 pt-2">
+                  <h4 className="font-bold text-slate-900">Storefront placement</h4>
+                  <p className="mt-1 text-[11px] text-slate-500">Choose whether customers can find this product and if it is featured.</p>
+                </div>
+                <div className="col-span-full grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
+                  <label className="flex items-start gap-2 font-semibold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={editingItem.isActive !== false}
+                      onChange={(event) => setEditingItem({ ...editingItem, isActive: event.target.checked })}
+                      className="mt-0.5 rounded text-teal-700 focus:ring-teal-700"
+                    />
+                    <span>Show on storefront</span>
+                  </label>
+                  <label className="flex items-start gap-2 font-semibold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={editingItem.isFeatured === true}
+                      onChange={(event) => setEditingItem({ ...editingItem, isFeatured: event.target.checked })}
+                      className="mt-0.5 rounded text-teal-700 focus:ring-teal-700"
+                    />
+                    <span>Featured product</span>
+                  </label>
+                  <label className="col-span-full flex items-start gap-2 font-semibold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={editingItem.rxRequired}
+                      onChange={(event) => setEditingItem({ ...editingItem, rxRequired: event.target.checked })}
+                      className="mt-0.5 rounded text-teal-700 focus:ring-teal-700"
+                    />
+                    <span>Prescription required</span>
+                  </label>
                 </div>
               </div>
 

@@ -30,7 +30,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
       item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.dosage.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
-  });
+  }).sort((a, b) => Number(b.isFeatured === true) - Number(a.isFeatured === true) || a.name.localeCompare(b.name));
 
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
@@ -152,6 +152,15 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                         <span className="bg-white/90 backdrop-blur-xs text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200/60 shadow-2xs flex items-center gap-1">
                           {getCategoryIcon(item.category)}
                           {item.category}
+                        </span>
+                      </div>
+                    )}
+
+                    {item.isFeatured && (
+                      <div className="absolute bottom-2.5 left-2.5">
+                        <span className="inline-flex items-center gap-1 rounded-md border border-amber-200/80 bg-white/95 px-2 py-1 text-[10px] font-bold text-amber-800 shadow-sm">
+                          <Star className="h-3 w-3 fill-current" />
+                          Featured
                         </span>
                       </div>
                     )}

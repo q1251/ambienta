@@ -246,6 +246,8 @@ export interface CatalogItem {
   ndcCode?: string;
   image?: string;
   lastRestocked?: string;
+  isActive?: boolean;
+  isFeatured?: boolean;
 }
 
 export interface CartItem {

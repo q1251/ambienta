@@ -62,6 +62,12 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    if (currentPath === '/admin') {
+      return () => {
+        active = false;
+      };
+    }
+
     fetch('/api/data.php?resource=catalog', { headers: { Accept: 'application/json' } })
       .then(async (response) => {
         const result = await response.json() as { products?: CatalogItem[]; categories?: string[]; message?: string };
@@ -91,7 +97,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentPath]);
 
   // Storefront Filter States
   const [selectedCategory, setSelectedCategory] = useState<StoreCategory | 'All Products'>('All Products');
@@ -173,13 +179,32 @@ export default function App() {
     setLeads([]);
     const loadAdminData = async () => {
       try {
-        const leadsResponse = await fetch('/api/data.php?resource=leads', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-        const leadsResult = await leadsResponse.json() as { leads?: ContactLead[]; message?: string };
+        const [leadsResponse, productsResponse] = await Promise.all([
+          fetch('/api/data.php?resource=leads', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+          fetch('/api/data.php?resource=products', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+        ]);
+        const [leadsResult, productsResult] = await Promise.all([
+          leadsResponse.json() as Promise<{ leads?: ContactLead[]; message?: string }>,
+          productsResponse.json() as Promise<{ products?: CatalogItem[]; message?: string }>,
+        ]);
         if (!leadsResponse.ok || !Array.isArray(leadsResult.leads)) {
           throw new Error(leadsResult.message || 'Could not load saved contact leads from the database.');
         }
+        if (!productsResponse.ok || !Array.isArray(productsResult.products)) {
+          throw new Error(productsResult.message || 'Could not load the complete product catalog.');
+        }
         if (isCurrent) {
           setLeads(leadsResult.leads);
+          const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
+          setCatalogItems(productsResult.products.map((item) => ({
+            ...seededById.get(item.id),
+            ...item,
+            ndcCode: item.ndcCode || undefined,
+            image: item.image || seededById.get(item.id)?.image,
+            costPrice: item.costPrice ?? seededById.get(item.id)?.costPrice,
+            copayPrice: item.copayPrice ?? seededById.get(item.id)?.copayPrice,
+            lastRestocked: item.lastRestocked || undefined,
+          })));
         }
       } catch (error) {
         if (!isCurrent) return;
@@ -401,6 +426,8 @@ export default function App() {
     const payload = products.map((product) => ({
       ...product,
       id: `prod-${crypto.randomUUID()}`,
+      isActive: true,
+      isFeatured: false,
       inStock: product.stockCount > 0,
       lastRestocked: product.stockCount > 0 ? now : undefined,
     }));
