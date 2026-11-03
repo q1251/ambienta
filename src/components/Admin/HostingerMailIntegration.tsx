@@ -3,10 +3,12 @@ import { AlertCircle, CheckCircle2, LoaderCircle, Mail, Send, ShieldCheck } from
 
 interface HostingerMailIntegrationProps {
   role: 'admin' | 'operator';
+  mode: 'settings' | 'mailbox';
 }
 
 interface MailSettings {
   configured: boolean;
+  verified: boolean;
   emailAccount: string;
   displayName: string;
   smtpHost: string;
@@ -25,6 +27,7 @@ interface ApiResponse {
   message?: string;
   error?: string;
   configured?: boolean;
+  verified?: boolean;
   emailAccount?: string;
   displayName?: string;
   smtpHost?: string;
@@ -52,9 +55,10 @@ const requestMailApi = async (resource: string, method: 'GET' | 'POST', body?: o
   return result;
 };
 
-export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> = ({ role }) => {
+export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> = ({ role, mode }) => {
   const [settings, setSettings] = useState<MailSettings>({
     configured: false,
+    verified: false,
     emailAccount: 'customersupport@ambienta.io',
     displayName: 'Ambienta Customer Support',
     smtpHost: 'smtp.hostinger.com',
@@ -69,7 +73,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [connectionVerified, setConnectionVerified] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -77,22 +80,25 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setIsLoading(true);
     setErrorMessage('');
     try {
-      const [settingsResult, activityResult] = await Promise.all([
-        requestMailApi('email-settings', 'GET'),
-        requestMailApi('email-activity', 'GET'),
-      ]);
-      if (typeof settingsResult.configured !== 'boolean'
-        || !Array.isArray(activityResult.messages)) {
+      const settingsResult = await requestMailApi('email-settings', 'GET');
+      if (typeof settingsResult.configured !== 'boolean' || typeof settingsResult.verified !== 'boolean') {
         throw new Error('The mail integration returned an invalid response.');
       }
       setSettings({
         configured: settingsResult.configured,
+        verified: settingsResult.verified,
         emailAccount: settingsResult.emailAccount || 'customersupport@ambienta.io',
         displayName: settingsResult.displayName || 'Ambienta Customer Support',
         smtpHost: settingsResult.smtpHost || 'smtp.hostinger.com',
         smtpPort: settingsResult.smtpPort || 465,
       });
-      setMessages(activityResult.messages);
+      if (mode === 'mailbox') {
+        const activityResult = await requestMailApi('email-activity', 'GET');
+        if (!Array.isArray(activityResult.messages)) {
+          throw new Error('The email activity response is invalid.');
+        }
+        setMessages(activityResult.messages);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Hostinger email settings could not be loaded.');
     } finally {
@@ -102,7 +108,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [mode]);
 
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -115,9 +121,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         displayName: settings.displayName,
         password,
       });
-      setSettings((current) => ({ ...current, configured: result.configured === true }));
+      setSettings((current) => ({ ...current, configured: result.configured === true, verified: false }));
       setPassword('');
-      setConnectionVerified(false);
       setSuccessMessage('Mailbox settings saved securely. Test the connection before sending.');
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Mailbox settings could not be saved.');
@@ -133,10 +138,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     try {
       const result = await requestMailApi('email-test', 'POST', {});
       if (result.connected !== true) throw new Error('Hostinger SMTP authentication was not confirmed.');
-      setConnectionVerified(true);
+      setSettings((current) => ({ ...current, verified: true }));
       setSuccessMessage('Hostinger SMTP authentication succeeded.');
     } catch (error) {
-      setConnectionVerified(false);
+      setSettings((current) => ({ ...current, verified: false }));
       setErrorMessage(error instanceof Error ? error.message : 'Hostinger SMTP connection failed.');
     } finally {
       setIsTesting(false);
@@ -156,6 +161,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       });
       if (result.sent !== true) throw new Error(result.message || 'Hostinger did not accept the email.');
       setSuccessMessage(result.message || 'Hostinger accepted the email for sending.');
+      setSettings((current) => ({ ...current, verified: true }));
       setSubject('');
       setMessageBody('');
       try {
@@ -166,6 +172,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         setErrorMessage(`Hostinger accepted the email, but the activity list could not be refreshed.${detail}`);
       }
     } catch (error) {
+      setSettings((current) => ({ ...current, verified: false }));
       setErrorMessage(error instanceof Error ? error.message : 'The email could not be sent.');
     } finally {
       setIsSending(false);
@@ -175,11 +182,19 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">Communications</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Email</h1>
-        <p className="mt-2 text-sm text-slate-600">Connect customersupport@ambienta.io and manage customer-support messages from the CRM.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">
+          {mode === 'settings' ? 'Connections' : 'Communications'}
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+          {mode === 'settings' ? 'Email integration' : 'Email'}
+        </h1>
+        <p className="mt-2 text-sm text-slate-600">
+          {mode === 'settings'
+            ? 'Configure and test the Hostinger mailbox connection used by the CRM.'
+            : 'Compose customer-support messages and review sent activity.'}
+        </p>
       </header>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+      {mode === 'settings' && <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-violet-50 p-3 text-violet-700"><Mail className="h-5 w-5" /></div>
@@ -192,14 +207,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             </div>
           </div>
           <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-            connectionVerified
+            settings.verified
               ? 'bg-emerald-50 text-emerald-800'
               : settings.configured
                 ? 'bg-amber-50 text-amber-800'
                 : 'bg-slate-100 text-slate-700'
           }`}>
-            {connectionVerified ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-            {connectionVerified ? 'Connection verified' : settings.configured ? 'Credentials saved · not tested' : 'Not configured'}
+            {settings.verified ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+            {settings.verified ? 'Connection verified' : settings.configured ? 'Credentials saved · not tested' : 'Not configured'}
           </span>
         </div>
 
@@ -241,9 +256,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             Only an administrator can configure the mailbox. You can send messages after the administrator has saved and verified it.
           </p>
         )}
-      </section>
+      </section>}
 
-      <section className="grid gap-5 xl:grid-cols-2">
+      {mode === 'mailbox' && <section className="grid gap-5 xl:grid-cols-2">
         <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
           <div>
             <h2 className="font-semibold text-slate-950">Compose an email</h2>
@@ -262,11 +277,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             <textarea id="mail-body" required maxLength={6000} rows={7} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
             <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
           </div>
-          <button type="submit" disabled={!settings.configured || !connectionVerified || isSending || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="submit" disabled={!settings.configured || !settings.verified || isSending || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
             {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             {isSending ? 'Sending…' : 'Send email'}
           </button>
-          {!connectionVerified && <p className="text-xs text-slate-500">Save the mailbox and verify the SMTP connection before sending.</p>}
+          {!settings.verified && <p className="text-xs text-slate-500">Configure and verify the mailbox under Integrations before sending.</p>}
         </form>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -299,11 +314,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             </div>
           )}
         </section>
-      </section>
+      </section>}
 
-      <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+      {mode === 'mailbox' && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
         SMTP can submit outgoing messages but does not confirm delivery or opens. Inbox synchronization, replies, bulk campaigns, and delivery/open tracking are not connected yet.
-      </p>
+      </p>}
     </div>
   );
 };

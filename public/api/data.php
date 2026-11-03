@@ -576,11 +576,39 @@ function data_mail_settings(): array
         || !is_string(base64_decode($settings['password'], true))
         || strlen((string) base64_decode($settings['nonce'], true)) !== 12
         || strlen((string) base64_decode($settings['tag'], true)) !== 16
+        || (isset($settings['verified']) && !is_bool($settings['verified']))
     ) {
         error_log('Ambients private mail settings are invalid.');
         data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Saved mail settings could not be loaded. Contact the administrator.']);
     }
     return $settings;
+}
+
+function data_mail_write_settings(array $settings): void
+{
+    $encodedSettings = json_encode($settings, JSON_UNESCAPED_SLASHES);
+    if (!is_string($encodedSettings)) {
+        data_respond(500, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be saved.']);
+    }
+
+    $path = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-settings.json';
+    $temporaryPath = $path . '.' . bin2hex(random_bytes(8)) . '.tmp';
+    $written = @file_put_contents($temporaryPath, $encodedSettings, LOCK_EX);
+    if ($written === false || $written !== strlen($encodedSettings)) {
+        @unlink($temporaryPath);
+        error_log('Ambients encrypted mail settings could not be written.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be stored on this server.']);
+    }
+    if (!chmod($temporaryPath, 0600)) {
+        @unlink($temporaryPath);
+        error_log('Ambients encrypted mail settings permissions could not be restricted.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings permissions could not be set.']);
+    }
+    if (!@rename($temporaryPath, $path)) {
+        @unlink($temporaryPath);
+        error_log('Ambients encrypted mail settings could not be installed.');
+        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be stored on this server.']);
+    }
 }
 
 function data_mail_password(array $settings): string
@@ -614,6 +642,7 @@ function data_mail_save_settings(string $email, string $displayName, string $pas
             'password' => $existing['password'],
             'nonce' => $existing['nonce'],
             'tag' => $existing['tag'],
+            'verified' => false,
         ];
     } else {
         $nonce = random_bytes(12);
@@ -629,32 +658,11 @@ function data_mail_save_settings(string $email, string $displayName, string $pas
             'password' => base64_encode($ciphertext),
             'nonce' => base64_encode($nonce),
             'tag' => base64_encode($tag),
+            'verified' => false,
         ];
     }
 
-    $encodedSettings = json_encode($settings, JSON_UNESCAPED_SLASHES);
-    if (!is_string($encodedSettings)) {
-        data_respond(500, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be saved.']);
-    }
-
-    $path = data_mail_directory() . DIRECTORY_SEPARATOR . 'mail-settings.json';
-    $temporaryPath = $path . '.' . bin2hex(random_bytes(8)) . '.tmp';
-    $written = @file_put_contents($temporaryPath, $encodedSettings, LOCK_EX);
-    if ($written === false || $written !== strlen($encodedSettings)) {
-        @unlink($temporaryPath);
-        error_log('Ambients encrypted mail settings could not be written.');
-        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be stored on this server.']);
-    }
-    if (!chmod($temporaryPath, 0600)) {
-        @unlink($temporaryPath);
-        error_log('Ambients encrypted mail settings permissions could not be restricted.');
-        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings permissions could not be set.']);
-    }
-    if (!@rename($temporaryPath, $path)) {
-        @unlink($temporaryPath);
-        error_log('Ambients encrypted mail settings could not be installed.');
-        data_respond(503, ['error' => 'mail_storage_unavailable', 'message' => 'Mail settings could not be stored on this server.']);
-    }
+    data_mail_write_settings($settings);
 }
 
 function data_smtp_read_response($socket, array $expectedCodes): string
@@ -1048,6 +1056,7 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
         $settings = data_mail_settings();
         data_respond(200, [
             'configured' => $settings !== [],
+            'verified' => (bool) ($settings['verified'] ?? false),
             'emailAccount' => $settings['emailAccount'] ?? 'customersupport@ambienta.io',
             'displayName' => $settings['displayName'] ?? 'Ambienta Customer Support',
             'smtpHost' => 'smtp.hostinger.com',
@@ -1091,6 +1100,8 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
         } finally {
             if (is_resource($socket)) fclose($socket);
         }
+        $settings['verified'] = true;
+        data_mail_write_settings($settings);
         data_respond(200, ['connected' => true, 'message' => 'Hostinger SMTP authentication succeeded.']);
     }
 
@@ -1110,7 +1121,7 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
             data_respond(400, ['error' => 'invalid_email_content', 'message' => 'The email subject or message contains unsupported characters.']);
         }
         $settings = data_mail_settings();
-        if ($settings === []) {
+        if ($settings === [] || empty($settings['verified'])) {
             data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
         }
         $db = data_db();
@@ -1119,6 +1130,12 @@ if (in_array($resource, ['email-settings', 'email-test', 'email-send', 'email-ac
         try {
             data_mail_send($settings, $recipient, $subject, $message);
         } catch (Throwable $error) {
+            $settings['verified'] = false;
+            try {
+                data_mail_write_settings($settings);
+            } catch (Throwable $settingsError) {
+                error_log('Ambients Hostinger connection state could not be updated after a send failure.');
+            }
             try {
                 $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Failed', $activityId]);
             } catch (Throwable $updateError) {

@@ -274,8 +274,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               <ContactLeadManager role={props.role} leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
             </Suspense>
           )}
-          {activeTab === 'email' && <HostingerMailIntegration role={props.role} />}
-          {activeTab === 'integrations' && <IntegrationStatus />}
+          {activeTab === 'email' && <HostingerMailIntegration role={props.role} mode="mailbox" />}
+          {activeTab === 'integrations' && <IntegrationStatus role={props.role} />}
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
           {activeTab === 'staff' && props.role === 'admin' && <StaffManager onEnterAccount={props.onEnterAccount} />}
           {activeTab === 'audit' && props.role === 'admin' && <AuditLogView />}
