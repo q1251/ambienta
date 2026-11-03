@@ -19,14 +19,16 @@ import { CatalogItem } from '../../types/pharmacy';
 
 interface InventoryManagerProps {
   catalogItems: CatalogItem[];
-  onAddProduct: (item: CatalogItem) => void;
-  onUpdateProduct: (item: CatalogItem) => void;
-  onDeleteProduct: (productId: string) => void;
-  onBulkPriceAdjust: (category: string, percentChange: number) => void;
+  catalogError?: string;
+  onAddProduct: (item: CatalogItem) => Promise<CatalogItem>;
+  onUpdateProduct: (item: CatalogItem) => Promise<CatalogItem>;
+  onDeleteProduct: (productId: string) => Promise<void>;
+  onBulkPriceAdjust: (category: string, percentChange: number) => Promise<void>;
 }
 
 export const InventoryManager: React.FC<InventoryManagerProps> = ({
   catalogItems,
+  catalogError,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
@@ -43,6 +45,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [bulkCategory, setBulkCategory] = useState('All');
   const [bulkPercent, setBulkPercent] = useState<number>(5);
   const [notification, setNotification] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // New product form state
   const [name, setName] = useState('');
@@ -57,7 +61,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [ndcCode, setNdcCode] = useState('');
   const [description, setDescription] = useState('');
   const [rxRequired, setRxRequired] = useState(false);
-  const [imageOption, setImageOption] = useState<string>('/src/assets/images/sleep_wellness_remedy_1793623730003.jpg');
+  const [imageOption, setImageOption] = useState('');
 
   // Stats calculation
   const totalProducts = catalogItems.length;
@@ -91,55 +95,66 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     return matchesSearch && matchesCategory && matchesStock;
   });
 
-  const handleStockAdjust = (item: CatalogItem, delta: number) => {
+  const handleStockAdjust = async (item: CatalogItem, delta: number) => {
     const newCount = Math.max(0, item.stockCount + delta);
-    onUpdateProduct({
-      ...item,
-      stockCount: newCount,
-      inStock: newCount > 0,
-      lastRestocked: delta > 0 ? '2026-11-02' : item.lastRestocked,
-    });
-    setNotification(`Updated stock for ${item.name} to ${newCount} units.`);
+    setActionError('');
+    setIsSaving(true);
+    try {
+      await onUpdateProduct({
+        ...item,
+        stockCount: newCount,
+        inStock: newCount > 0,
+        lastRestocked: delta > 0 ? new Date().toISOString().slice(0, 10) : item.lastRestocked,
+      });
+      setNotification(`Updated stock for ${item.name} to ${newCount} units.`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Inventory update could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleToggleInStock = (item: CatalogItem) => {
-    const updated = !item.inStock;
-    onUpdateProduct({
-      ...item,
-      inStock: updated,
-    });
-    setNotification(`${item.name} is now marked ${updated ? 'In Stock' : 'Out of Stock'}.`);
-  };
-
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const parsedPrice = parseFloat(price) || 0;
-    const parsedStock = parseInt(stockCount) || 0;
+    const parsedPrice = Number(price);
+    const parsedStock = Number(stockCount);
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0 || !Number.isInteger(parsedStock) || parsedStock < 0) {
+      setActionError('Enter a non-negative price and whole-number stock count.');
+      return;
+    }
 
     const newItem: CatalogItem = {
-      id: `prod-${Date.now()}`,
+      id: `prod-${crypto.randomUUID()}`,
       name: name.trim(),
       category,
       price: parsedPrice,
-      copayPrice: parseFloat(copayPrice) || 0,
-      costPrice: parseFloat(costPrice) || 0,
+      copayPrice: Number(copayPrice) || 0,
+      costPrice: Number(costPrice) || 0,
       stockCount: parsedStock,
-      minStockThreshold: parseInt(minThreshold) || 10,
+      minStockThreshold: Number(minThreshold) || 10,
       dosage: dosage.trim() || 'Standard Clinical Unit',
-      sku: sku.trim() || `SKU-${Date.now().toString().slice(-6)}`,
+      sku: sku.trim() || `SKU-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
       ndcCode: ndcCode.trim() || undefined,
       description: description.trim() || 'Verified pharmaceutical formulation.',
       rxRequired,
       inStock: parsedStock > 0,
-      image: imageOption,
-      lastRestocked: '2026-11-02',
+      image: imageOption || catalogItems.find((item) => item.image)?.image || '',
+      lastRestocked: new Date().toISOString().slice(0, 10),
     };
 
-    onAddProduct(newItem);
-    setNotification(`Successfully added product: ${newItem.name}`);
-    setIsAddModalOpen(false);
+    setActionError('');
+    setIsSaving(true);
+    try {
+      await onAddProduct(newItem);
+      setNotification(`Successfully added product: ${newItem.name}`);
+      setIsAddModalOpen(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The product could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
 
     // Reset form
     setName('');
@@ -149,27 +164,44 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     setNdcCode('');
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
-    onUpdateProduct(editingItem);
-    setNotification(`Saved changes for ${editingItem.name}.`);
-    setEditingItem(null);
+    setActionError('');
+    setIsSaving(true);
+    try {
+      await onUpdateProduct(editingItem);
+      setNotification(`Saved changes for ${editingItem.name}.`);
+      setEditingItem(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The product update could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleApplyBulkPrice = (e: React.FormEvent) => {
+  const handleApplyBulkPrice = async (e: React.FormEvent) => {
     e.preventDefault();
-    onBulkPriceAdjust(bulkCategory, bulkPercent);
-    setNotification(
-      `Applied ${bulkPercent > 0 ? `+${bulkPercent}%` : `${bulkPercent}%`} price adjustment to ${
-        bulkCategory === 'All' ? 'all catalog products' : bulkCategory
-      }.`
-    );
-    setIsBulkPriceModalOpen(false);
+    setActionError('');
+    setIsSaving(true);
+    try {
+      await onBulkPriceAdjust(bulkCategory, bulkPercent);
+      setNotification(
+        `Applied ${bulkPercent > 0 ? `+${bulkPercent}%` : `${bulkPercent}%`} price adjustment to ${
+          bulkCategory === 'All' ? 'all catalog products' : bulkCategory
+        }.`
+      );
+      setIsBulkPriceModalOpen(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Bulk price changes could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
     <div className="space-y-6">
+      {catalogError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{catalogError}</p>}
       {/* Top Controls Bar */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -218,6 +250,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           </button>
         </div>
       )}
+      {actionError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{actionError}</p>}
 
       {/* Inventory KPI Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -387,6 +420,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     <td className="py-3 px-3 text-center">
                       <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200">
                         <button
+                          disabled={isSaving}
                           onClick={() => handleStockAdjust(item, -10)}
                           title="Decrease 10"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
@@ -394,6 +428,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                           -10
                         </button>
                         <button
+                          disabled={isSaving}
                           onClick={() => handleStockAdjust(item, -1)}
                           title="Decrease 1"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
@@ -401,6 +436,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                           -1
                         </button>
                         <button
+                          disabled={isSaving}
                           onClick={() => handleStockAdjust(item, 1)}
                           title="Increase 1"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
@@ -408,6 +444,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                           +1
                         </button>
                         <button
+                          disabled={isSaving}
                           onClick={() => handleStockAdjust(item, 10)}
                           title="Increase 10"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
@@ -418,9 +455,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     </td>
 
                     <td className="py-3 px-3 text-center">
-                      <button
-                        onClick={() => handleToggleInStock(item)}
-                        className={`px-2 py-0.5 rounded-sm text-[11px] font-semibold border transition-colors ${
+                      <span
+                        className={`px-2 py-0.5 rounded-sm text-[11px] font-semibold border ${
                           isOut
                             ? 'bg-rose-50 text-rose-800 border-rose-200'
                             : isLow
@@ -429,11 +465,12 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         }`}
                       >
                         {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'}
-                      </button>
+                      </span>
                     </td>
 
                     <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
                       <button
+                        disabled={isSaving}
                         onClick={() => setEditingItem(item)}
                         className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded-md transition-colors"
                         title="Edit Price & Details"
@@ -441,7 +478,17 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => onDeleteProduct(item.id)}
+                        disabled={isSaving}
+                        onClick={() => {
+                          if (window.confirm(`Archive "${item.name}"? It will disappear from the storefront, but old order records will remain.`)) {
+                            setActionError('');
+                            setIsSaving(true);
+                            void onDeleteProduct(item.id)
+                              .then(() => setNotification(`Archived ${item.name}.`))
+                              .catch((error: unknown) => setActionError(error instanceof Error ? error.message : 'The product could not be archived.'))
+                              .finally(() => setIsSaving(false));
+                          }
+                        }}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                         title="Delete Product"
                       >
@@ -613,21 +660,13 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     onChange={(e) => setImageOption(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900"
                   >
-                    <option value="/src/assets/images/sleep_wellness_remedy_1793623730003.jpg">
-                      Sleep &amp; Rest Apothecary Display (High Res)
-                    </option>
-                    <option value="/src/assets/images/weight_metabolic_care_1793623731156.jpg">
-                      Weight Loss &amp; Metabolic Care (High Res)
-                    </option>
-                    <option value="/src/assets/images/medication_chronic_care_1793621456444.jpg">
-                      Clinical Healthcare Care Bottles (High Res)
-                    </option>
-                    <option value="/src/assets/images/wellness_vitamins_display_1793621456102.jpg">
-                      Wellness &amp; Amber Glass Supplement Display
-                    </option>
-                    <option value="/src/assets/images/hero_pharmacy_care_1793621455330.jpg">
-                      Dispensary Counter &amp; Care Package
-                    </option>
+                    <option value="">Use the default catalog image</option>
+                    {Array.from(new Map(catalogItems
+                      .filter((item): item is CatalogItem & { image: string } => Boolean(item.image))
+                      .map(({ image, name }) => [image, name] as const)))
+                      .map(([image, productName]) => (
+                        <option key={image} value={image}>{productName}</option>
+                      ))}
                   </select>
                 </div>
 
@@ -668,9 +707,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 </button>
                 <button
                   type="submit"
+                  disabled={isSaving}
                   className="px-5 py-2.5 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
                 >
-                  Save &amp; Publish to Public Catalog
+                  {isSaving ? 'Saving…' : 'Save &amp; Publish to Public Catalog'}
                 </button>
               </div>
             </form>
@@ -803,9 +843,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 </button>
                 <button
                   type="submit"
+                  disabled={isSaving}
                   className="px-5 py-2.5 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
                 >
-                  Update Product
+                  {isSaving ? 'Saving…' : 'Update Product'}
                 </button>
               </div>
             </form>
@@ -881,9 +922,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 </button>
                 <button
                   type="submit"
+                  disabled={isSaving}
                   className="px-5 py-2 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
                 >
-                  Apply to Catalog
+                  {isSaving ? 'Saving…' : 'Apply to Catalog'}
                 </button>
               </div>
             </form>

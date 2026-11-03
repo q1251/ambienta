@@ -31,7 +31,7 @@ interface OrdersManagerProps {
   orders: OnlineOrder[];
   onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
   onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
-  onAddOrderInternalNote?: (orderId: string, note: string) => void;
+  onAddOrderInternalNote?: (orderId: string, note: string) => Promise<string>;
   onSendEmailNotification?: (log: EmailLog) => void;
   onAddManualOrder?: (order: OnlineOrder) => void;
   catalogItems?: CatalogItem[];
@@ -58,6 +58,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [newInternalNote, setNewInternalNote] = useState('');
   const [emailSentAlert, setEmailSentAlert] = useState<string | null>(null);
   const [orderSaveError, setOrderSaveError] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   // Manual Order Modal
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -158,17 +159,23 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   };
 
   // Add internal staff note
-  const handleAddNote = () => {
+  const handleAddNote = async () => {
     if (!selectedOrder || !newInternalNote.trim()) return;
-    const noteText = `[${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Staff]: ${newInternalNote.trim()}`;
-    if (onAddOrderInternalNote) {
-      onAddOrderInternalNote(selectedOrder.id, noteText);
+    if (!onAddOrderInternalNote) return;
+    setOrderSaveError('');
+    setIsSavingNote(true);
+    try {
+      const noteText = await onAddOrderInternalNote(selectedOrder.id, newInternalNote.trim());
+      setSelectedOrder({
+        ...selectedOrder,
+        internalNotes: [noteText, ...(selectedOrder.internalNotes || [])],
+      });
+      setNewInternalNote('');
+    } catch (error) {
+      setOrderSaveError(error instanceof Error ? error.message : 'Order note could not be saved.');
+    } finally {
+      setIsSavingNote(false);
     }
-    setSelectedOrder({
-      ...selectedOrder,
-      internalNotes: [noteText, ...(selectedOrder.internalNotes || [])],
-    });
-    setNewInternalNote('');
   };
 
   // Save a tracking email draft until a mail provider is connected.
@@ -571,9 +578,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
                       <select
                         value={ord.status}
-                        onChange={(e) =>
-                          void handleStatusChange(ord.id, e.target.value as OnlineOrder['status'])
-                        }
+                        onChange={(e) => {
+                          const nextStatus = e.target.value as OnlineOrder['status'];
+                          if (nextStatus === 'Cancelled' && ord.status !== 'Cancelled'
+                            && !window.confirm(`Cancel order ${ord.orderNumber}? Its reserved inventory will be returned to stock.`)) {
+                            e.currentTarget.value = ord.status;
+                            return;
+                          }
+                          void handleStatusChange(ord.id, nextStatus);
+                        }}
                         className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
                       >
                         <option value="Submitted">Submitted</option>
@@ -818,15 +831,17 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     type="text"
                     value={newInternalNote}
                     onChange={(e) => setNewInternalNote(e.target.value)}
-                    placeholder="Add clinical or fulfillment note..."
+                    placeholder="Fulfillment note only; do not include clinical or health details"
+                    maxLength={2000}
                     className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
                   />
                   <button
                     type="button"
                     onClick={handleAddNote}
+                    disabled={isSavingNote || !newInternalNote.trim()}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
                   >
-                    Add Note
+                    {isSavingNote ? 'Saving…' : 'Add Note'}
                   </button>
                 </div>
 

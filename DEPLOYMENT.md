@@ -76,13 +76,21 @@ the admin data API creates the tables and seeds initial catalog prices/stock.
 Verify the Leads and Orders sections load successfully before accepting real
 orders.
 
-The API persists contact details for leads and fulfillment fields for orders;
-it does not store clinical, prescription, insurance, or free-form checkout
-notes. The sample clinical CRM, email logs, and inventory editor remain
-browser-memory previews and are not part of this database. Storefront checkout
-currently accepts cash on delivery/pickup only. Card, PayPal, and
-cryptocurrency processing are disabled until a server-side payment provider is
-configured; no payment is captured by this API.
+The API persists contact leads, the public product catalog and stock counts,
+storefront orders, fulfillment tracking, fulfillment-only internal order notes,
+and an admin audit log. Cancelling an order restores its reserved stock exactly
+once. Do not put clinical, prescription, insurance, or payment-card details in
+order notes. The sample clinical CRM, staff reminders, and email logs remain
+browser-memory previews; mail is not connected and no email is sent or tracked
+as delivered/opened. The audit log is available only through the authenticated
+admin API.
+
+Storefront checkout currently accepts cash on delivery/pickup only. Card,
+PayPal, and cryptocurrency processing are disabled until a server-side payment
+provider is configured; no payment is captured by this API. To enable payment
+or mailbox features, configure provider credentials only through protected
+server/GitHub Actions secrets and complete provider webhook, delivery, and
+security verification before representing those integrations as active.
 
 For local development, start the PHP API from a second terminal with
 `php -S 127.0.0.1:8001 -t public`; Vite proxies `/api` requests to it. Create

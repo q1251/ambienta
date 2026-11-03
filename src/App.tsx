@@ -52,11 +52,44 @@ export default function App() {
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
   const [leads, setLeads] = useState<ContactLead[]>([]);
   const [adminDataError, setAdminDataError] = useState('');
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(INITIAL_CATALOG);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [hostingerConfig, setHostingerConfig] = useState<HostingerConfig>(INITIAL_HOSTINGER_CONFIG);
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>(INITIAL_EMAIL_LOGS);
   const [reminderRules, setReminderRules] = useState<ReminderRule[]>(INITIAL_REMINDER_RULES);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/data.php?resource=catalog', { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const result = await response.json() as { products?: CatalogItem[]; message?: string };
+        if (!response.ok || !Array.isArray(result.products)) {
+          throw new Error(result.message || 'The live product catalog could not be loaded.');
+        }
+        if (active) {
+          const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
+          setCatalogItems(result.products.map((item) => ({
+            ...seededById.get(item.id),
+            ...item,
+            ndcCode: item.ndcCode || undefined,
+            image: item.image || seededById.get(item.id)?.image,
+            costPrice: item.costPrice ?? seededById.get(item.id)?.costPrice,
+            copayPrice: item.copayPrice ?? seededById.get(item.id)?.copayPrice,
+            lastRestocked: item.lastRestocked || undefined,
+          })));
+          setCatalogError('');
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setCatalogError(error instanceof Error ? error.message : 'The live product catalog could not be loaded.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Storefront Filter States
   const [selectedCategory, setSelectedCategory] = useState<StoreCategory | 'All Products'>('All Products');
@@ -287,30 +320,79 @@ export default function App() {
     }
   };
 
-  const handleAddOrderInternalNote = (orderId: string, note: string) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId ? { ...o, internalNotes: [note, ...(o.internalNotes || [])] } : o
-      )
-    );
+  const handleAddOrderInternalNote = async (orderId: string, note: string): Promise<string> => {
+    const response = await fetch('/api/data.php?resource=order-notes', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ orderId, note }),
+    });
+    const result = await response.json() as { note?: string; message?: string };
+    if (!response.ok || typeof result.note !== 'string') {
+      throw new Error(result.message || 'Order note could not be saved.');
+    }
+    const savedNote = result.note;
+    setOrders((prev) => prev.map((order) => order.id === orderId
+      ? { ...order, internalNotes: [savedNote, ...(order.internalNotes || [])] }
+      : order));
+    return savedNote;
   };
 
   // Inventory Management Handlers
-  const handleAddProduct = (newProduct: CatalogItem) => {
-    setCatalogItems((prev) => [newProduct, ...prev]);
+  const handleAddProduct = async (newProduct: CatalogItem): Promise<CatalogItem> => {
+    const response = await fetch('/api/data.php?resource=products', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(newProduct),
+    });
+    const result = await response.json() as { product?: CatalogItem; message?: string };
+    if (!response.ok || !result.product) {
+      throw new Error(result.message || 'The product could not be saved.');
+    }
+    const savedProduct = result.product;
+    setCatalogItems((prev) => [savedProduct, ...prev]);
+    return savedProduct;
   };
 
-  const handleUpdateProduct = (updatedProduct: CatalogItem) => {
-    setCatalogItems((prev) =>
-      prev.map((item) => (item.id === updatedProduct.id ? updatedProduct : item))
-    );
+  const handleUpdateProduct = async (updatedProduct: CatalogItem): Promise<CatalogItem> => {
+    const response = await fetch('/api/data.php?resource=products', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(updatedProduct),
+    });
+    const result = await response.json() as { product?: CatalogItem; message?: string };
+    if (!response.ok || !result.product) {
+      throw new Error(result.message || 'The product update could not be saved.');
+    }
+    const savedProduct = result.product;
+    setCatalogItems((prev) => prev.map((item) => item.id === updatedProduct.id
+      ? { ...item, ...savedProduct, image: savedProduct.image || item.image }
+      : item));
+    return savedProduct;
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
+    const response = await fetch(`/api/data.php?resource=products&id=${encodeURIComponent(productId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+    const result = await response.json() as { message?: string };
+    if (!response.ok) throw new Error(result.message || 'The product could not be archived.');
     setCatalogItems((prev) => prev.filter((item) => item.id !== productId));
   };
 
-  const handleBulkPriceAdjust = (category: string, percentChange: number) => {
+  const handleBulkPriceAdjust = async (category: string, percentChange: number) => {
+    const response = await fetch('/api/data.php?resource=products', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ category, bulkPercent: percentChange }),
+    });
+    const result = await response.json() as { message?: string };
+    if (!response.ok) throw new Error(result.message || 'Bulk price changes could not be saved.');
     setCatalogItems((prev) =>
       prev.map((item) => {
         if (category === 'All' || item.category === category) {
@@ -416,6 +498,14 @@ export default function App() {
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
       );
+      if (newStatus === 'Cancelled' && order.status !== 'Cancelled') {
+        setCatalogItems((prev) => prev.map((product) => {
+          const orderedItem = order.items?.find((item) => item.productId === product.id);
+          return orderedItem
+            ? { ...product, stockCount: product.stockCount + orderedItem.quantity, inStock: true }
+            : product;
+        }));
+      }
       setAdminDataError('');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Order status could not be saved.';
@@ -477,6 +567,7 @@ export default function App() {
         dataError={adminDataError}
         onSaveLeads={handleSaveLeads}
         catalogItems={catalogItems}
+        catalogError={catalogError}
         onAddProduct={handleAddProduct}
         onUpdateProduct={handleUpdateProduct}
         onDeleteProduct={handleDeleteProduct}
@@ -535,6 +626,11 @@ export default function App() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
+        {catalogError && (
+          <p role="alert" className="mx-auto my-6 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+            {catalogError} Products and checkout are unavailable until the live catalog service is restored.
+          </p>
+        )}
 
         {/* Value & Delivery Banner */}
         <section className="border-t border-blue-100 bg-white py-12">

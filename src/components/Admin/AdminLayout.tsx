@@ -23,6 +23,7 @@ import { AutomatedRemindersView } from '../CRM/AutomatedRemindersView';
 import { HostingerEmailSyncView } from '../CRM/HostingerEmailSyncView';
 import { BulkHealthCategoryCampaignView } from '../CRM/BulkHealthCategoryCampaignView';
 import { PatientDetailModal } from '../CRM/PatientDetailModal';
+import { AuditLogView } from './AuditLogView';
 
 interface AdminLayoutProps {
   onNavigateHome: () => void;
@@ -34,10 +35,11 @@ interface AdminLayoutProps {
   dataError?: string;
   onSaveLeads: (leads: Omit<ContactLead, 'id' | 'createdAt'>[]) => Promise<void>;
   catalogItems: CatalogItem[];
-  onAddProduct: (item: CatalogItem) => void;
-  onUpdateProduct: (item: CatalogItem) => void;
-  onDeleteProduct: (productId: string) => void;
-  onBulkPriceAdjust: (category: string, percentChange: number) => void;
+  catalogError?: string;
+  onAddProduct: (item: CatalogItem) => Promise<CatalogItem>;
+  onUpdateProduct: (item: CatalogItem) => Promise<CatalogItem>;
+  onDeleteProduct: (productId: string) => Promise<void>;
+  onBulkPriceAdjust: (category: string, percentChange: number) => Promise<void>;
   hostingerConfig: HostingerConfig;
   onUpdateHostingerConfig: (config: HostingerConfig) => void;
   emailLogs: EmailLog[];
@@ -48,7 +50,7 @@ interface AdminLayoutProps {
   orders: OnlineOrder[];
   onUpdateOrderStatus: (orderId: string, newStatus: OnlineOrder['status']) => Promise<void>;
   onUpdateOrderTracking?: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
-  onAddOrderInternalNote?: (orderId: string, note: string) => void;
+  onAddOrderInternalNote?: (orderId: string, note: string) => Promise<string>;
   selectedPatient: Patient | null;
   onClosePatientModal: () => void;
   onAddPharmacistNote: (patientId: string, note: Omit<PharmacistNote, 'id' | 'createdAt'>) => void;
@@ -62,7 +64,8 @@ export type AdminTab =
   | 'reminders'
   | 'hostinger'
   | 'campaigns'
-  | 'orders';
+  | 'orders'
+  | 'audit';
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onNavigateHome,
@@ -74,6 +77,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   dataError,
   onSaveLeads,
   catalogItems,
+  catalogError,
   onAddProduct,
   onUpdateProduct,
   onDeleteProduct,
@@ -171,7 +175,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       )}
 
       <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-950">
-        Sample clinical records remain in preview memory. Only contact leads and storefront orders are saved to the server.
+        Sample clinical records stay in preview memory. The server stores product inventory, contact leads, orders, and fulfillment-only order notes.
       </div>
       {dataError && <div role="alert" className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-center text-xs font-medium text-rose-900">{dataError}</div>}
 
@@ -218,6 +222,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                   {pendingOrdersCount} review
                 </span>
               )}
+            </button>
+
+            <button
+              onClick={() => setActiveAdminTab('audit')}
+              className={`px-3.5 py-2 rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
+                activeAdminTab === 'audit'
+                  ? 'bg-teal-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Audit Log</span>
             </button>
 
             <button
@@ -294,6 +310,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         {activeAdminTab === 'inventory' && (
           <InventoryManager
             catalogItems={catalogItems}
+            catalogError={catalogError}
             onAddProduct={onAddProduct}
             onUpdateProduct={onUpdateProduct}
             onDeleteProduct={onDeleteProduct}
@@ -347,6 +364,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             hostingerConfig={hostingerConfig}
           />
         )}
+
+        {activeAdminTab === 'audit' && <AuditLogView />}
       </main>
 
       {/* Patient Profile Detail Modal */}
