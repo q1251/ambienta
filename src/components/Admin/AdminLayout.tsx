@@ -155,7 +155,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     url.searchParams.delete('leadId');
     window.history.replaceState(window.history.state, '', url);
   }, [activeTab, props.role, visibleNavigation]);
-  const activeLabel = navigation.find((item) => item.id === activeTab)?.label || 'Overview';
+  const activeItem = navigation.find((item) => item.id === activeTab);
+  const labelForItem = (item: (typeof navigation)[number]) =>
+    item.id === 'profile' && props.role === 'operator' ? 'My agent profile' : item.label;
+  const activeLabel = activeItem ? labelForItem(activeItem) : 'Overview';
 
   const logout = async () => {
     setLogoutError('');
@@ -209,17 +212,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         <aside className="sticky top-[68px] hidden h-[calc(100vh-68px)] w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-5 lg:flex">
           <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
           {visibleNavigation.filter((item) => item.group === 'Workspace').map((item) => (
-            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={selectTab} />
+            <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
           ))}
           <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
           {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
-            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={selectTab} />
+            <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
           ))}
           {props.role === 'admin' && (
             <>
               <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Administration</p>
               {visibleNavigation.filter((item) => item.group === 'Administration').map((item) => (
-                <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={selectTab} />
+                <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
               ))}
             </>
           )}
@@ -241,7 +244,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           <div className="mb-5 lg:hidden">
             <label htmlFor="admin-section" className="sr-only">Workspace section</label>
             <select id="admin-section" value={activeTab} onChange={(event) => selectTab(event.target.value as AdminTab)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium">
-              {visibleNavigation.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              {visibleNavigation.map((item) => <option key={item.id} value={item.id}>{labelForItem(item)}</option>)}
             </select>
           </div>
           {props.dataError && <p role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{props.dataError}</p>}
@@ -288,13 +291,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
 
 interface NavButtonProps {
   item: (typeof navigation)[number];
+  label: string;
   active: boolean;
   onSelect: (tab: AdminTab) => void;
 }
 
-const NavButton: React.FC<NavButtonProps> = ({ item, active, onSelect }) => (
+const NavButton: React.FC<NavButtonProps> = ({ item, label, active, onSelect }) => (
   <button type="button" onClick={() => onSelect(item.id)} className={`mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition ${active ? 'bg-teal-50 text-teal-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}>
     <item.icon className={`h-4 w-4 ${active ? 'text-teal-800' : 'text-slate-400'}`} />
-    <span>{item.label}</span>
+    <span>{label}</span>
   </button>
 );

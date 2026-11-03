@@ -977,6 +977,38 @@ if ($method === 'GET') {
     }
     if ($resource === 'staff') {
         data_require_admin('admin');
+        if (isset($_GET['id'])) {
+            $staffId = filter_var($_GET['id'], FILTER_VALIDATE_INT);
+            if ($staffId === false || $staffId < 1) {
+                data_respond(400, ['error' => 'invalid_staff_id', 'message' => 'The agent profile identifier is invalid.']);
+            }
+            $findStaff = $db->prepare(
+                'SELECT id, email, display_name, role, permissions, is_active, created_by, created_at, updated_at
+                 FROM staff_users WHERE id = ? LIMIT 1'
+            );
+            $findStaff->execute([$staffId]);
+            $staffProfile = $findStaff->fetch();
+            if (!$staffProfile) {
+                data_respond(404, ['error' => 'staff_not_found', 'message' => 'The agent profile was not found.']);
+            }
+            $staffProfile['id'] = (int) $staffProfile['id'];
+            $staffProfile['is_active'] = (bool) $staffProfile['is_active'];
+            $staffProfile['permissions'] = data_staff_permissions(json_decode((string) $staffProfile['permissions'], true)) ?? [];
+            $assignedLeads = $db->prepare(
+                'SELECT id, first_name, last_name, email, status, created_at
+                 FROM leads WHERE assigned_staff_id = ? ORDER BY id DESC'
+            );
+            $assignedLeads->execute([$staffId]);
+            $staffProfile['assignedLeads'] = array_map(static fn (array $lead): array => [
+                'id' => (int) $lead['id'],
+                'firstName' => $lead['first_name'],
+                'lastName' => $lead['last_name'],
+                'email' => $lead['email'],
+                'status' => $lead['status'],
+                'createdAt' => $lead['created_at'],
+            ], $assignedLeads->fetchAll());
+            data_respond(200, ['profile' => $staffProfile]);
+        }
         $rows = $db->query(
             'SELECT s.id, s.email, s.display_name, s.role, s.permissions, s.is_active, s.created_by, s.created_at, s.updated_at,
                     (SELECT COUNT(*) FROM leads l WHERE l.assigned_staff_id = s.id) AS assigned_lead_count

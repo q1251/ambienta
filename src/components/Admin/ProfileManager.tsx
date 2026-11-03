@@ -66,7 +66,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
     <div className="flex min-h-[calc(100vh-11rem)] w-full flex-col gap-6">
       <header>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Account settings</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Profile &amp; security</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{role === 'admin' ? 'Profile & security' : 'Agent profile & security'}</h1>
         <p className="mt-2 text-sm text-slate-600">Update the name and email shown for your {role === 'admin' ? 'administrator' : 'agent'} account, or set a new password.</p>
       </header>
 

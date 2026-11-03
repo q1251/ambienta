@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyRound, LogIn, UserPlus, Users, UserX } from 'lucide-react';
+import { CalendarDays, KeyRound, LogIn, Mail, UserPlus, Users, UserX, X } from 'lucide-react';
 
 const availablePermissions = [
   { id: 'leads', label: 'Leads' },
@@ -19,6 +19,18 @@ interface StaffAccount {
   created_by: string;
   created_at: string;
   assigned_lead_count: number;
+}
+
+interface AgentProfile extends StaffAccount {
+  updated_at: string;
+  assignedLeads: Array<{
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    status: string;
+    createdAt: string;
+  }>;
 }
 
 interface StaffManagerProps {
@@ -41,6 +53,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [permissions, setPermissions] = useState<StaffPermission[]>(defaultPermissions);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<AgentProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPermissions, setEditPermissions] = useState<StaffPermission[]>([]);
@@ -194,6 +209,27 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     }
   };
 
+  const openProfile = async (account: StaffAccount) => {
+    setSelectedProfile(null);
+    setProfileError('');
+    setProfileLoading(true);
+    try {
+      const response = await fetch(`/api/data.php?resource=staff&id=${encodeURIComponent(String(account.id))}`, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
+      const result = await response.json() as { profile?: AgentProfile; message?: string };
+      if (!response.ok || !result.profile || !Array.isArray(result.profile.assignedLeads)) {
+        throw new Error(result.message || 'The agent profile could not be loaded.');
+      }
+      setSelectedProfile(result.profile);
+    } catch (loadError) {
+      setProfileError(loadError instanceof Error ? loadError.message : 'The agent profile could not be loaded.');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const startEditing = (account: StaffAccount) => {
     setEditingId(account.id);
     setEditName(account.display_name);
@@ -305,6 +341,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => void openProfile(account)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">View profile</button>
                     {account.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(account)} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-3.5 w-3.5" />Enter account</button>}
                     <button type="button" disabled={saving} onClick={() => startEditing(account)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>
                     <button type="button" disabled={saving} onClick={() => void updateAccount(account, { resetPassword: true }, 'A new one-time password was generated.')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><KeyRound className="h-3.5 w-3.5" />Reset password</button>
@@ -318,6 +355,71 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
           {loading && <p className="px-5 py-10 text-center text-sm text-slate-500">Loading agent accounts…</p>}
         </div>
       </section>
+
+      {(profileLoading || profileError || selectedProfile) && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="agent-profile-title">
+          <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 p-5 sm:p-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent account</p>
+                <h2 id="agent-profile-title" className="mt-1 text-xl font-semibold text-slate-950">
+                  {selectedProfile ? `${selectedProfile.display_name || selectedProfile.email} profile` : 'Agent profile'}
+                </h2>
+              </div>
+              <button type="button" onClick={() => { setSelectedProfile(null); setProfileError(''); }} aria-label="Close agent profile" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            {profileLoading && <p role="status" className="p-8 text-center text-sm text-slate-600">Loading agent profile…</p>}
+            {profileError && <p role="alert" className="m-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{profileError}</p>}
+            {selectedProfile && (
+              <div className="space-y-5 p-5 sm:p-6">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Contact & account</p>
+                    <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-900"><Mail className="h-4 w-4 text-teal-800" />{selectedProfile.email}</p>
+                    <p className="mt-2 text-sm text-slate-600">Status: {selectedProfile.is_active ? 'Active' : 'Inactive'}</p>
+                    <p className="mt-1 text-sm text-slate-600">Role: Agent</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Account history</p>
+                    <p className="mt-2 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-teal-800" />Created {new Date(selectedProfile.created_at).toLocaleString()}</p>
+                    <p className="mt-2 text-sm text-slate-600">Created by {selectedProfile.created_by}</p>
+                    <p className="mt-1 text-sm text-slate-600">Last updated {new Date(selectedProfile.updated_at).toLocaleString()}</p>
+                  </div>
+                </div>
+                <section>
+                  <h3 className="text-sm font-semibold text-slate-900">Permissions</h3>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedProfile.permissions.map((permission) => <span key={permission} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium capitalize text-teal-900">{permission}</span>)}
+                    {!selectedProfile.permissions.length && <span className="text-sm text-slate-500">No operational permissions</span>}
+                  </div>
+                </section>
+                <section>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-slate-900">Assigned leads</h3>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.assignedLeads.length}</span>
+                  </div>
+                  {selectedProfile.assignedLeads.length ? (
+                    <div className="mt-2 max-h-64 overflow-auto rounded-xl border border-slate-200">
+                      {selectedProfile.assignedLeads.map((lead) => (
+                        <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 last:border-0">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{lead.firstName} {lead.lastName}</p>
+                            <p className="text-xs text-slate-500">{lead.email}</p>
+                          </div>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{lead.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="mt-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No leads are assigned to this agent yet. Assign leads from the Contact Leads page.</p>}
+                </section>
+                <div className="flex justify-end border-t border-slate-100 pt-4">
+                  <button type="button" onClick={() => { setSelectedProfile(null); setProfileError(''); }} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Close profile</button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 };
