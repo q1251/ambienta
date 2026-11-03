@@ -353,23 +353,21 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </div>
         <div className="divide-y divide-slate-100">
           {accounts.map((account) => (
-            <div key={account.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="min-w-[220px] flex-1">
+            <div key={account.id} className="flex flex-wrap items-center gap-4 px-5 py-4 sm:flex-nowrap sm:gap-6">
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-slate-900">{account.display_name || account.email}</p>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${account.is_active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{account.is_active ? 'Active' : 'Inactive'}</span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-500">{account.email} · {account.assigned_lead_count} assigned leads · Created {account.created_at} by {account.created_by}</p>
+                    <p className="mt-1 break-words text-xs text-slate-500">{account.email} · {account.assigned_lead_count} assigned leads · Created {account.created_at} by {account.created_by}</p>
                     <p className="mt-2 flex flex-wrap gap-1.5">
                       {account.permissions.map((permission) => <span key={permission} className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium capitalize text-teal-900">{permission}</span>)}
                       {!account.permissions.length && <span className="text-xs text-slate-500">No operational permissions</span>}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
                     <button type="button" onClick={() => void openProfile(account)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">View profile</button>
                   </div>
-                </div>
             </div>
           ))}
           {!loading && accounts.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">No agent accounts yet.</p>}
