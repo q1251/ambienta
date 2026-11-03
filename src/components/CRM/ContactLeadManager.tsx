@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, Check, Copy, Download, Mail, MessageSquare, Package, Pencil, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, getLeadCountry, parseLeadsCsv } from '../../utils/pharmacyLogic';
-import { CountrySelect, PhoneCountryInput } from './PhoneCountryInput';
+import { CountryFlag, CountrySelect, PhoneCountryInput } from './PhoneCountryInput';
+import { getLeadCountryCode } from '../../utils/countryOptions';
 
 type NewLead = ContactLeadInput;
 
@@ -477,7 +478,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                   <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                   <label className="text-sm font-medium text-slate-700">Email<input required type="email" maxLength={254} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                  <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} defaultCountryName={profileCountry} disabled={profileSaving} /></span></label>
+                  <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} disabled={profileSaving} /></span></label>
                   <label className="block text-sm font-medium text-slate-700">Country<span className="mt-1 block"><CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={profileSaving} /></span></label>
                   <div className="flex items-end sm:col-span-2">
                     <button type="submit" disabled={profileSaving || !onUpdateLead} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
@@ -685,7 +686,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <label className="text-sm font-medium text-slate-700">First name<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="block text-sm font-medium text-slate-700">Phone (optional)<span className="mt-1 block"><PhoneCountryInput value={phone} onChange={setPhone} defaultCountryName={country} /></span></label>
+                <label className="block text-sm font-medium text-slate-700">Phone (optional)<span className="mt-1 block"><PhoneCountryInput value={phone} onChange={setPhone} /></span></label>
                 <label className="block text-sm font-medium text-slate-700">Country (optional)<span className="mt-1 block"><CountrySelect value={country} onChange={setCountry} /></span></label>
                 <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
                   <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
@@ -720,7 +721,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Email<input required type="email" maxLength={254} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-              <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} defaultCountryName={profileCountry} disabled={editLeadSaving} /></span></label>
+              <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} disabled={editLeadSaving} /></span></label>
               <label className="block text-sm font-medium text-slate-700">Country<span className="mt-1 block"><CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={editLeadSaving} /></span></label>
               <div className="flex items-end justify-end gap-2 sm:col-span-2">
                 <button type="button" disabled={editLeadSaving} onClick={() => setEditingLead(null)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Cancel</button>
@@ -824,7 +825,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       {lead.phone && copyButton(lead, 'phone', lead.phone)}
                     </span>
                   </td>
-                  <td className="py-3">{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</td>
+                  <td className="py-3">
+                    <span className="inline-flex items-center gap-2">
+                      <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
+                      {lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}
+                    </span>
+                  </td>
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>

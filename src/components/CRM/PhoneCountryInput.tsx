@@ -13,8 +13,8 @@ interface CountryPickerProps {
   showCallingCode?: boolean;
 }
 
-const CountryFlag: React.FC<{ country?: CountryOption }> = ({ country }) => (
-  country ? <span aria-hidden="true" className={`fi fi-${country.code.toLowerCase()} shrink-0 rounded-sm`} /> : null
+export const CountryFlag: React.FC<{ countryCode?: CountryCode | '' }> = ({ countryCode }) => (
+  countryCode ? <span aria-hidden="true" className={`fi fi-${countryCode.toLowerCase()} shrink-0 rounded-sm`} /> : null
 );
 
 const CountryPicker: React.FC<CountryPickerProps> = ({
@@ -62,10 +62,10 @@ const CountryPicker: React.FC<CountryPickerProps> = ({
         onClick={() => setOpen((current) => !current)}
         className="flex min-h-10 w-full items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <CountryFlag country={selectedCountry} />
+        <CountryFlag countryCode={selectedCountry?.code} />
         <span className="min-w-0 flex-1 truncate">
           {selectedCountry
-            ? `${selectedCountry.name}${showCallingCode ? ` (+${selectedCountry.callingCode})` : ''}`
+            ? showCallingCode ? `+${selectedCountry.callingCode}` : selectedCountry.name
             : selectedLabel || placeholder}
         </span>
         <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-500" />
@@ -99,7 +99,7 @@ const CountryPicker: React.FC<CountryPickerProps> = ({
                 onClick={() => chooseCountry(country)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-slate-800 hover:bg-teal-50 focus-visible:bg-teal-50 focus-visible:outline-none"
               >
-                <CountryFlag country={country} />
+                <CountryFlag countryCode={country.code} />
                 <span className="min-w-0 flex-1 truncate">{country.name}</span>
                 {showCallingCode && <span className="text-slate-500">+{country.callingCode}</span>}
                 {country.code === value && <Check aria-hidden="true" className="h-4 w-4 text-teal-800" />}
@@ -116,12 +116,11 @@ const CountryPicker: React.FC<CountryPickerProps> = ({
 interface PhoneCountryInputProps {
   value: string;
   onChange: (value: string) => void;
-  defaultCountryName?: string;
   disabled?: boolean;
 }
 
-export const PhoneCountryInput: React.FC<PhoneCountryInputProps> = ({ value, onChange, defaultCountryName = '', disabled = false }) => {
-  const phoneParts = phoneInputParts(value, defaultCountryName);
+export const PhoneCountryInput: React.FC<PhoneCountryInputProps> = ({ value, onChange, disabled = false }) => {
+  const phoneParts = phoneInputParts(value);
   const [selectedCountryCode, setSelectedCountryCode] = useState<CountryCode | ''>(phoneParts.countryCode);
   const lastEmittedValue = useRef<string | null>(null);
   useEffect(() => {
@@ -129,8 +128,8 @@ export const PhoneCountryInput: React.FC<PhoneCountryInputProps> = ({ value, onC
       lastEmittedValue.current = null;
       return;
     }
-    setSelectedCountryCode(phoneInputParts(value, defaultCountryName).countryCode);
-  }, [value, defaultCountryName]);
+    setSelectedCountryCode(phoneInputParts(value).countryCode);
+  }, [value]);
 
   const updatePhone = (code: CountryCode | '', number: string) => {
     setSelectedCountryCode(code);
@@ -143,7 +142,7 @@ export const PhoneCountryInput: React.FC<PhoneCountryInputProps> = ({ value, onC
 
   return (
     <div className="flex min-w-0">
-      <div className="w-44 shrink-0">
+      <div className="w-28 shrink-0">
         <CountryPicker
           value={selectedCountryCode}
           onChange={(code) => updatePhone(code, phoneParts.nationalNumber)}

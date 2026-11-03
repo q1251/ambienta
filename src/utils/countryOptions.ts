@@ -45,12 +45,23 @@ export function getLeadCountry(phone: string): string {
   return 'Not specified';
 }
 
-export function phoneInputParts(phone: string, defaultCountryName = ''): { countryCode: CountryCode | ''; nationalNumber: string } {
+export function getLeadCountryCode(countryName: string, phone: string): CountryCode | '' {
+  const countryLabel = countryName.trim();
+  if (countryLabel && countryLabel !== 'Not specified') {
+    return countryOptions.find((country) => country.name.toLowerCase() === countryLabel.toLowerCase())?.code ?? '';
+  }
+
+  const inferredCountry = countryOptions.find((country) => country.name === getLeadCountry(phone));
+  if (inferredCountry) return inferredCountry.code;
+
+  return parsePhoneNumberFromString(phone)?.country ?? '';
+}
+
+export function phoneInputParts(phone: string): { countryCode: CountryCode | ''; nationalNumber: string } {
   const parsed = parsePhoneNumberFromString(phone);
   if (parsed?.country) {
     return { countryCode: parsed.country, nationalNumber: parsed.nationalNumber };
   }
-  const fallbackCountry = countryOptions.find((country) => country.name === defaultCountryName);
   if (phone.startsWith('+') || phone.startsWith('00')) {
     const digits = phone.trim().replace(/^\+|^00/, '').replace(/\D/g, '');
     const matchingCountries = countryOptions
@@ -58,12 +69,11 @@ export function phoneInputParts(phone: string, defaultCountryName = ''): { count
       .sort((left, right) => right.callingCode.length - left.callingCode.length);
     const match = matchingCountries[0];
     if (match) {
-      const selectedCountry = fallbackCountry?.callingCode === match.callingCode ? fallbackCountry : match;
-      return { countryCode: selectedCountry.code, nationalNumber: digits.slice(match.callingCode.length) };
+      return { countryCode: match.code, nationalNumber: digits.slice(match.callingCode.length) };
     }
   }
   return {
-    countryCode: fallbackCountry?.code ?? '',
+    countryCode: '',
     nationalNumber: phone.replace(/\D/g, ''),
   };
 }

@@ -9,7 +9,7 @@ import {
   parseLeadsCsv,
   evaluateDueReminders,
 } from './pharmacyLogic';
-import { countryOptions, phoneInputParts } from './countryOptions';
+import { countryOptions, getLeadCountryCode, phoneInputParts } from './countryOptions';
 import { Patient, ReminderRule } from '../types/pharmacy';
 
 test('calculateDaysRemaining computes correct difference', () => {
@@ -76,10 +76,14 @@ test('country selectors include the full supported calling-code list and split i
     countryCode: 'GB',
     nationalNumber: '2079460958',
   });
-  assert.deepEqual(phoneInputParts('555-0120', 'United States'), {
-    countryCode: 'US',
+  assert.deepEqual(phoneInputParts('555-0120'), {
+    countryCode: '',
     nationalNumber: '5550120',
   });
+  assert.equal(getLeadCountryCode('Canada', '+44 20 7946 0958'), 'CA');
+  assert.equal(getLeadCountryCode('', '+44 20 7946 0958'), 'GB');
+  assert.equal(getLeadCountryCode('Not specified', '+44 20 7946 0958'), 'GB');
+  assert.equal(getLeadCountryCode('Somewhere else', '+44 20 7946 0958'), '');
 });
 
 test('parseLeadsCsv keeps explicit country values and infers one from phone when absent', () => {
