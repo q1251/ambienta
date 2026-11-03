@@ -55,26 +55,26 @@ storefront orders in MySQL. It creates its tables and initial catalog records
 when first accessed. The database user must have permission to create tables,
 read/write rows, and update inventory.
 
-1. In hPanel, confirm the MySQL database host, database name, username, and
-   password. Enable PHP's `pdo_mysql` extension for the site.
-2. Create `/domains/ambienta.io/private/app-config.php` alongside
-   `admin-auth.php`, outside `public_html`, with the actual values from hPanel:
+Set the repository Actions secret `APP_CONFIG_JSON_B64` to a base64-encoded
+JSON object containing the database settings from hPanel:
 
-   ```php
-   <?php
-   return [
-       'db_host' => 'localhost',
-       'db_name' => 'YOUR_DATABASE_NAME',
-       'db_user' => 'YOUR_DATABASE_USER',
-       'db_password' => 'YOUR_DATABASE_PASSWORD',
-   ];
-   ```
+```json
+{
+  "db_host": "YOUR_DATABASE_HOST",
+  "db_name": "YOUR_DATABASE_NAME",
+  "db_user": "YOUR_DATABASE_USER",
+  "db_password": "YOUR_DATABASE_PASSWORD"
+}
+```
 
-   Replace `localhost` if hPanel lists a different database host. Restrict
-   access to this file and never upload it into `public_html` or commit it.
-3. After deploying the PHP endpoint, sign in at `/admin`; the admin data API
-   creates the tables and seeds catalog prices/stock. Verify the Leads and
-   Orders sections load successfully before accepting real orders.
+Generate the base64 value locally and add it as a GitHub Actions secret; do
+not put database credentials in source code or a normal Actions variable. The
+deployment workflow installs the generated `app-config.php` alongside
+`admin-auth.php` in `/domains/ambienta.io/private/`, outside `public_html`.
+Enable PHP's `pdo_mysql` extension in hPanel before deploying. Once installed,
+the admin data API creates the tables and seeds initial catalog prices/stock.
+Verify the Leads and Orders sections load successfully before accepting real
+orders.
 
 The API persists contact details for leads and fulfillment fields for orders;
 it does not store clinical, prescription, insurance, or free-form checkout
@@ -85,10 +85,11 @@ cryptocurrency processing are disabled until a server-side payment provider is
 configured; no payment is captured by this API.
 
 For local development, start the PHP API from a second terminal with
-`php -S 127.0.0.1:8001 -t public`; Vite proxies `/api` requests to it. Create a
-local `private/admin-auth.php` and `private/app-config.php` using the structures
-above for local sign-in and database testing. The `private/` directory is
-ignored by Git. Local testing also requires PHP's `pdo_mysql` extension.
+`php -S 127.0.0.1:8001 -t public`; Vite proxies `/api` requests to it. Create
+local `private/admin-auth.php` and `private/app-config.php` files using the
+structures above for local sign-in and database testing. The `private/`
+directory is ignored by Git. Local testing also requires PHP's `pdo_mysql`
+extension.
 
 This login and limited database API do not turn the frontend into a compliant
 patient-record system. Do not enter real patient, prescription, or payment

@@ -41,6 +41,7 @@ jobs:
         env:
           ADMIN_EMAIL: afosterofficial@gmail.com
           ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          APP_CONFIG_JSON_B64: ${{ secrets.APP_CONFIG_JSON_B64 }}
 
       - name: Deploy private admin configuration over FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
