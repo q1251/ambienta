@@ -272,7 +272,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <>
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
               <h3 className="text-base font-bold text-slate-900">Contact details</h3>
-              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 <div><p className="text-xs font-medium uppercase text-slate-500">Email</p><p className="mt-1 break-all text-sm text-slate-900">{profile.lead.email}</p></div>
                 <div>
                   <p className="text-xs font-medium uppercase text-slate-500">Phone</p>
@@ -282,11 +282,15 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </div>
                 <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
                 <div>
-                  <p className="text-xs font-medium uppercase text-slate-500">Added</p>
-                  <p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p>
-                  <button type="button" onClick={() => setEmailComposerOpen(true)} className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline">
-                    <Mail className="h-4 w-4" /> Compose email
-                  </button>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase text-slate-500">Added</p>
+                      <p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p>
+                    </div>
+                    <button type="button" onClick={() => setEmailComposerOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline">
+                      <Mail className="h-4 w-4" /> Compose email
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="mt-5 grid items-start gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
