@@ -167,6 +167,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       {dataError && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
       {requestError && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
       {success && <p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{success}</p>}
+      {leads.some((lead) => lead.leadSource === 'Synthetic Demo') && (
+        <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Demo records use reserved example.com addresses and fictional phone numbers. They are not real people and are not opted in to marketing.
+        </p>
+      )}
 
       {mode === 'csv' ? (
         <div className="rounded-xl border border-slate-200 bg-white p-5">

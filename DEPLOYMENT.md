@@ -117,6 +117,11 @@ including fulfillment status and tracking details. Order activity does not
 change the manually managed lead stage; update it from the profile when
 appropriate.
 
+The CRM seeds 20 clearly labeled synthetic demo contacts for interface testing.
+Their addresses use the reserved `example.com` domain, their phone numbers are
+fictional, and they have no marketing consent. They are not actual prospects or
+customers; remove them before relying on CRM counts for business reporting.
+
 The primary administrator can create operator accounts from **Staff access**.
 Each operator receives a temporary password, which is stored as a password
 hash and must be changed on first sign-in. Share temporary passwords through a

@@ -115,15 +115,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <span className="hidden max-w-52 truncate rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-600 sm:inline">{props.email}</span>
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${props.role === 'admin' ? 'bg-violet-50 text-violet-800' : 'bg-teal-50 text-teal-800'}`}>
               {props.role === 'admin' ? 'Administrator' : 'Operator'}
             </span>
             <button type="button" onClick={props.onNavigateHome} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 md:inline-flex">
               Storefront <ArrowUpRight className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" onClick={() => void logout()} aria-label="Sign out" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
-              <LogOut className="h-3.5 w-3.5" /><span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>
@@ -152,6 +148,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             <p className="text-xs font-semibold text-amber-950">Operational data only</p>
             <p className="mt-1 text-[11px] leading-4 text-amber-900">Do not enter patient, prescription, insurance, or payment-card data.</p>
           </div>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="mt-4 flex w-full items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Logout</span>
+          </button>
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-7 lg:px-9 lg:py-8">
@@ -185,6 +189,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
           {activeTab === 'staff' && props.role === 'admin' && <StaffManager />}
           {activeTab === 'audit' && props.role === 'admin' && <AuditLogView />}
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100 lg:hidden"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
         </main>
       </div>
     </div>

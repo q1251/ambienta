@@ -67,7 +67,7 @@ export interface ContactLead {
   lastName: string;
   email: string;
   phone: string;
-  leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order';
+  leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo';
   createdAt: string;
   status: LeadStatus;
   marketingConsent: boolean;
