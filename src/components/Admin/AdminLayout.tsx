@@ -222,10 +222,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               ))}
             </>
           )}
-          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
-            <p className="text-xs font-semibold text-amber-950">Operational data only</p>
-            <p className="mt-1 text-[11px] leading-4 text-amber-900">Do not enter patient, prescription, insurance, or payment-card data.</p>
-          </div>
           <div className="mt-auto">
             <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
             {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
