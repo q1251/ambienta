@@ -54,7 +54,7 @@ interface InboxMessage {
   unread: boolean;
 }
 
-type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash' | 'campaigns';
+type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history';
 
 interface MailCampaign {
   id: string;
@@ -663,7 +663,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
         <div className="grid items-stretch gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className={`rounded-2xl border border-slate-200 bg-white p-3 ${
-          activeFolder === 'compose' || activeFolder === 'campaigns' ? 'h-fit self-start' : 'h-full self-stretch'
+          activeFolder === 'compose' || activeFolder === 'campaigns' || activeFolder === 'campaign-history' ? 'h-fit self-start' : 'h-full self-stretch'
         }`}>
           <button
             type="button"
@@ -701,19 +701,34 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             ))}
           </nav>
           {role === 'admin' && (
-            <button
-              type="button"
-              aria-current={activeFolder === 'campaigns' ? 'page' : undefined}
-              onClick={() => setActiveFolder('campaigns')}
-              className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
-                activeFolder === 'campaigns'
-                  ? 'bg-violet-50 text-violet-900'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
-              }`}
-            >
-              <Megaphone className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">Campaigns</span>
-            </button>
+            <>
+              <button
+                type="button"
+                aria-current={activeFolder === 'campaigns' || activeFolder === 'campaign-history' ? 'page' : undefined}
+                onClick={() => setActiveFolder('campaigns')}
+                className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                  activeFolder === 'campaigns' || activeFolder === 'campaign-history'
+                    ? 'bg-violet-50 text-violet-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
+                }`}
+              >
+                <Megaphone className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">Campaigns</span>
+              </button>
+              <button
+                type="button"
+                aria-current={activeFolder === 'campaign-history' ? 'page' : undefined}
+                onClick={() => setActiveFolder('campaign-history')}
+                className={`ml-7 flex w-[calc(100%-1.75rem)] items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  activeFolder === 'campaign-history'
+                    ? 'bg-violet-50 text-violet-900'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <span className="h-1 w-1 shrink-0 rounded-full bg-current" />
+                <span className="min-w-0 flex-1 truncate">Campaign history</span>
+              </button>
+            </>
           )}
           <div className="mt-4 hidden border-t border-slate-100 px-2 pt-4 lg:block">
             <p className="text-xs font-medium text-slate-500">Mailbox</p>
@@ -921,51 +936,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 </form>
               </section>
 
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="font-semibold text-slate-950">Campaign history</h2>
-                    <p className="mt-1 text-sm text-slate-600">View send progress and manage scheduled campaigns. “Sent” means accepted by SMTP; delivery and opens are not tracked.</p>
-                  </div>
-                  <button type="button" onClick={() => void loadData()} disabled={isLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
-                </div>
-                {campaigns.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-slate-500">No campaigns yet. Save a draft to get started.</p>
-                ) : (
-                  <ul className="mt-4 divide-y divide-slate-100">
-                    {campaigns.map((campaign) => (
-                      <li key={campaign.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-slate-900">{campaign.name}</p>
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              campaign.status === 'sent' ? 'bg-emerald-50 text-emerald-800'
-                                : campaign.status === 'partial' || campaign.status === 'failed' ? 'bg-rose-50 text-rose-800'
-                                  : campaign.status === 'sending' ? 'bg-blue-50 text-blue-800'
-                                    : campaign.status === 'scheduled' ? 'bg-violet-50 text-violet-800'
-                                      : 'bg-slate-100 text-slate-700'
-                            }`}>{campaign.status}</span>
-                          </div>
-                          <p className="mt-1 truncate text-sm text-slate-700">{campaign.subject}</p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {campaign.recipientCount} recipients · {campaign.sentCount} sent · {campaign.failedCount} failed · {campaign.unsubscribedCount} unsubscribed
-                            {campaign.scheduledAt ? ` · Scheduled ${new Date(`${campaign.scheduledAt.replace(' ', 'T')}Z`).toLocaleString()}` : ''}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          {campaign.status === 'draft' && (
-                            <button type="button" onClick={() => openCampaignDraft(campaign)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit draft</button>
-                          )}
-                          {campaign.status === 'scheduled' && (
-                            <button type="button" onClick={() => void cancelCampaign(campaign)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Cancel schedule</button>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
               <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -980,6 +950,61 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <p className="mt-3 text-xs text-amber-900">The command contains a private worker token. Keep it secret. Generating a new command immediately invalidates the previous one.</p>
               </section>
             </div>
+          )}
+          {activeFolder === 'campaign-history' && role === 'admin' && (
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-slate-950">Campaign history</h2>
+                  <p className="mt-1 text-sm text-slate-600">View send progress and manage scheduled campaigns. “Sent” means accepted by SMTP; delivery and opens are not tracked.</p>
+                </div>
+                <button type="button" onClick={() => void loadData()} disabled={isLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
+              </div>
+              {campaigns.length === 0 ? (
+                <p className="py-8 text-center text-sm text-slate-500">No campaigns yet. Create a campaign to get started.</p>
+              ) : (
+                <ul className="mt-4 divide-y divide-slate-100">
+                  {campaigns.map((campaign) => (
+                    <li key={campaign.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-slate-900">{campaign.name}</p>
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            campaign.status === 'sent' ? 'bg-emerald-50 text-emerald-800'
+                              : campaign.status === 'partial' || campaign.status === 'failed' ? 'bg-rose-50 text-rose-800'
+                                : campaign.status === 'sending' ? 'bg-blue-50 text-blue-800'
+                                  : campaign.status === 'scheduled' ? 'bg-violet-50 text-violet-800'
+                                    : 'bg-slate-100 text-slate-700'
+                          }`}>{campaign.status}</span>
+                        </div>
+                        <p className="mt-1 truncate text-sm text-slate-700">{campaign.subject}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {campaign.recipientCount} recipients · {campaign.sentCount} sent · {campaign.failedCount} failed · {campaign.unsubscribedCount} unsubscribed
+                          {campaign.scheduledAt ? ` · Scheduled ${new Date(`${campaign.scheduledAt.replace(' ', 'T')}Z`).toLocaleString()}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {campaign.status === 'draft' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              openCampaignDraft(campaign);
+                              setActiveFolder('campaigns');
+                            }}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Edit draft
+                          </button>
+                        )}
+                        {campaign.status === 'scheduled' && (
+                          <button type="button" onClick={() => void cancelCampaign(campaign)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Cancel schedule</button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           )}
         </div>
         </div>
