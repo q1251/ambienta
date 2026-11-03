@@ -9,6 +9,7 @@ import {
   Settings2,
   ShieldCheck,
   Users,
+  UserRound,
 } from 'lucide-react';
 import { CatalogItem, ContactLead, OnlineOrder } from '../../types/pharmacy';
 import { AuditLogView } from './AuditLogView';
@@ -17,9 +18,10 @@ import { InventoryManager } from './InventoryManager';
 import { OperationsOverview } from './OperationsOverview';
 import { OrdersManager } from './OrdersManager';
 import { StaffManager } from './StaffManager';
+import { ProfileManager } from './ProfileManager';
 import { ContactLeadManager } from '../CRM/ContactLeadManager';
 
-export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'integrations' | 'staff' | 'audit';
+export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'integrations' | 'profile' | 'staff' | 'audit';
 export interface OrderSearch {
   query: string;
   status: string;
@@ -37,6 +39,8 @@ interface AdminLayoutProps {
   onLogout: () => Promise<void>;
   role: 'admin' | 'operator';
   email: string;
+  displayName: string;
+  onProfileUpdated: (email: string, displayName: string) => void;
   leads: ContactLead[];
   leadDataError?: string;
   dataError?: string;
@@ -71,6 +75,7 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
   { id: 'leads', label: 'Contact leads', icon: FileSpreadsheet, group: 'Workspace' },
   { id: 'inventory', label: 'Products & stock', icon: Package, group: 'Workspace' },
   { id: 'integrations', label: 'Integrations', icon: Settings2, group: 'Settings' },
+  { id: 'profile', label: 'Profile & security', icon: UserRound, group: 'Settings' },
   { id: 'staff', label: 'Staff access', icon: Users, group: 'Administration' },
   { id: 'audit', label: 'Audit log', icon: ShieldCheck, group: 'Administration' },
 ];
@@ -99,7 +104,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           <div className="flex min-w-0 items-center gap-3">
             <img src="/ambients-mark.svg" alt="" className="h-10 w-10 rounded-xl" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-tight text-slate-950">Ambients operations</p>
+              <p className="truncate text-sm font-semibold tracking-tight text-slate-950">{props.displayName || 'Ambients operations'}</p>
               <p className="text-xs text-slate-500">{activeLabel}</p>
             </div>
           </div>
@@ -171,6 +176,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           )}
           {activeTab === 'leads' && <ContactLeadManager leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} />}
           {activeTab === 'integrations' && <IntegrationStatus />}
+          {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
           {activeTab === 'staff' && props.role === 'admin' && <StaffManager />}
           {activeTab === 'audit' && props.role === 'admin' && <AuditLogView />}
         </main>

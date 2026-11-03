@@ -176,6 +176,7 @@ function data_ensure_schema(PDO $db): void
         "CREATE TABLE IF NOT EXISTS staff_users (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(254) NOT NULL UNIQUE,
+            display_name VARCHAR(120) NOT NULL DEFAULT '',
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(24) NOT NULL DEFAULT 'operator',
             is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -192,6 +193,10 @@ function data_ensure_schema(PDO $db): void
     $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', 'must_change_password']);
     if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
         $db->exec('ALTER TABLE staff_users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1 AFTER is_active');
+    }
+    $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', 'display_name']);
+    if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
+        $db->exec("ALTER TABLE staff_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT '' AFTER email");
     }
     $legacyColumns = [
         'category' => "VARCHAR(32) NOT NULL DEFAULT 'Daily Wellness'",
@@ -552,7 +557,7 @@ if ($method === 'GET') {
     }
     if ($resource === 'staff') {
         data_require_admin('admin');
-        $rows = $db->query('SELECT id, email, role, is_active, created_by, created_at, updated_at FROM staff_users ORDER BY email')->fetchAll();
+        $rows = $db->query('SELECT id, email, display_name, role, is_active, created_by, created_at, updated_at FROM staff_users ORDER BY email')->fetchAll();
         foreach ($rows as &$row) {
             $row['id'] = (int) $row['id'];
             $row['is_active'] = (bool) $row['is_active'];

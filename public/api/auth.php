@@ -97,6 +97,7 @@ function connect_staff_database(): PDO
             "CREATE TABLE IF NOT EXISTS staff_users (
                 id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 email VARCHAR(254) NOT NULL UNIQUE,
+                display_name VARCHAR(120) NOT NULL DEFAULT '',
                 password_hash VARCHAR(255) NOT NULL,
                 role VARCHAR(24) NOT NULL DEFAULT 'operator',
                 is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -113,6 +114,24 @@ function connect_staff_database(): PDO
         if ((int) $column->fetchColumn() === 0) {
             $db->exec('ALTER TABLE staff_users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1 AFTER is_active');
         }
+        $column->execute([$databaseName, 'staff_users', 'display_name']);
+        if ((int) $column->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE staff_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT '' AFTER email");
+        }
+        $db->exec(
+            "CREATE TABLE IF NOT EXISTS admin_profile (
+                id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+                email VARCHAR(254) NOT NULL UNIQUE,
+                display_name VARCHAR(120) NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+        $adminConfig = get_auth_config();
+        $seed = $db->prepare(
+            "INSERT IGNORE INTO admin_profile (id, email, display_name, password_hash) VALUES (1, ?, 'Administrator', ?)"
+        );
+        $seed->execute([$adminConfig['admin_email'], $adminConfig['password_hash']]);
         return $db;
     } catch (Throwable $error) {
         error_log('Ambients staff sign-in lookup failed: ' . $error->getMessage());
@@ -123,10 +142,21 @@ function connect_staff_database(): PDO
 function find_staff_account(string $email): ?array
 {
     $db = connect_staff_database();
-    $statement = $db->prepare('SELECT email, password_hash, role, must_change_password FROM staff_users WHERE email = ? AND is_active = 1');
+    $statement = $db->prepare('SELECT email, display_name, password_hash, role, must_change_password FROM staff_users WHERE email = ? AND is_active = 1');
     $statement->execute([$email]);
     $staff = $statement->fetch();
     return is_array($staff) ? $staff : null;
+}
+
+function find_admin_account(): array
+{
+    $db = connect_staff_database();
+    $account = $db->query('SELECT email, display_name, password_hash FROM admin_profile WHERE id = 1')->fetch();
+    if (!is_array($account)) {
+        error_log('Ambients primary administrator profile is missing.');
+        respond(503, ['authenticated' => false, 'message' => 'Administrator sign-in is temporarily unavailable.']);
+    }
+    return $account;
 }
 
 function update_login_attempts(string $clientAddress, bool $clear): array
@@ -281,8 +311,14 @@ if ($action === 'session' && $method === 'GET') {
         if ($staff === null || $staff['role'] !== 'operator') {
             $authenticated = false;
         } else {
+            $_SESSION['admin_email'] = $staff['email'];
+            $_SESSION['admin_display_name'] = $staff['display_name'];
             $_SESSION['must_change_password'] = (bool) $staff['must_change_password'];
         }
+    } elseif ($authenticated) {
+        $admin = find_admin_account();
+        $_SESSION['admin_email'] = $admin['email'];
+        $_SESSION['admin_display_name'] = $admin['display_name'];
     }
 
     if ($authenticated) {
@@ -295,6 +331,7 @@ if ($action === 'session' && $method === 'GET') {
         'authenticated' => $authenticated,
         'configured' => true,
         'email' => $authenticated ? $_SESSION['admin_email'] : null,
+        'displayName' => $authenticated ? ($_SESSION['admin_display_name'] ?? '') : null,
         'role' => $authenticated ? ($_SESSION['admin_role'] ?? null) : null,
         'mustChangePassword' => $authenticated && (bool) ($_SESSION['must_change_password'] ?? false),
     ]);
@@ -320,12 +357,13 @@ if ($action === 'login' && $method === 'POST') {
         ], ['Retry-After' => (string) $attemptLimit['retry_after']]);
     }
 
-    $configuredEmail = strtolower(trim($config['admin_email']));
     $role = null;
     $mustChangePassword = false;
-    if (hash_equals($configuredEmail, $email)) {
-        if (password_verify($password, $config['password_hash'])) {
+    $admin = find_admin_account();
+    if (hash_equals(strtolower($admin['email']), $email)) {
+        if (password_verify($password, $admin['password_hash'])) {
             $role = 'admin';
+            $displayName = $admin['display_name'];
         }
     } else {
         $staff = find_staff_account($email);
@@ -336,6 +374,7 @@ if ($action === 'login' && $method === 'POST') {
         ) {
             $role = 'operator';
             $mustChangePassword = (bool) $staff['must_change_password'];
+            $displayName = $staff['display_name'];
         }
     }
 
@@ -356,6 +395,7 @@ if ($action === 'login' && $method === 'POST') {
     }
 
     $_SESSION['admin_email'] = $email;
+    $_SESSION['admin_display_name'] = $displayName;
     $_SESSION['admin_role'] = $role;
     $_SESSION['must_change_password'] = $mustChangePassword;
     $_SESSION['last_activity'] = time();
@@ -363,9 +403,115 @@ if ($action === 'login' && $method === 'POST') {
         'authenticated' => true,
         'configured' => true,
         'email' => $email,
+        'displayName' => $displayName,
         'role' => $role,
         'mustChangePassword' => $mustChangePassword,
     ]);
+}
+
+if ($action === 'update-profile' && $method === 'POST') {
+    start_admin_session();
+    if (
+        !isset($_SESSION['admin_email'], $_SESSION['admin_role'])
+        || !is_string($_SESSION['admin_email'])
+        || !in_array($_SESSION['admin_role'], ['admin', 'operator'], true)
+        || !is_int($_SESSION['last_activity'] ?? null)
+        || $_SESSION['last_activity'] < time() - 28800
+    ) {
+        respond(401, ['authenticated' => false, 'message' => 'Sign in again before updating your profile.']);
+    }
+
+    $displayName = isset($input['displayName']) && is_string($input['displayName']) ? trim($input['displayName']) : '';
+    $email = isset($input['email']) && is_string($input['email']) ? strtolower(trim($input['email'])) : '';
+    $currentPassword = isset($input['currentPassword']) && is_string($input['currentPassword']) ? $input['currentPassword'] : '';
+    $newPassword = isset($input['newPassword']) && is_string($input['newPassword']) ? $input['newPassword'] : '';
+    if ($displayName === '' || strlen($displayName) > 120 || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 254) {
+        respond(400, ['message' => 'Enter a display name and valid email address.']);
+    }
+    if ($currentPassword === '' || strlen($currentPassword) > 1024) {
+        respond(400, ['message' => 'Enter your current password to confirm profile changes.']);
+    }
+    if ($newPassword !== '' && (strlen($newPassword) < 12 || strlen($newPassword) > 1024)) {
+        respond(400, ['message' => 'A new password must be at least 12 characters.']);
+    }
+
+    $db = connect_staff_database();
+    $role = $_SESSION['admin_role'];
+    $currentEmail = $_SESSION['admin_email'];
+    $db->beginTransaction();
+    try {
+        if ($role === 'admin') {
+            $find = $db->query('SELECT email, display_name, password_hash FROM admin_profile WHERE id = 1 FOR UPDATE');
+            $account = $find->fetch();
+            if (!is_array($account) || !password_verify($currentPassword, $account['password_hash'])) {
+                $db->rollBack();
+                respond(403, ['message' => 'Your current password is incorrect.']);
+            }
+            $adminEmail = $db->prepare('SELECT id FROM staff_users WHERE email = ? LIMIT 1');
+            $adminEmail->execute([$email]);
+            if (strtolower($email) !== strtolower($account['email']) && $adminEmail->fetch()) {
+                $db->rollBack();
+                respond(409, ['message' => 'That email address is already assigned to another account.']);
+            }
+            if ($newPassword !== '' && password_verify($newPassword, $account['password_hash'])) {
+                $db->rollBack();
+                respond(400, ['message' => 'Choose a new password different from your current password.']);
+            }
+            $passwordHash = $newPassword === '' ? $account['password_hash'] : password_hash($newPassword, PASSWORD_DEFAULT);
+            if (!is_string($passwordHash)) {
+                throw new RuntimeException('Administrator password hashing failed.');
+            }
+            $update = $db->prepare('UPDATE admin_profile SET email = ?, display_name = ?, password_hash = ? WHERE id = 1');
+            $update->execute([$email, $displayName, $passwordHash]);
+        } else {
+            $find = $db->prepare('SELECT id, email, password_hash, must_change_password FROM staff_users WHERE email = ? AND is_active = 1 AND role = ? FOR UPDATE');
+            $find->execute([$currentEmail, 'operator']);
+            $account = $find->fetch();
+            if (!is_array($account) || !password_verify($currentPassword, $account['password_hash'])) {
+                $db->rollBack();
+                respond(403, ['message' => 'Your current password is incorrect or the account is inactive.']);
+            }
+            if ((int) $account['must_change_password'] === 1 && $newPassword === '') {
+                $db->rollBack();
+                respond(403, ['message' => 'Set a new password before changing other profile details.']);
+            }
+            $adminEmail = $db->query('SELECT email FROM admin_profile WHERE id = 1')->fetchColumn();
+            $otherStaff = $db->prepare('SELECT id FROM staff_users WHERE email = ? AND id <> ? LIMIT 1');
+            $otherStaff->execute([$email, $account['id']]);
+            if (strtolower($email) === strtolower((string) $adminEmail) || $otherStaff->fetch()) {
+                $db->rollBack();
+                respond(409, ['message' => 'That email address is already assigned to another account.']);
+            }
+            if ($newPassword !== '' && password_verify($newPassword, $account['password_hash'])) {
+                $db->rollBack();
+                respond(400, ['message' => 'Choose a new password different from your current password.']);
+            }
+            $passwordHash = $newPassword === '' ? $account['password_hash'] : password_hash($newPassword, PASSWORD_DEFAULT);
+            if (!is_string($passwordHash)) {
+                throw new RuntimeException('Staff password hashing failed.');
+            }
+            $update = $db->prepare('UPDATE staff_users SET email = ?, display_name = ?, password_hash = ?, must_change_password = 0 WHERE id = ?');
+            $update->execute([$email, $displayName, $passwordHash, $account['id']]);
+        }
+
+        if (!session_regenerate_id(true)) {
+            $db->rollBack();
+            error_log('Ambients account profile session ID could not be regenerated.');
+            respond(503, ['message' => 'The profile could not be updated. Please try again.']);
+        }
+        $db->commit();
+        $_SESSION['admin_email'] = $email;
+        $_SESSION['admin_display_name'] = $displayName;
+        $_SESSION['must_change_password'] = false;
+        $_SESSION['last_activity'] = time();
+        respond(200, ['updated' => true, 'email' => $email, 'displayName' => $displayName]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log('Ambients account profile update failed: ' . $error->getMessage());
+        respond(500, ['message' => 'The profile could not be updated. Please try again.']);
+    }
 }
 
 if ($action === 'change-password' && $method === 'POST') {

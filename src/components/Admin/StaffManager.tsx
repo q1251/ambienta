@@ -4,6 +4,7 @@ import { UserPlus, Users, UserX } from 'lucide-react';
 interface StaffAccount {
   id: number;
   email: string;
+  display_name: string;
   role: 'operator';
   is_active: boolean;
   created_by: string;
@@ -124,8 +125,8 @@ export const StaffManager: React.FC = () => {
           {accounts.map((account) => (
             <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
               <div>
-                <p className="text-sm font-semibold text-slate-900">{account.email}</p>
-                <p className="mt-0.5 text-xs text-slate-500">Operator · Created {account.created_at} by {account.created_by}</p>
+                <p className="text-sm font-semibold text-slate-900">{account.display_name || account.email}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{account.email} · Operator · Created {account.created_at} by {account.created_by}</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${account.is_active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{account.is_active ? 'Active' : 'Inactive'}</span>

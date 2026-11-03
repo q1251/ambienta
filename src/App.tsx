@@ -39,6 +39,7 @@ export default function App() {
   const [adminAuthSetupMessage, setAdminAuthSetupMessage] = useState<string>();
   const [adminRole, setAdminRole] = useState<'admin' | 'operator'>('admin');
   const [adminEmail, setAdminEmail] = useState('');
+  const [adminDisplayName, setAdminDisplayName] = useState('');
   const [mustChangePassword, setMustChangePassword] = useState(false);
 
   // Master application states
@@ -117,6 +118,7 @@ export default function App() {
           code?: string;
           message?: string;
           email?: string;
+          displayName?: string;
           role?: 'admin' | 'operator';
           mustChangePassword?: boolean;
         };
@@ -125,6 +127,7 @@ export default function App() {
         if (response.ok && result.authenticated) {
           setAdminRole(result.role || 'admin');
           setAdminEmail(result.email || '');
+          setAdminDisplayName(result.displayName || result.email || '');
           setMustChangePassword(Boolean(result.mustChangePassword));
           setAdminAuthStatus('authenticated');
           setAdminAuthSetupMessage(undefined);
@@ -530,10 +533,11 @@ export default function App() {
     return (
       <AdminLogin
         setupMessage={adminAuthSetupMessage}
-        onAuthenticated={(role, shouldChangePassword, email) => {
+        onAuthenticated={(role, shouldChangePassword, email, displayName) => {
           setAdminAuthSetupMessage(undefined);
           setAdminRole(role);
           setAdminEmail(email);
+          setAdminDisplayName(displayName);
           setMustChangePassword(shouldChangePassword);
           setAdminAuthStatus('authenticated');
         }}
@@ -557,6 +561,11 @@ export default function App() {
         onLogout={handleAdminLogout}
         role={adminRole}
         email={adminEmail}
+        displayName={adminDisplayName}
+        onProfileUpdated={(email, displayName) => {
+          setAdminEmail(email);
+          setAdminDisplayName(displayName);
+        }}
         leads={leads}
         leadDataError={adminDataError}
         dataError={adminDataError}

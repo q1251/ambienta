@@ -38,10 +38,22 @@ password. Add its generated hash as the repository Actions secret
 workflow variable. The deployment workflow installs the config at
 `/domains/ambienta.io/private/admin-auth.php`, outside `public_html`.
 
-The configured administrator email is `afosterofficial@gmail.com`. Confirm
+The initial administrator email is `afosterofficial@gmail.com`; after first
+sign-in, the administrator can change it from **Profile & security**. Confirm
 that Hostinger PHP 8.1+ and HTTPS are active, then push to `main` or run the
 deployment workflow manually. After the private-config deployment succeeds,
 open `https://ambienta.io/admin` and sign in.
+
+Administrators and operators can update their display name, sign-in email, and
+password from **Profile & security** in the admin sidebar. The current password
+is required to save changes; new passwords must be at least 12 characters.
+Profile changes are stored in the application database, so changing the
+`ADMIN_PASSWORD_HASH` deployment secret does not overwrite an already-created
+admin profile. If the primary administrator loses access, generate a new hash
+with `node scripts/create-admin-hash.mjs` on a trusted computer and update the
+`admin_profile.password_hash` value for account `id = 1` using Hostinger's
+protected database administration tools. Never paste passwords or hashes into
+chat, source control, or deployment logs.
 
 The login is intentionally unavailable until this private server-side config
 exists. If the deployment is served without PHP, the API will not run and the
