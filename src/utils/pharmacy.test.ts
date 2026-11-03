@@ -9,6 +9,7 @@ import {
   parseLeadsCsv,
   evaluateDueReminders,
 } from './pharmacyLogic';
+import { countryOptions, phoneInputParts } from './countryOptions';
 import { Patient, ReminderRule } from '../types/pharmacy';
 
 test('calculateDaysRemaining computes correct difference', () => {
@@ -61,10 +62,24 @@ Maya,Lin,maya@example.com,555-5678,yes,Diabetes,Metformin 1000mg,RX-445566,2026-
 
 test('getLeadCountry detects supported international calling codes without guessing local numbers', () => {
   assert.equal(getLeadCountry('+1 (555) 123-4567'), 'North America (+1)');
+  assert.equal(getLeadCountry('+1 213 373 4253'), 'United States');
   assert.equal(getLeadCountry('0044 20 7946 0958'), 'United Kingdom');
   assert.equal(getLeadCountry('+971 50 123 4567'), 'United Arab Emirates');
   assert.equal(getLeadCountry('555-0120'), 'Not specified');
   assert.equal(getLeadCountry(''), 'Not specified');
+});
+
+test('country selectors include the full supported calling-code list and split international numbers', () => {
+  assert.ok(countryOptions.length > 200);
+  assert.ok(countryOptions.every((country) => country.callingCode && country.flag));
+  assert.deepEqual(phoneInputParts('+44 20 7946 0958'), {
+    countryCode: 'GB',
+    nationalNumber: '2079460958',
+  });
+  assert.deepEqual(phoneInputParts('555-0120', 'United States'), {
+    countryCode: 'US',
+    nationalNumber: '5550120',
+  });
 });
 
 test('parseLeadsCsv keeps explicit country values and infers one from phone when absent', () => {

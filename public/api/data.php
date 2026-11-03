@@ -93,9 +93,6 @@ function data_ensure_schema(PDO $db): void
             UNIQUE KEY leads_email (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
-    if (!$db->query("SHOW COLUMNS FROM leads LIKE 'country'")->fetch()) {
-        $db->exec("ALTER TABLE leads ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT '' AFTER phone");
-    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS lead_activities (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -232,6 +229,7 @@ function data_ensure_schema(PDO $db): void
         'status' => "VARCHAR(24) NOT NULL DEFAULT 'Cold'",
         'marketing_consent' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'marketing_consent_at' => 'DATETIME NULL',
+        'country' => "VARCHAR(100) NOT NULL DEFAULT ''",
     ];
     foreach ($leadColumns as $column => $definition) {
         $check = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
@@ -1084,7 +1082,7 @@ if ($method === 'POST' && $resource === 'manual-orders') {
         $nameParts = preg_split('/\s+/', $customerName, 2) ?: [$customerName];
         $db->prepare(
             "INSERT INTO leads (first_name, last_name, email, phone, lead_source) VALUES (?, ?, ?, ?, 'Online Order')
-             ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone)"
+             ON DUPLICATE KEY UPDATE id = id"
         )->execute([$nameParts[0], $nameParts[1] ?? '', $email, $phone]);
         data_audit($db, 'order.created_manually', 'order', $orderId, ['orderNumber' => $orderNumber, 'total' => $total]);
         $db->commit();
@@ -1199,7 +1197,7 @@ if ($method === 'POST' && $resource === 'orders') {
         $nameParts = preg_split('/\s+/', $customerName, 2) ?: [$customerName];
         $db->prepare(
             "INSERT INTO leads (first_name, last_name, email, phone, lead_source) VALUES (?, ?, ?, ?, 'Online Order')
-             ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone)"
+             ON DUPLICATE KEY UPDATE id = id"
         )->execute([$nameParts[0], $nameParts[1] ?? '', $email, $phone]);
         data_audit($db, 'order.created', 'order', $orderId, ['orderNumber' => $orderNumber, 'total' => $totalAmount]);
         $db->commit();
@@ -1225,11 +1223,14 @@ if ($method === 'POST' && $resource === 'leads') {
     }
 
     $db = data_db();
+    $canEditContactDetails = ($_SESSION['admin_role'] ?? '') === 'admin';
     $insert = $db->prepare(
         'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL))
-         ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone),
-           country = IF(VALUES(country) <> \'\', VALUES(country), country),
+         ON DUPLICATE KEY UPDATE first_name = IF(? = 1, VALUES(first_name), first_name),
+           last_name = IF(? = 1, VALUES(last_name), last_name),
+           phone = IF(? = 1, VALUES(phone), phone),
+           country = IF(? = 1 AND VALUES(country) <> \'\', VALUES(country), country),
            marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
            marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at)'
     );
@@ -1266,7 +1267,8 @@ if ($method === 'POST' && $resource === 'leads') {
             $source = in_array($lead['leadSource'] ?? '', ['CSV Upload', 'Manual Entry'], true)
                 ? $lead['leadSource']
                 : 'Manual Entry';
-            $insert->execute([$firstName, $lastName, $email, $phone, $country, $source, (int) $marketingConsent, (int) $marketingConsent]);
+            $canEditValue = (int) $canEditContactDetails;
+            $insert->execute([$firstName, $lastName, $email, $phone, $country, $source, (int) $marketingConsent, (int) $marketingConsent, $canEditValue, $canEditValue, $canEditValue, $canEditValue]);
             $find->execute([$email]);
             $savedLead = $find->fetch();
             $saved[] = data_lead_row($savedLead);
@@ -1297,32 +1299,76 @@ if ($method === 'PATCH' && $resource === 'leads') {
     $status = $body['status'] ?? null;
     $marketingConsent = $body['marketingConsent'] ?? null;
     $statusNote = array_key_exists('statusNote', $body) ? data_string($body, 'statusNote', 2000, false) : null;
+    $firstNameProvided = array_key_exists('firstName', $body);
+    $firstName = $firstNameProvided ? data_string($body, 'firstName', 100) : null;
+    $lastNameProvided = array_key_exists('lastName', $body);
+    $lastName = $lastNameProvided ? data_string($body, 'lastName', 100) : null;
+    $emailProvided = array_key_exists('email', $body);
+    $email = $emailProvided ? strtolower(data_string($body, 'email', 254)) : null;
+    if ($emailProvided && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        data_respond(400, ['error' => 'invalid_email', 'message' => 'Provide a valid email address.']);
+    }
     $phoneProvided = array_key_exists('phone', $body);
     $phone = $phoneProvided ? data_string($body, 'phone', 40, false) : null;
     $countryProvided = array_key_exists('country', $body);
     $country = $countryProvided ? data_string($body, 'country', 100, false) : null;
+    $contactDetailsProvided = $firstNameProvided || $lastNameProvided || $emailProvided || $phoneProvided || $countryProvided;
+    if ($contactDetailsProvided && ($_SESSION['admin_role'] ?? '') !== 'admin') {
+        data_respond(403, ['error' => 'admin_required', 'message' => 'Only a superadmin can edit lead contact details.']);
+    }
     $validStatuses = ['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
     if (
-        ($status === null && $marketingConsent === null && !$phoneProvided && !$countryProvided)
+        ($status === null && $marketingConsent === null && !$contactDetailsProvided)
         || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))
         || ($marketingConsent !== null && !is_bool($marketingConsent))
         || ($statusNote !== null && $status === null)
     ) {
-        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, phone number, country, or marketing consent value.']);
+        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, contact detail, or marketing consent value.']);
     }
 
     $db = data_db();
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT id, email, phone, country, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
+        $find = $db->prepare('SELECT id, first_name, last_name, email, phone, country, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
             $db->rollBack();
             data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
         }
+        if ($emailProvided && $email !== $current['email']) {
+            $duplicate = $db->prepare('SELECT id FROM leads WHERE email = ? AND id <> ? LIMIT 1 FOR UPDATE');
+            $duplicate->execute([$email, $id]);
+            if ($duplicate->fetchColumn()) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'lead_email_in_use', 'message' => 'Another lead already uses this email address.']);
+            }
+            $existingOrder = $db->prepare('SELECT id FROM orders WHERE email = ? LIMIT 1 FOR UPDATE');
+            $existingOrder->execute([$email]);
+            if ($existingOrder->fetchColumn()) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'lead_email_has_orders', 'message' => 'This email address is already associated with other order history.']);
+            }
+        }
         $updates = [];
         $parameters = [];
+        $changedContactFields = [];
+        if ($firstNameProvided && $firstName !== $current['first_name']) {
+            $updates[] = 'first_name = ?';
+            $parameters[] = $firstName;
+            $changedContactFields[] = 'firstName';
+        }
+        if ($lastNameProvided && $lastName !== $current['last_name']) {
+            $updates[] = 'last_name = ?';
+            $parameters[] = $lastName;
+            $changedContactFields[] = 'lastName';
+        }
+        if ($emailProvided && $email !== $current['email']) {
+            $updates[] = 'email = ?';
+            $parameters[] = $email;
+            $changedContactFields[] = 'email';
+            $db->prepare('UPDATE orders SET email = ? WHERE email = ?')->execute([$email, $current['email']]);
+        }
         if ($status !== null && $status !== $current['status']) {
             $updates[] = 'status = ?';
             $parameters[] = $status;
@@ -1344,6 +1390,13 @@ if ($method === 'PATCH' && $resource === 'leads') {
         if ($countryProvided && $country !== $current['country']) {
             $updates[] = 'country = ?';
             $parameters[] = $country;
+            $changedContactFields[] = 'country';
+        }
+        if ($changedContactFields !== []) {
+            data_audit($db, 'lead.contact_details_updated', 'lead', (string) $id, [
+                'fields' => $changedContactFields,
+                'actorName' => (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Staff'),
+            ]);
         }
         if ($marketingConsent !== null && (bool) $marketingConsent !== (bool) $current['marketing_consent']) {
             $updates[] = 'marketing_consent = ?';

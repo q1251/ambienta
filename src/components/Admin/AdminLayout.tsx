@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import {
   ArrowUpRight,
   ClipboardList,
@@ -20,7 +20,8 @@ import { OperationsOverview } from './OperationsOverview';
 import { OrdersManager } from './OrdersManager';
 import { StaffManager } from './StaffManager';
 import { ProfileManager } from './ProfileManager';
-import { ContactLeadManager } from '../CRM/ContactLeadManager';
+
+const ContactLeadManager = React.lazy(() => import('../CRM/ContactLeadManager').then((module) => ({ default: module.ContactLeadManager })));
 
 export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'integrations' | 'profile' | 'staff' | 'audit';
 export interface OrderSearch {
@@ -201,7 +202,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           {activeTab === 'inventory' && (
             <InventoryManager categories={props.categories} catalogItems={props.catalogItems} catalogError={props.catalogError} onAddCategory={props.onAddCategory} onBulkAddProducts={props.onBulkAddProducts} onAddProduct={props.onAddProduct} onUpdateProduct={props.onUpdateProduct} onDeleteProduct={props.onDeleteProduct} onBulkPriceAdjust={props.onBulkPriceAdjust} />
           )}
-          {activeTab === 'leads' && <ContactLeadManager leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />}
+          {activeTab === 'leads' && (
+            <Suspense fallback={<p role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">Loading contact leads…</p>}>
+              <ContactLeadManager role={props.role} leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
+            </Suspense>
+          )}
           {activeTab === 'integrations' && <IntegrationStatus />}
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
           {activeTab === 'staff' && props.role === 'admin' && <StaffManager />}

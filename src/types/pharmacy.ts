@@ -116,6 +116,9 @@ export interface LeadActivityInput {
 }
 
 export interface ContactLeadUpdate {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   status?: LeadStatus;
   statusNote?: string;
   marketingConsent?: boolean;

@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, ArrowLeft, Check, Copy, Download, Mail, MessageSquare, Package, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
 import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, getLeadCountry, parseLeadsCsv } from '../../utils/pharmacyLogic';
+import { CountrySelect, PhoneCountryInput } from './PhoneCountryInput';
 
 type NewLead = ContactLeadInput;
 
 interface ContactLeadManagerProps {
+  role?: 'admin' | 'operator';
   leads: ContactLead[];
   dataError?: string;
   onSaveLeads: (leads: NewLead[]) => Promise<void>;
@@ -15,6 +17,7 @@ interface ContactLeadManagerProps {
 }
 
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
+  role,
   leads,
   dataError,
   onSaveLeads,
@@ -34,6 +37,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
+  const [profileFirstName, setProfileFirstName] = useState('');
+  const [profileLastName, setProfileLastName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
   const [profileCountry, setProfileCountry] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [search, setSearch] = useState('');
@@ -55,6 +62,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [copiedField, setCopiedField] = useState('');
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
+  const isSuperadmin = role === 'admin';
   useEffect(() => {
     if (!mode) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -182,6 +190,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const loadedProfile = await onLoadLeadProfile(lead.id);
       if (requestId === profileRequestId.current) {
         setProfile(loadedProfile);
+        setProfileFirstName(loadedProfile.lead.firstName);
+        setProfileLastName(loadedProfile.lead.lastName);
+        setProfileEmail(loadedProfile.lead.email);
+        setProfilePhone(loadedProfile.lead.phone);
         setProfileCountry(loadedProfile.lead.country || getLeadCountry(loadedProfile.lead.phone));
       }
     } catch (error) {
@@ -224,8 +236,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const lead = await onUpdateLead(leadId, update);
       if (requestId !== profileRequestId.current) return;
       setProfile((current) => current?.lead.id === leadId ? { ...current, lead } : current);
+      if (update.firstName !== undefined) setProfileFirstName(lead.firstName);
+      if (update.lastName !== undefined) setProfileLastName(lead.lastName);
+      if (update.email !== undefined) setProfileEmail(lead.email);
+      if (update.phone !== undefined) setProfilePhone(lead.phone);
       if (update.country !== undefined) setProfileCountry(lead.country || '');
-      if ((update.status !== undefined || update.phone !== undefined) && onLoadLeadProfile) {
+      if ((update.firstName !== undefined || update.lastName !== undefined || update.email !== undefined || update.status !== undefined || update.phone !== undefined || update.country !== undefined) && onLoadLeadProfile) {
         try {
           const refreshed = await onLoadLeadProfile(lead.id);
           if (requestId === profileRequestId.current) setProfile(refreshed);
@@ -241,6 +257,17 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     } finally {
       if (requestId === profileRequestId.current) setProfileSaving(false);
     }
+  };
+
+  const saveContactDetails = (event: React.FormEvent) => {
+    event.preventDefault();
+    void updateProfile({
+      firstName: profileFirstName.trim(),
+      lastName: profileLastName.trim(),
+      email: profileEmail.trim(),
+      phone: profilePhone.trim(),
+      country: profileCountry.trim(),
+    });
   };
 
   const saveActivity = async (event: React.FormEvent) => {
@@ -355,13 +382,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase text-slate-500">Country</p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input aria-label="Lead country" maxLength={100} value={profileCountry} onChange={(event) => setProfileCountry(event.target.value)} placeholder="Enter country" className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm" />
-                    <button type="button" disabled={profileSaving || !onUpdateLead || profileCountry.trim() === (profile.lead.country || '')} onClick={() => void updateProfile({ country: profileCountry.trim() })} className="shrink-0 rounded-md bg-teal-800 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
-                      Save
-                    </button>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">Inferred from phone if left unspecified.</p>
+                  <p className="mt-1 text-sm text-slate-900">{profile.lead.country || getLeadCountry(profile.lead.phone)}</p>
                 </div>
                 <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
                 <div>
@@ -376,6 +397,20 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </div>
                 </div>
               </div>
+              {isSuperadmin && (
+                <form onSubmit={saveContactDetails} className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
+                  <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                  <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                  <label className="text-sm font-medium text-slate-700">Email<input required type="email" maxLength={254} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                  <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} defaultCountryName={profileCountry} disabled={profileSaving} /></span></label>
+                  <label className="block text-sm font-medium text-slate-700">Country<span className="mt-1 block"><CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={profileSaving} /></span></label>
+                  <div className="flex items-end sm:col-span-2">
+                    <button type="submit" disabled={profileSaving || !onUpdateLead} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                      {profileSaving ? 'Saving contact details…' : 'Save contact details'}
+                    </button>
+                  </div>
+                </form>
+              )}
               <div className="mt-5 grid items-start gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
                 <div>
                   <form onSubmit={(event) => void saveActivity(event)} className="space-y-3">
@@ -571,8 +606,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <label className="text-sm font-medium text-slate-700">First name<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="text-sm font-medium text-slate-700">Phone (optional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="text-sm font-medium text-slate-700">Country (optional)<input value={country} onChange={(event) => setCountry(event.target.value)} maxLength={100} placeholder="Country name" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                <label className="block text-sm font-medium text-slate-700">Phone (optional)<span className="mt-1 block"><PhoneCountryInput value={phone} onChange={setPhone} defaultCountryName={country} /></span></label>
+                <label className="block text-sm font-medium text-slate-700">Country (optional)<span className="mt-1 block"><CountrySelect value={country} onChange={setCountry} /></span></label>
                 <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
                   <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
                   <span>Contact explicitly opted in to marketing emails. Leave unchecked unless consent was actually given.</span>

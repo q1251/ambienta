@@ -125,6 +125,13 @@ comments retain their author and timestamp. Notes are operational only: never
 enter health, prescription, insurance, payment-card, or other sensitive
 personal information.
 
+Only the primary administrator (the `admin` role / superadmin) can edit a
+lead's name, email, phone number, or country. This is enforced by the data API;
+operators can view those details and manage stages and comments. Phone entry
+offers international calling codes and flags, and country entry uses the
+country selector. Operator CSV imports cannot overwrite contact details on
+existing leads.
+
 The Leads table includes a **Not called, repeat buyers** view for contacts with
 no recorded call activity and at least two non-cancelled orders. Its order
 count excludes cancelled orders; the **All leads** view continues to show total
