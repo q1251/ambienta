@@ -231,7 +231,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           <button
             type="button"
             onClick={() => void logout()}
-            className="mt-4 flex w-full items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+            className="mt-auto flex w-full items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-left text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
           >
             <LogOut className="h-4 w-4" />
             <span>Logout</span>
