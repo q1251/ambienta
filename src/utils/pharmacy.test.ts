@@ -5,6 +5,7 @@ import {
   determineRefillStatus,
   interpolateEmailTemplate,
   filterPatientsByHealthCategory,
+  getLeadCountry,
   parseLeadsCsv,
   evaluateDueReminders,
 } from './pharmacyLogic';
@@ -55,6 +56,14 @@ Maya,Lin,maya@example.com,555-5678,yes,Diabetes,Metformin 1000mg,RX-445566,2026-
   assert.equal(parsed.leads[1].marketingConsent, true);
   assert.equal('healthCategory' in parsed.leads[0], false);
   assert.equal('refillHistory' in parsed.leads[0], false);
+});
+
+test('getLeadCountry detects supported international calling codes without guessing local numbers', () => {
+  assert.equal(getLeadCountry('+1 (555) 123-4567'), 'North America (+1)');
+  assert.equal(getLeadCountry('0044 20 7946 0958'), 'United Kingdom');
+  assert.equal(getLeadCountry('+971 50 123 4567'), 'United Arab Emirates');
+  assert.equal(getLeadCountry('555-0120'), 'Not specified');
+  assert.equal(getLeadCountry(''), 'Not specified');
 });
 
 test('filterPatientsByHealthCategory isolates requested segments', () => {

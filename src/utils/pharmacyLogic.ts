@@ -59,6 +59,90 @@ export interface CsvParseResult {
   totalParsed: number;
 }
 
+const phoneCountryCodes: Array<[string, string]> = [
+  ['1', 'North America (+1)'],
+  ['7', 'Russia / Kazakhstan (+7)'],
+  ['20', 'Egypt'],
+  ['27', 'South Africa'],
+  ['30', 'Greece'],
+  ['31', 'Netherlands'],
+  ['32', 'Belgium'],
+  ['33', 'France'],
+  ['34', 'Spain'],
+  ['36', 'Hungary'],
+  ['39', 'Italy'],
+  ['40', 'Romania'],
+  ['41', 'Switzerland'],
+  ['43', 'Austria'],
+  ['44', 'United Kingdom'],
+  ['45', 'Denmark'],
+  ['46', 'Sweden'],
+  ['47', 'Norway'],
+  ['48', 'Poland'],
+  ['49', 'Germany'],
+  ['52', 'Mexico'],
+  ['55', 'Brazil'],
+  ['60', 'Malaysia'],
+  ['61', 'Australia'],
+  ['62', 'Indonesia'],
+  ['63', 'Philippines'],
+  ['64', 'New Zealand'],
+  ['65', 'Singapore'],
+  ['66', 'Thailand'],
+  ['81', 'Japan'],
+  ['82', 'South Korea'],
+  ['84', 'Vietnam'],
+  ['86', 'China'],
+  ['90', 'Turkey'],
+  ['91', 'India'],
+  ['92', 'Pakistan'],
+  ['94', 'Sri Lanka'],
+  ['212', 'Morocco'],
+  ['213', 'Algeria'],
+  ['216', 'Tunisia'],
+  ['234', 'Nigeria'],
+  ['254', 'Kenya'],
+  ['256', 'Uganda'],
+  ['351', 'Portugal'],
+  ['353', 'Ireland'],
+  ['354', 'Iceland'],
+  ['358', 'Finland'],
+  ['420', 'Czechia'],
+  ['421', 'Slovakia'],
+  ['852', 'Hong Kong'],
+  ['853', 'Macau'],
+  ['855', 'Cambodia'],
+  ['856', 'Laos'],
+  ['880', 'Bangladesh'],
+  ['886', 'Taiwan'],
+  ['961', 'Lebanon'],
+  ['962', 'Jordan'],
+  ['965', 'Kuwait'],
+  ['966', 'Saudi Arabia'],
+  ['968', 'Oman'],
+  ['971', 'United Arab Emirates'],
+  ['972', 'Israel'],
+  ['973', 'Bahrain'],
+  ['974', 'Qatar'],
+  ['975', 'Bhutan'],
+  ['976', 'Mongolia'],
+  ['977', 'Nepal'],
+  ['992', 'Tajikistan'],
+  ['993', 'Turkmenistan'],
+  ['994', 'Azerbaijan'],
+  ['995', 'Georgia'],
+  ['996', 'Kyrgyzstan'],
+  ['998', 'Uzbekistan'],
+];
+
+export function getLeadCountry(phone: string): string {
+  const internationalNumber = phone.trim().replace(/^00/, '+');
+  if (!internationalNumber.startsWith('+')) return 'Not specified';
+  const digits = internationalNumber.slice(1).replace(/\D/g, '');
+  const match = phoneCountryCodes.find(([callingCode]) => digits.startsWith(callingCode));
+  return match?.[1] ?? 'Not specified';
+}
+
 /**
  * Parses contact-only CSV data. Clinical and prescription columns are ignored.
  */
