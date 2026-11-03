@@ -119,7 +119,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         {logoutError && <p role="alert" className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">{logoutError}</p>}
       </header>
 
-      <div className="mx-auto flex min-h-[calc(100vh-68px)] max-w-[1680px]">
+      <div className="flex min-h-[calc(100vh-68px)]">
         <aside className="sticky top-[68px] hidden h-[calc(100vh-68px)] w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-5 lg:flex">
           <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
           {visibleNavigation.filter((item) => item.group === 'Workspace').map((item) => (
