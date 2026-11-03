@@ -83,6 +83,7 @@ function data_ensure_schema(PDO $db): void
             last_name VARCHAR(100) NOT NULL,
             email VARCHAR(254) NOT NULL,
             phone VARCHAR(40) NOT NULL DEFAULT '',
+            country VARCHAR(100) NOT NULL DEFAULT '',
             lead_source VARCHAR(24) NOT NULL,
             status VARCHAR(24) NOT NULL DEFAULT 'Cold',
             marketing_consent TINYINT(1) NOT NULL DEFAULT 0,
@@ -92,6 +93,9 @@ function data_ensure_schema(PDO $db): void
             UNIQUE KEY leads_email (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    if (!$db->query("SHOW COLUMNS FROM leads LIKE 'country'")->fetch()) {
+        $db->exec("ALTER TABLE leads ADD COLUMN country VARCHAR(100) NOT NULL DEFAULT '' AFTER phone");
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS lead_activities (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -427,6 +431,7 @@ function data_lead_row(array $row): array
         'lastName' => $row['last_name'],
         'email' => $row['email'],
         'phone' => $row['phone'],
+        'country' => $row['country'] ?? '',
         'leadSource' => $row['lead_source'],
         'createdAt' => $row['created_at'],
         'status' => $row['status'] ?? 'Cold',
@@ -657,7 +662,7 @@ if ($method === 'GET') {
                 data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
             }
             $find = $db->prepare(
-                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                         COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                         COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                         (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
@@ -677,7 +682,7 @@ if ($method === 'GET') {
             ]);
         }
         $rows = $db->query(
-            'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+            'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                     COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                     COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                     (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
@@ -1221,14 +1226,15 @@ if ($method === 'POST' && $resource === 'leads') {
 
     $db = data_db();
     $insert = $db->prepare(
-        'INSERT INTO leads (first_name, last_name, email, phone, lead_source, marketing_consent, marketing_consent_at)
-         VALUES (?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL))
+        'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL))
          ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone),
+           country = IF(VALUES(country) <> \'\', VALUES(country), country),
            marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
            marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at)'
     );
     $find = $db->prepare(
-        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                 (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
@@ -1247,6 +1253,7 @@ if ($method === 'POST' && $resource === 'leads') {
             $lastName = data_string($lead, 'lastName', 100);
             $email = strtolower(data_string($lead, 'email', 254));
             $phone = data_string($lead, 'phone', 40, false);
+            $country = data_string($lead, 'country', 100, false);
             $marketingConsent = $lead['marketingConsent'] ?? false;
             if (!is_bool($marketingConsent)) {
                 data_respond(400, ['error' => 'invalid_consent', 'message' => 'Marketing consent must be explicitly true or false.']);
@@ -1259,7 +1266,7 @@ if ($method === 'POST' && $resource === 'leads') {
             $source = in_array($lead['leadSource'] ?? '', ['CSV Upload', 'Manual Entry'], true)
                 ? $lead['leadSource']
                 : 'Manual Entry';
-            $insert->execute([$firstName, $lastName, $email, $phone, $source, (int) $marketingConsent, (int) $marketingConsent]);
+            $insert->execute([$firstName, $lastName, $email, $phone, $country, $source, (int) $marketingConsent, (int) $marketingConsent]);
             $find->execute([$email]);
             $savedLead = $find->fetch();
             $saved[] = data_lead_row($savedLead);
@@ -1292,20 +1299,22 @@ if ($method === 'PATCH' && $resource === 'leads') {
     $statusNote = array_key_exists('statusNote', $body) ? data_string($body, 'statusNote', 2000, false) : null;
     $phoneProvided = array_key_exists('phone', $body);
     $phone = $phoneProvided ? data_string($body, 'phone', 40, false) : null;
+    $countryProvided = array_key_exists('country', $body);
+    $country = $countryProvided ? data_string($body, 'country', 100, false) : null;
     $validStatuses = ['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
     if (
-        ($status === null && $marketingConsent === null && !$phoneProvided)
+        ($status === null && $marketingConsent === null && !$phoneProvided && !$countryProvided)
         || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))
         || ($marketingConsent !== null && !is_bool($marketingConsent))
         || ($statusNote !== null && $status === null)
     ) {
-        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, phone number, or marketing consent value.']);
+        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, phone number, country, or marketing consent value.']);
     }
 
     $db = data_db();
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT id, email, phone, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
+        $find = $db->prepare('SELECT id, email, phone, country, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
@@ -1332,6 +1341,10 @@ if ($method === 'PATCH' && $resource === 'leads') {
                 'actorName' => (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Staff'),
             ]);
         }
+        if ($countryProvided && $country !== $current['country']) {
+            $updates[] = 'country = ?';
+            $parameters[] = $country;
+        }
         if ($marketingConsent !== null && (bool) $marketingConsent !== (bool) $current['marketing_consent']) {
             $updates[] = 'marketing_consent = ?';
             $parameters[] = (int) $marketingConsent;
@@ -1350,7 +1363,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
         data_respond(500, ['error' => 'lead_update_failed', 'message' => 'The contact lead could not be updated.']);
     }
     $find = $db->prepare(
-        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                 (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count

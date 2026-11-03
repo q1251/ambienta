@@ -108,7 +108,9 @@ added in the inventory workspace are shared with product forms, price filters,
 the public storefront, and order items.
 
 Contact lead CSV imports accept `first_name`, `last_name`, `email`, and optional
-`phone` and `marketing_consent`. Imported leads start at **Cold**; marketing
+`phone`, `country`, and `marketing_consent`. Country is saved on the lead and
+shown in both the table and profile; when omitted, the CRM can infer it from an
+international phone prefix. Imported leads start at **Cold**; marketing
 consent is false unless the CSV explicitly contains an affirmative value
 (`yes`, `true`, `1`, or `opted in`). Do not infer consent from possession of an
 email address. Lead profiles support manual stages (Cold, Contacted, Qualified,

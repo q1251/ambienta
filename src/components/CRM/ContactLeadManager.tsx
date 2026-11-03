@@ -33,6 +33,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('');
+  const [profileCountry, setProfileCountry] = useState('');
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
@@ -93,6 +95,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setLastName('');
       setEmail('');
       setPhone('');
+      setCountry('');
       setMarketingConsent(false);
       setMode(null);
     } catch (error) {
@@ -124,12 +127,13 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const downloadContacts = () => {
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = [
-      ['first_name', 'last_name', 'email', 'phone', 'lead_source', 'status', 'marketing_consent', 'created_at'],
+      ['first_name', 'last_name', 'email', 'phone', 'country', 'lead_source', 'status', 'marketing_consent', 'created_at'],
       ...leads.map((lead) => [
         lead.firstName,
         lead.lastName,
         lead.email,
         lead.phone,
+        lead.country || getLeadCountry(lead.phone),
         lead.leadSource,
         lead.status,
         lead.marketingConsent ? 'yes' : 'no',
@@ -152,6 +156,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       lastName: lastName.trim(),
       email: email.trim(),
       phone: phone.trim(),
+      country: country.trim() || getLeadCountry(phone),
       leadSource: 'Manual Entry',
       status: 'Cold',
       marketingConsent,
@@ -177,6 +182,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const loadedProfile = await onLoadLeadProfile(lead.id);
       if (requestId === profileRequestId.current) {
         setProfile(loadedProfile);
+        setProfileCountry(loadedProfile.lead.country || getLeadCountry(loadedProfile.lead.phone));
       }
     } catch (error) {
       if (requestId === profileRequestId.current) {
@@ -218,6 +224,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const lead = await onUpdateLead(leadId, update);
       if (requestId !== profileRequestId.current) return;
       setProfile((current) => current?.lead.id === leadId ? { ...current, lead } : current);
+      if (update.country !== undefined) setProfileCountry(lead.country || '');
       if ((update.status !== undefined || update.phone !== undefined) && onLoadLeadProfile) {
         try {
           const refreshed = await onLoadLeadProfile(lead.id);
@@ -345,6 +352,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   {profile.lead.phone
                     ? <a href={`tel:${phoneLink(profile.lead.phone)}`} className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline"><Phone className="h-4 w-4" />{profile.lead.phone}</a>
                     : <p className="mt-1 text-sm text-slate-500">No phone number saved</p>}
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-slate-500">Country</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input aria-label="Lead country" maxLength={100} value={profileCountry} onChange={(event) => setProfileCountry(event.target.value)} placeholder="Enter country" className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+                    <button type="button" disabled={profileSaving || !onUpdateLead || profileCountry.trim() === (profile.lead.country || '')} onClick={() => void updateProfile({ country: profileCountry.trim() })} className="shrink-0 rounded-md bg-teal-800 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                      Save
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Inferred from phone if left unspecified.</p>
                 </div>
                 <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
                 <div>
@@ -539,9 +556,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 {errors.map((error) => <p key={error} className="mt-2 flex items-center gap-2 text-sm text-rose-700"><AlertCircle className="h-4 w-4" />{error}</p>)}
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full text-left text-sm">
-                    <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th><th>Marketing consent</th></tr></thead>
+                    <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th><th>Country</th><th>Marketing consent</th></tr></thead>
                     <tbody>
-                      {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td></tr>)}
+                      {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.country || getLeadCountry(lead.phone)}</td><td>{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td></tr>)}
                     </tbody>
                   </table>
                 </div>
@@ -555,6 +572,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Phone (optional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+                <label className="text-sm font-medium text-slate-700">Country (optional)<input value={country} onChange={(event) => setCountry(event.target.value)} maxLength={100} placeholder="Country name" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
                 <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
                   <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
                   <span>Contact explicitly opted in to marketing emails. Leave unchecked unless consent was actually given.</span>
@@ -654,7 +672,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       {lead.phone && copyButton(lead, 'phone', lead.phone)}
                     </span>
                   </td>
-                  <td className="py-3">{getLeadCountry(lead.phone)}</td>
+                  <td className="py-3">{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</td>
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>

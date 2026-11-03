@@ -67,6 +67,7 @@ export interface ContactLead {
   lastName: string;
   email: string;
   phone: string;
+  country?: string;
   leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo';
   createdAt: string;
   status: LeadStatus;
@@ -80,7 +81,7 @@ export interface ContactLead {
 
 export type ContactLeadInput = Pick<
   ContactLead,
-  'firstName' | 'lastName' | 'email' | 'phone' | 'leadSource' | 'status' | 'marketingConsent'
+  'firstName' | 'lastName' | 'email' | 'phone' | 'leadSource' | 'status' | 'marketingConsent' | 'country'
 >;
 
 export type LeadStatus = 'Cold' | 'Contacted' | 'Qualified' | 'Customer' | 'Inactive';
@@ -119,6 +120,7 @@ export interface ContactLeadUpdate {
   statusNote?: string;
   marketingConsent?: boolean;
   phone?: string;
+  country?: string;
 }
 
 export interface LeadProfile {

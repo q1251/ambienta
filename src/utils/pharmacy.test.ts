@@ -50,6 +50,7 @@ Maya,Lin,maya@example.com,555-5678,yes,Diabetes,Metformin 1000mg,RX-445566,2026-
   assert.equal(parsed.leads.length, 2);
   assert.equal(parsed.leads[0].firstName, 'George');
   assert.equal(parsed.leads[0].email, 'george@example.com');
+  assert.equal(parsed.leads[0].country, 'Not specified');
   assert.equal(parsed.leads[1].firstName, 'Maya');
   assert.equal(parsed.leads[0].status, 'Cold');
   assert.equal(parsed.leads[0].marketingConsent, false);
@@ -64,6 +65,18 @@ test('getLeadCountry detects supported international calling codes without guess
   assert.equal(getLeadCountry('+971 50 123 4567'), 'United Arab Emirates');
   assert.equal(getLeadCountry('555-0120'), 'Not specified');
   assert.equal(getLeadCountry(''), 'Not specified');
+});
+
+test('parseLeadsCsv keeps explicit country values and infers one from phone when absent', () => {
+  const parsed = parseLeadsCsv([
+    'first_name,last_name,email,phone,country',
+    'Ava,Stone,ava@example.com,555-0101,Canada',
+    'Noah,Reed,noah@example.com,+44 20 7946 0958,',
+  ].join('\n'));
+
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.leads[0].country, 'Canada');
+  assert.equal(parsed.leads[1].country, 'United Kingdom');
 });
 
 test('filterPatientsByHealthCategory isolates requested segments', () => {

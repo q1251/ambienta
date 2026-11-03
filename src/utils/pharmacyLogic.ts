@@ -177,6 +177,7 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   const lnIdx = findIdx(['last_name', 'lastname', 'last']);
   const emailIdx = findIdx(['email', 'mail']);
   const phoneIdx = findIdx(['phone', 'mobile', 'tel']);
+  const countryIdx = findIdx(['country', 'country_name', 'location_country']);
   const consentIdx = findIdx(['marketing_consent', 'marketing_opt_in', 'consent']);
   if (emailIdx === -1 || fnIdx === -1 || lnIdx === -1) {
     errors.push('CSV header must contain first_name, last_name, and email columns.');
@@ -189,6 +190,7 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     const lastName = cols[lnIdx] || '';
     const email = (cols[emailIdx] || '').toLowerCase();
     const phone = phoneIdx !== -1 ? cols[phoneIdx] || '' : '';
+    const country = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
     if (!firstName || !lastName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       errors.push(`Row ${rowIndex + 1}: Skipped row due to missing name or valid email.`);
       continue;
@@ -201,6 +203,7 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
       leadSource: 'CSV Upload',
       email,
       phone,
+      country: country || getLeadCountry(phone),
       status: 'Cold',
       marketingConsent: ['yes', 'true', '1', 'opted in'].includes(consentValue),
     });
@@ -214,12 +217,12 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
  */
 export function generateSampleCsv(): string {
   return [
-    'first_name,last_name,email,phone,marketing_consent',
-    'Robert,Miller,robert.miller@example.com,+1 (555) 304-8891,no',
-    'Sarah,Jenkins,sarah.j@example.com,+1 (555) 441-9923,no',
-    'David,Kim,dkim.archive@example.com,+1 (555) 912-3341,no',
-    'Margaret,Thurston,margaret.t@example.com,+1 (555) 883-1200,no',
-    'Claire,Delaney,claire.delaney@example.com,+1 (555) 762-4419,no',
+    'first_name,last_name,email,phone,country,marketing_consent',
+    'Robert,Miller,robert.miller@example.com,+1 (555) 304-8891,United States,no',
+    'Sarah,Jenkins,sarah.j@example.com,+44 20 7946 0958,United Kingdom,no',
+    'David,Kim,dkim.archive@example.com,+61 2 5550 1200,Australia,no',
+    'Margaret,Thurston,margaret.t@example.com,+1 (555) 883-1200,United States,no',
+    'Claire,Delaney,claire.delaney@example.com,+1 (555) 762-4419,United States,no',
   ].join('\n');
 }
 
