@@ -88,10 +88,24 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
 ];
 
 export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>(() =>
-    new URLSearchParams(window.location.search).has('leadId') ? 'leads' : 'overview'
-  );
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('leadId')) return 'leads';
+    const requestedTab = params.get('section');
+    const validTabs: AdminTab[] = ['overview', 'orders', 'inventory', 'leads', 'integrations', 'profile', 'staff', 'audit'];
+    if (!requestedTab || !validTabs.includes(requestedTab as AdminTab)) return 'overview';
+    if (props.role !== 'admin' && (requestedTab === 'staff' || requestedTab === 'audit')) return 'overview';
+    return requestedTab as AdminTab;
+  });
   const [logoutError, setLogoutError] = useState('');
+  const selectTab = (tab: AdminTab) => {
+    const url = new URL(window.location.href);
+    if (tab === 'overview') url.searchParams.delete('section');
+    else url.searchParams.set('section', tab);
+    if (tab !== 'leads') url.searchParams.delete('leadId');
+    window.history.replaceState(window.history.state, '', url);
+    setActiveTab(tab);
+  };
   const visibleNavigation = navigation.filter((item) =>
     props.role === 'admin' || (item.id !== 'staff' && item.id !== 'audit')
   );
@@ -133,17 +147,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         <aside className="sticky top-[68px] hidden h-[calc(100vh-68px)] w-60 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-5 lg:flex">
           <p className="px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
           {visibleNavigation.filter((item) => item.group === 'Workspace').map((item) => (
-            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={setActiveTab} />
+            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={selectTab} />
           ))}
           <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
           {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
-            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={setActiveTab} />
+            <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={selectTab} />
           ))}
           {props.role === 'admin' && (
             <>
               <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Administration</p>
               {visibleNavigation.filter((item) => item.group === 'Administration').map((item) => (
-                <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={setActiveTab} />
+                <NavButton key={item.id} item={item} active={activeTab === item.id} onSelect={selectTab} />
               ))}
             </>
           )}
@@ -164,13 +178,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 sm:py-7 lg:px-9 lg:py-8">
           <div className="mb-5 lg:hidden">
             <label htmlFor="admin-section" className="sr-only">Workspace section</label>
-            <select id="admin-section" value={activeTab} onChange={(event) => setActiveTab(event.target.value as AdminTab)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium">
+            <select id="admin-section" value={activeTab} onChange={(event) => selectTab(event.target.value as AdminTab)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium">
               {visibleNavigation.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
           </div>
           {props.dataError && <p role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{props.dataError}</p>}
 
-          {activeTab === 'overview' && <OperationsOverview onNavigate={setActiveTab} />}
+          {activeTab === 'overview' && <OperationsOverview onNavigate={selectTab} />}
           {activeTab === 'orders' && (
             <OrdersManager
               orders={props.orders}
