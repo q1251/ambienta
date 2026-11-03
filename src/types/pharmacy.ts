@@ -69,6 +69,23 @@ export interface ContactLead {
   phone: string;
   leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order';
   createdAt: string;
+  status: LeadStatus;
+  marketingConsent: boolean;
+  marketingConsentAt?: string | null;
+  orderCount?: number;
+  lastOrderAt?: string | null;
+}
+
+export type ContactLeadInput = Pick<
+  ContactLead,
+  'firstName' | 'lastName' | 'email' | 'phone' | 'leadSource' | 'status' | 'marketingConsent'
+>;
+
+export type LeadStatus = 'Cold' | 'Contacted' | 'Qualified' | 'Customer' | 'Inactive';
+
+export interface LeadProfile {
+  lead: ContactLead;
+  orders: OnlineOrder[];
 }
 
 export type PaymentMethod =
@@ -166,14 +183,7 @@ export interface ReminderRule {
   isActive: boolean;
 }
 
-export type StoreCategory =
-  | 'Sleep'
-  | 'Weight Loss'
-  | 'Energy & Focus'
-  | 'Heart & Circulation'
-  | 'Digestive Health'
-  | 'Daily Wellness'
-  | 'Pain & Recovery';
+export type StoreCategory = string;
 
 export interface CatalogItem {
   id: string;

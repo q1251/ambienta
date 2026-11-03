@@ -4,6 +4,7 @@ import { CatalogItem, StoreCategory } from '../types/pharmacy';
 
 interface CategoriesAndProductsProps {
   catalogItems: CatalogItem[];
+  categories: StoreCategory[];
   onSelectItem: (item: CatalogItem) => void;
   selectedCategory: StoreCategory | 'All Products';
   onSelectCategory: (category: StoreCategory | 'All Products') => void;
@@ -11,25 +12,16 @@ interface CategoriesAndProductsProps {
   setSearchQuery: (query: string) => void;
 }
 
-const STORE_CATEGORIES: (StoreCategory | 'All Products')[] = [
-  'All Products',
-  'Sleep',
-  'Weight Loss',
-  'Energy & Focus',
-  'Heart & Circulation',
-  'Digestive Health',
-  'Daily Wellness',
-  'Pain & Recovery',
-];
-
 export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
   catalogItems,
+  categories,
   onSelectItem,
   selectedCategory,
   onSelectCategory,
   searchQuery,
   setSearchQuery,
 }) => {
+  const storeCategories: (StoreCategory | 'All Products')[] = ['All Products', ...categories];
   const filteredItems = catalogItems.filter((item) => {
     const matchesCategory =
       selectedCategory === 'All Products' || item.category === selectedCategory;
@@ -90,7 +82,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
 
         {/* Category Navigation Bar */}
         <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar">
-          {STORE_CATEGORIES.map((cat) => {
+          {storeCategories.map((cat) => {
             const count =
               cat === 'All Products'
                 ? catalogItems.length

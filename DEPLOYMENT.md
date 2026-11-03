@@ -98,6 +98,25 @@ integration status, staff access, and audit history. Manual orders use current
 catalog pricing and reserve stock in the database; their payment status remains
 pending and creating an order does not charge a customer.
 
+Products can be imported from **Products & stock > Bulk CSV Upload**. Use the
+downloadable template; `name`, `category`, `sku`, `price`, and `stock_count` are
+required, while description, dosage, stock threshold, prescription flag, cost,
+copay, NDC, and image URL are optional. Imports are limited to 500 rows, check
+for duplicate SKUs, require categories to exist first, and are committed as one
+database transaction so a failed batch is not partially saved. Categories
+added in the inventory workspace are shared with product forms, price filters,
+the public storefront, and order items.
+
+Contact lead CSV imports accept `first_name`, `last_name`, `email`, and optional
+`phone` and `marketing_consent`. Imported leads start at **Cold**; marketing
+consent is false unless the CSV explicitly contains an affirmative value
+(`yes`, `true`, `1`, or `opted in`). Do not infer consent from possession of an
+email address. Lead profiles support manual stages (Cold, Contacted, Qualified,
+Customer, Inactive), consent changes, and order history matched by email,
+including fulfillment status and tracking details. Order activity does not
+change the manually managed lead stage; update it from the profile when
+appropriate.
+
 The primary administrator can create operator accounts from **Staff access**.
 Each operator receives a temporary password, which is stored as a password
 hash and must be changed on first sign-in. Share temporary passwords through a

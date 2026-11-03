@@ -14,6 +14,9 @@ import { AdminLogin } from './components/Admin/AdminLogin';
 import { CATALOG_ITEMS as INITIAL_CATALOG } from './data/seedData';
 import {
   ContactLead,
+  ContactLeadInput,
+  LeadProfile,
+  LeadStatus,
   OnlineOrder,
   CatalogItem,
   CartItem,
@@ -22,6 +25,7 @@ import {
 import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
 import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChange';
 import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
+import type { ProductCsvItem } from './utils/productCsv';
 
 export default function App() {
   // Current route state: inspect window.location.pathname
@@ -51,14 +55,15 @@ export default function App() {
   const [adminDataError, setAdminDataError] = useState('');
   const [catalogError, setCatalogError] = useState('');
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const [categories, setCategories] = useState<string[]>(() => [...new Set(INITIAL_CATALOG.map((item) => item.category))]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
     let active = true;
     fetch('/api/data.php?resource=catalog', { headers: { Accept: 'application/json' } })
       .then(async (response) => {
-        const result = await response.json() as { products?: CatalogItem[]; message?: string };
-        if (!response.ok || !Array.isArray(result.products)) {
+        const result = await response.json() as { products?: CatalogItem[]; categories?: string[]; message?: string };
+        if (!response.ok || !Array.isArray(result.products) || !Array.isArray(result.categories)) {
           throw new Error(result.message || 'The live product catalog could not be loaded.');
         }
         if (active) {
@@ -72,6 +77,7 @@ export default function App() {
             copayPrice: item.copayPrice ?? seededById.get(item.id)?.copayPrice,
             lastRestocked: item.lastRestocked || undefined,
           })));
+          setCategories(result.categories);
           setCatalogError('');
         }
       })
@@ -388,6 +394,50 @@ export default function App() {
     return savedProduct;
   };
 
+  const handleBulkAddProducts = async (products: ProductCsvItem[]): Promise<CatalogItem[]> => {
+    const now = new Date().toISOString().slice(0, 10);
+    const payload = products.map((product) => ({
+      ...product,
+      id: `prod-${crypto.randomUUID()}`,
+      inStock: product.stockCount > 0,
+      lastRestocked: product.stockCount > 0 ? now : undefined,
+    }));
+    const response = await fetch('/api/data.php?resource=products', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ products: payload }),
+    });
+    const result = await response.json() as { products?: CatalogItem[]; message?: string };
+    if (!response.ok || !Array.isArray(result.products)) {
+      throw new Error(result.message || 'The product import could not be saved.');
+    }
+    const savedProducts = result.products.map((item) => ({
+      ...item,
+      image: item.image || undefined,
+      ndcCode: item.ndcCode || undefined,
+      lastRestocked: item.lastRestocked || undefined,
+    }));
+    setCatalogItems((previous) => [...savedProducts, ...previous]);
+    return savedProducts;
+  };
+
+  const handleAddCategory = async (name: string): Promise<string> => {
+    const response = await fetch('/api/data.php?resource=categories', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const result = await response.json() as { category?: string; message?: string };
+    if (!response.ok || typeof result.category !== 'string') {
+      throw new Error(result.message || 'The category could not be saved.');
+    }
+    const savedCategory = result.category;
+    setCategories((previous) => [...previous, savedCategory].sort((a, b) => a.localeCompare(b)));
+    return savedCategory;
+  };
+
   const handleUpdateProduct = async (updatedProduct: CatalogItem): Promise<CatalogItem> => {
     const response = await fetch('/api/data.php?resource=products', {
       method: 'PATCH',
@@ -473,7 +523,7 @@ export default function App() {
     }
   };
 
-  const handleSaveLeads = async (newLeads: Omit<ContactLead, 'id' | 'createdAt'>[]) => {
+  const handleSaveLeads = async (newLeads: ContactLeadInput[]) => {
     const response = await fetch('/api/data.php?resource=leads', {
       method: 'POST',
       credentials: 'same-origin',
@@ -489,6 +539,34 @@ export default function App() {
       for (const lead of result.leads || []) merged.set(lead.email.toLowerCase(), lead);
       return [...merged.values()].sort((a, b) => b.id - a.id);
     });
+  };
+
+  const handleLoadLeadProfile = async (leadId: number): Promise<LeadProfile> => {
+    const response = await fetch(`/api/data.php?resource=leads&id=${encodeURIComponent(String(leadId))}`, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; message?: string };
+    if (!response.ok || !result.lead || !Array.isArray(result.orders)) {
+      throw new Error(result.message || 'The contact profile could not be loaded.');
+    }
+    return { lead: result.lead, orders: result.orders };
+  };
+
+  const handleUpdateLead = async (leadId: number, update: { status?: LeadStatus; marketingConsent?: boolean }) => {
+    const response = await fetch('/api/data.php?resource=leads', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ id: leadId, ...update }),
+    });
+    const result = await response.json() as { lead?: ContactLead; message?: string };
+    if (!response.ok || !result.lead) {
+      throw new Error(result.message || 'The contact lead could not be updated.');
+    }
+    const updatedLead = result.lead;
+    setLeads((previous) => previous.map((lead) => lead.id === leadId ? updatedLead : lead));
+    return updatedLead;
   };
 
   const handleCreateManualOrder = async (data: {
@@ -570,8 +648,13 @@ export default function App() {
         leadDataError={adminDataError}
         dataError={adminDataError}
         onSaveLeads={handleSaveLeads}
+        onLoadLeadProfile={handleLoadLeadProfile}
+        onUpdateLead={handleUpdateLead}
+        categories={categories}
         catalogItems={catalogItems}
         catalogError={catalogError}
+        onAddCategory={handleAddCategory}
+        onBulkAddProducts={handleBulkAddProducts}
         onAddProduct={handleAddProduct}
         onUpdateProduct={handleUpdateProduct}
         onDeleteProduct={handleDeleteProduct}
@@ -600,6 +683,7 @@ export default function App() {
         }}
         openCart={() => setIsCartOpen(true)}
         cartCount={totalCartCount}
+        categories={categories}
         selectedCategory={selectedCategory}
         onSelectCategory={(cat) => setSelectedCategory(cat)}
       />
@@ -609,6 +693,7 @@ export default function App() {
         {/* Store Hero Banner */}
         <PharmacyHero
           selectedCategory={selectedCategory}
+          categories={categories}
           onSelectCategory={(cat) => setSelectedCategory(cat)}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -617,6 +702,7 @@ export default function App() {
         {/* Store Catalog & Filterable Products */}
         <CategoriesAndProducts
           catalogItems={catalogItems}
+          categories={categories}
           onSelectItem={handleAddToCart}
           selectedCategory={selectedCategory}
           onSelectCategory={(cat) => setSelectedCategory(cat)}

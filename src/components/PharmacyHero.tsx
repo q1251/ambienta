@@ -5,6 +5,7 @@ import { StoreCategory } from '../types/pharmacy';
 
 interface PharmacyHeroProps {
   selectedCategory: StoreCategory | 'All Products';
+  categories: StoreCategory[];
   onSelectCategory: (cat: StoreCategory | 'All Products') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -12,18 +13,21 @@ interface PharmacyHeroProps {
 
 export const PharmacyHero: React.FC<PharmacyHeroProps> = ({
   selectedCategory,
+  categories,
   onSelectCategory,
   searchQuery,
   setSearchQuery,
 }) => {
-  const storeCategories: { name: StoreCategory; icon: React.ReactNode }[] = [
-    { name: 'Sleep', icon: <Moon className="h-4 w-4" /> },
-    { name: 'Weight Loss', icon: <Heart className="h-4 w-4" /> },
-    { name: 'Energy & Focus', icon: <Zap className="h-4 w-4" /> },
-    { name: 'Heart & Circulation', icon: <Heart className="h-4 w-4" /> },
-    { name: 'Digestive Health', icon: <Sparkles className="h-4 w-4" /> },
-    { name: 'Daily Wellness', icon: <ShieldCheck className="h-4 w-4" /> },
-  ];
+  const categoryIcon = (name: StoreCategory) => {
+    switch (name) {
+      case 'Sleep': return <Moon className="h-4 w-4" />;
+      case 'Weight Loss': return <Heart className="h-4 w-4" />;
+      case 'Energy & Focus': return <Zap className="h-4 w-4" />;
+      case 'Heart & Circulation': return <Heart className="h-4 w-4" />;
+      case 'Daily Wellness': return <ShieldCheck className="h-4 w-4" />;
+      default: return <Sparkles className="h-4 w-4" />;
+    }
+  };
 
   const scrollToCatalog = () => {
     document.getElementById('store-catalog')?.scrollIntoView({ behavior: 'smooth' });
@@ -122,18 +126,18 @@ export const PharmacyHero: React.FC<PharmacyHeroProps> = ({
             >
               All products
             </button>
-            {storeCategories.map((category) => (
+            {categories.map((name) => (
               <button
-                key={category.name}
-                onClick={() => onSelectCategory(category.name)}
+                key={name}
+                onClick={() => onSelectCategory(name)}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition ${
-                  selectedCategory === category.name
+                  selectedCategory === name
                     ? 'bg-white text-[#123b68]'
                     : 'border border-white/45 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
                 }`}
               >
-                {category.icon}
-                {category.name}
+                {categoryIcon(name)}
+                {name}
               </button>
             ))}
           </div>

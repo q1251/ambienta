@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
-import { AlertCircle, Download, FileSpreadsheet, Upload, UserPlus } from 'lucide-react';
-import { ContactLead } from '../../types/pharmacy';
+import React, { useRef, useState } from 'react';
+import { AlertCircle, Download, FileSpreadsheet, Mail, Package, Search, Upload, UserPlus, X } from 'lucide-react';
+import { ContactLead, ContactLeadInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
 import { generateSampleCsv, parseLeadsCsv } from '../../utils/pharmacyLogic';
 
-type NewLead = Omit<ContactLead, 'id' | 'createdAt'>;
+type NewLead = ContactLeadInput;
 
 interface ContactLeadManagerProps {
   leads: ContactLead[];
   dataError?: string;
   onSaveLeads: (leads: NewLead[]) => Promise<void>;
+  onLoadLeadProfile?: (leadId: number) => Promise<LeadProfile>;
+  onUpdateLead?: (leadId: number, update: { status?: LeadStatus; marketingConsent?: boolean }) => Promise<ContactLead>;
 }
 
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   leads,
   dataError,
   onSaveLeads,
+  onLoadLeadProfile,
+  onUpdateLead,
 }) => {
   const [mode, setMode] = useState<'csv' | 'manual'>('csv');
   const [csv, setCsv] = useState('');
@@ -27,6 +31,21 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [search, setSearch] = useState('');
+  const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
+  const [profile, setProfile] = useState<LeadProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const profileRequestId = useRef(0);
+  const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
+  const filteredLeads = leads.filter((lead) => {
+    const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
+    const query = search.trim().toLowerCase();
+    const matchesSearch = !query || `${lead.firstName} ${lead.lastName} ${lead.email} ${lead.phone}`.toLowerCase().includes(query);
+    return matchesStage && matchesSearch;
+  });
 
   const parse = (value: string) => {
     setCsv(value);
@@ -49,6 +68,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setLastName('');
       setEmail('');
       setPhone('');
+      setMarketingConsent(false);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : 'Unable to save contact leads.');
     } finally {
@@ -77,7 +97,54 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
   const handleManualSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    void save([{ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(), leadSource: 'Manual Entry' }]);
+    void save([{
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      leadSource: 'Manual Entry',
+      status: 'Cold',
+      marketingConsent,
+    }]);
+  };
+
+  const openProfile = async (lead: ContactLead) => {
+    if (!onLoadLeadProfile) return;
+    const requestId = ++profileRequestId.current;
+    setProfile(null);
+    setProfileError('');
+    setProfileLoading(true);
+    try {
+      const loadedProfile = await onLoadLeadProfile(lead.id);
+      if (requestId === profileRequestId.current) setProfile(loadedProfile);
+    } catch (error) {
+      if (requestId === profileRequestId.current) {
+        setProfileError(error instanceof Error ? error.message : 'The contact profile could not be loaded.');
+      }
+    } finally {
+      if (requestId === profileRequestId.current) setProfileLoading(false);
+    }
+  };
+
+  const closeProfile = () => {
+    profileRequestId.current += 1;
+    setProfile(null);
+    setProfileError('');
+    setProfileLoading(false);
+  };
+
+  const updateProfile = async (update: { status?: LeadStatus; marketingConsent?: boolean }) => {
+    if (!profile || !onUpdateLead) return;
+    setProfileSaving(true);
+    setProfileError('');
+    try {
+      const lead = await onUpdateLead(profile.lead.id, update);
+      setProfile((current) => current ? { ...current, lead } : current);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'The contact profile could not be updated.');
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   return (
@@ -85,7 +152,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       <header className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-bold text-slate-900">Contact leads</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Only names and contact details are stored here. Do not upload health, prescription, or insurance information.
+            Track contact stages and order fulfillment history. Only contacts with recorded marketing opt-in are eligible for future bulk outreach. Do not upload health, prescription, or insurance information.
         </p>
         <div className="mt-4 flex gap-2">
           <button type="button" onClick={() => setMode('csv')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${mode === 'csv' ? 'bg-teal-800 text-white' : 'bg-slate-100 text-slate-700'}`}>
@@ -124,9 +191,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           {errors.map((error) => <p key={error} className="mt-2 flex items-center gap-2 text-sm text-rose-700"><AlertCircle className="h-4 w-4" />{error}</p>)}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th></tr></thead>
+              <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th><th>Marketing consent</th></tr></thead>
               <tbody>
-                {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td></tr>)}
+                {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -140,20 +207,116 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
           <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
           <label className="text-sm font-medium text-slate-700">Phone (optional)<input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+          <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
+            <span>Contact explicitly opted in to marketing emails. Leave unchecked unless consent was actually given.</span>
+          </label>
           <button disabled={saving} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-2">{saving ? 'Saving…' : 'Save contact lead'}</button>
         </form>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-        <h3 className="px-5 pt-4 text-base font-bold text-slate-900">Saved contacts ({leads.length})</h3>
-        <table className="mt-3 w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Source</th></tr></thead>
-          <tbody>
-            {leads.map((lead) => <tr key={lead.id} className="border-t border-slate-100"><td className="px-5 py-3">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.leadSource}</td></tr>)}
-            {!leads.length && <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">No contact leads are stored yet.</td></tr>}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Saved contacts ({leads.length})</h3>
+            <p className="mt-1 text-xs text-slate-500">{eligibleCount} explicitly opted-in contact{eligibleCount === 1 ? '' : 's'} eligible for bulk email</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled title="Mail is not connected; sending is disabled until credentials are configured privately." className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-400">
+              <Mail className="h-4 w-4" /> Bulk email unavailable
+            </button>
+            <label className="relative">
+              <span className="sr-only">Search leads</span>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search contacts" className="rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm" />
+            </label>
+            <select aria-label="Filter by lead stage" value={stageFilter} onChange={(event) => setStageFilter(event.target.value as 'All' | LeadStatus)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <option value="All">All stages</option>
+              {(['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Stage</th><th className="py-3">Orders</th><th className="py-3">Marketing consent</th><th className="py-3">Source</th></tr></thead>
+            <tbody>
+              {filteredLeads.map((lead) => (
+                <tr key={lead.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-5 py-3">
+                    {onLoadLeadProfile ? (
+                      <button type="button" onClick={() => void openProfile(lead)} className="font-semibold text-teal-800 underline-offset-2 hover:underline">
+                        {lead.firstName} {lead.lastName}
+                      </button>
+                    ) : `${lead.firstName} ${lead.lastName}`}
+                  </td>
+                  <td className="py-3">{lead.email}</td>
+                  <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
+                  <td className="py-3">{lead.orderCount || 0}</td>
+                  <td className="py-3">{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td>
+                  <td className="py-3">{lead.leadSource}</td>
+                </tr>
+              ))}
+              {!filteredLeads.length && <tr><td colSpan={6} className="px-5 py-8 text-center text-slate-500">{leads.length ? 'No contacts match these filters.' : 'No contact leads are stored yet.'}</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {(profileLoading || profileError || profile) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-label="Lead profile">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 p-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Lead profile</p>
+                <h3 className="mt-1 text-xl font-bold text-slate-900">{profile ? `${profile.lead.firstName} ${profile.lead.lastName}` : 'Loading contact…'}</h3>
+                {profile && <p className="mt-1 text-sm text-slate-600">{profile.lead.email}{profile.lead.phone ? ` · ${profile.lead.phone}` : ''}</p>}
+              </div>
+              <button type="button" onClick={closeProfile} aria-label="Close lead profile" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-5 p-5">
+              {profileLoading && <p role="status" className="text-sm text-slate-600">Loading contact and order history…</p>}
+              {profileError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{profileError}</p>}
+              {profile && (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700">Pipeline stage
+                      <select disabled={profileSaving} value={profile.lead.status} onChange={(event) => void updateProfile({ status: event.target.value as LeadStatus })} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2">
+                        {(['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status}>{status}</option>)}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 self-end pb-2 text-sm text-slate-700">
+                      <input type="checkbox" disabled={profileSaving} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} />
+                      Explicit marketing opt-in recorded
+                    </label>
+                    <div className="text-sm text-slate-600"><span className="font-medium text-slate-800">Source:</span> {profile.lead.leadSource}<br /><span className="font-medium text-slate-800">Added:</span> {new Date(profile.lead.createdAt).toLocaleDateString()}</div>
+                    <div className="text-sm text-slate-600"><span className="font-medium text-slate-800">Orders:</span> {profile.lead.orderCount || 0}<br /><span className="font-medium text-slate-800">Last order:</span> {profile.lead.lastOrderAt ? new Date(profile.lead.lastOrderAt).toLocaleDateString() : 'No orders'}</div>
+                  </div>
+                  <section>
+                    <h4 className="mb-3 flex items-center gap-2 font-semibold text-slate-900"><Package className="h-4 w-4 text-teal-800" />Order and tracking history</h4>
+                    {profile.orders.length ? (
+                      <div className="overflow-x-auto rounded-lg border border-slate-200">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2">Order</th><th className="px-3 py-2">Placed</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Tracking</th></tr></thead>
+                          <tbody>{profile.orders.map((order) => (
+                            <tr key={order.id} className="border-t border-slate-100">
+                              <td className="px-3 py-2 font-medium">{order.orderNumber}</td>
+                              <td className="px-3 py-2">{new Date(order.placedAt).toLocaleDateString()}</td>
+                              <td className="px-3 py-2">${order.totalAmount.toFixed(2)}</td>
+                              <td className="px-3 py-2">{order.status}</td>
+                              <td className="px-3 py-2">{order.trackingNumber ? `${order.carrier || 'Carrier'} · ${order.trackingNumber}` : 'Not available'}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No orders are associated with this email address yet.</p>}
+                    {(profile.lead.orderCount || 0) > profile.orders.length && <p className="mt-2 text-xs text-slate-500">Showing the 100 most recent orders.</p>}
+                  </section>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

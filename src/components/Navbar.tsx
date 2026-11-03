@@ -6,6 +6,7 @@ interface NavbarProps {
   onNavigateHome: () => void;
   openCart: () => void;
   cartCount: number;
+  categories: StoreCategory[];
   onSelectCategory?: (category: StoreCategory | 'All Products') => void;
   selectedCategory?: StoreCategory | 'All Products';
 }
@@ -14,6 +15,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome,
   openCart,
   cartCount,
+  categories,
   onSelectCategory,
   selectedCategory,
 }) => {
@@ -55,7 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick Category Jump Bar */}
           <nav           className="hidden items-center gap-1 text-sm font-medium text-slate-600 lg:flex">
-            {(['All Products', 'Sleep', 'Weight Loss', 'Energy & Focus', 'Daily Wellness'] as const).map((cat) => {
+            {(['All Products', ...categories] as const).map((cat) => {
               const active = selectedCategory === cat;
               return (
                 <button

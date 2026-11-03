@@ -84,6 +84,9 @@ function data_ensure_schema(PDO $db): void
             email VARCHAR(254) NOT NULL,
             phone VARCHAR(40) NOT NULL DEFAULT '',
             lead_source VARCHAR(24) NOT NULL,
+            status VARCHAR(24) NOT NULL DEFAULT 'Cold',
+            marketing_consent TINYINT(1) NOT NULL DEFAULT 0,
+            marketing_consent_at DATETIME NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY leads_email (email)
@@ -93,7 +96,7 @@ function data_ensure_schema(PDO $db): void
         "CREATE TABLE IF NOT EXISTS products (
             id VARCHAR(64) NOT NULL PRIMARY KEY,
             name VARCHAR(180) NOT NULL,
-            category VARCHAR(32) NOT NULL,
+            category VARCHAR(80) NOT NULL,
             description TEXT NOT NULL,
             rx_required TINYINT(1) NOT NULL DEFAULT 0,
             dosage VARCHAR(120) NOT NULL DEFAULT '',
@@ -108,6 +111,13 @@ function data_ensure_schema(PDO $db): void
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             last_restocked DATE NULL,
             UNIQUE KEY products_sku (sku)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS product_categories (
+            name VARCHAR(80) NOT NULL PRIMARY KEY,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
@@ -133,7 +143,8 @@ function data_ensure_schema(PDO $db): void
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             KEY orders_placed_at (placed_at),
-            KEY orders_status (status)
+            KEY orders_status (status),
+            KEY orders_email (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
@@ -142,7 +153,7 @@ function data_ensure_schema(PDO $db): void
             order_id VARCHAR(64) NOT NULL,
             product_id VARCHAR(64) NOT NULL,
             product_name VARCHAR(180) NOT NULL,
-            category VARCHAR(32) NOT NULL,
+            category VARCHAR(80) NOT NULL,
             quantity SMALLINT UNSIGNED NOT NULL,
             unit_price DECIMAL(10,2) NOT NULL,
             CONSTRAINT order_items_order_fk FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
@@ -198,8 +209,20 @@ function data_ensure_schema(PDO $db): void
     if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
         $db->exec("ALTER TABLE staff_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT '' AFTER email");
     }
+    $leadColumns = [
+        'status' => "VARCHAR(24) NOT NULL DEFAULT 'Cold'",
+        'marketing_consent' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'marketing_consent_at' => 'DATETIME NULL',
+    ];
+    foreach ($leadColumns as $column => $definition) {
+        $check = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $check->execute([$databaseName, 'leads', $column]);
+        if ((int) $check->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE leads ADD COLUMN `$column` $definition");
+        }
+    }
     $legacyColumns = [
-        'category' => "VARCHAR(32) NOT NULL DEFAULT 'Daily Wellness'",
+        'category' => "VARCHAR(80) NOT NULL DEFAULT 'Daily Wellness'",
         'description' => 'TEXT NULL',
         'rx_required' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'dosage' => "VARCHAR(120) NOT NULL DEFAULT ''",
@@ -217,6 +240,18 @@ function data_ensure_schema(PDO $db): void
         if ((int) $check->fetchColumn() === 0) {
             $db->exec("ALTER TABLE products ADD COLUMN `$column` $definition");
         }
+    }
+    foreach (['products', 'order_items'] as $table) {
+        $categoryLength = $db->prepare('SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $categoryLength->execute([$databaseName, $table, 'category']);
+        if ((int) $categoryLength->fetchColumn() < 80) {
+            $db->exec("ALTER TABLE `$table` MODIFY category VARCHAR(80) NOT NULL");
+        }
+    }
+    $ordersEmailIndex = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
+    $ordersEmailIndex->execute([$databaseName, 'orders', 'orders_email']);
+    if ((int) $ordersEmailIndex->fetchColumn() === 0) {
+        $db->exec('ALTER TABLE orders ADD KEY orders_email (email)');
     }
 
     $db->exec('UPDATE products SET sku = id WHERE sku = \'\'');
@@ -254,6 +289,7 @@ function data_ensure_schema(PDO $db): void
             $insert->execute($product);
         }
     }
+    $db->exec('INSERT IGNORE INTO product_categories (name) SELECT DISTINCT category FROM products WHERE category <> \'\'');
 }
 
 function data_require_admin(string $requiredRole = 'operator'): void
@@ -309,14 +345,14 @@ function data_require_admin(string $requiredRole = 'operator'): void
     $_SESSION['last_activity'] = time();
 }
 
-function data_read_json(): array
+function data_read_json(int $maxBytes = 262144): array
 {
     $contentType = strtolower(trim(explode(';', (string) ($_SERVER['CONTENT_TYPE'] ?? ''))[0]));
     if ($contentType !== 'application/json') {
         data_respond(415, ['error' => 'unsupported_media_type', 'message' => 'Requests must use application/json.']);
     }
     $raw = file_get_contents('php://input');
-    if ($raw === false || strlen($raw) > 262144) {
+    if ($raw === false || strlen($raw) > $maxBytes) {
         data_respond(413, ['error' => 'request_too_large', 'message' => 'The request is too large.']);
     }
     $body = json_decode($raw, true);
@@ -341,7 +377,7 @@ function data_string(array $source, string $key, int $maxLength, bool $required 
 
 function data_lead_row(array $row): array
 {
-    return [
+    $lead = [
         'id' => (int) $row['id'],
         'firstName' => $row['first_name'],
         'lastName' => $row['last_name'],
@@ -349,7 +385,13 @@ function data_lead_row(array $row): array
         'phone' => $row['phone'],
         'leadSource' => $row['lead_source'],
         'createdAt' => $row['created_at'],
+        'status' => $row['status'] ?? 'Cold',
+        'marketingConsent' => (bool) ($row['marketing_consent'] ?? false),
+        'marketingConsentAt' => $row['marketing_consent_at'] ?? null,
     ];
+    if (array_key_exists('order_count', $row)) $lead['orderCount'] = (int) $row['order_count'];
+    if (array_key_exists('last_order_at', $row)) $lead['lastOrderAt'] = $row['last_order_at'];
+    return $lead;
 }
 
 function data_product_row(array $row): array
@@ -387,11 +429,11 @@ function data_audit(PDO $db, string $action, string $entityType, string $entityI
     )->execute([$actor, $action, $entityType, $entityId, $encoded]);
 }
 
-function data_product_input(array $body, bool $isUpdate): array
+function data_product_input(PDO $db, array $body, bool $isUpdate): array
 {
     $id = $isUpdate ? data_string($body, 'id', 64) : data_string($body, 'id', 64);
     $name = data_string($body, 'name', 180);
-    $category = data_string($body, 'category', 32);
+    $category = data_string($body, 'category', 80);
     $description = data_string($body, 'description', 3000, false);
     $dosage = data_string($body, 'dosage', 120, false);
     $sku = data_string($body, 'sku', 80);
@@ -408,16 +450,22 @@ function data_product_input(array $body, bool $isUpdate): array
     if (!is_int($stock) || $stock < 0 || $stock > 100000000 || !is_int($minimum) || $minimum < 0 || $minimum > 100000000) {
         data_respond(400, ['error' => 'invalid_stock', 'message' => 'Stock values must be non-negative whole numbers.']);
     }
-    if (($cost !== null && (!is_numeric($cost) || (float) $cost < 0)) || ($copay !== null && (!is_numeric($copay) || (float) $copay < 0))) {
+    if (
+        ($cost !== null && (!is_numeric($cost) || (float) $cost < 0 || (float) $cost > 99999999.99))
+        || ($copay !== null && (!is_numeric($copay) || (float) $copay < 0 || (float) $copay > 99999999.99))
+    ) {
         data_respond(400, ['error' => 'invalid_price', 'message' => 'Cost and copay must be non-negative amounts.']);
     }
     if (!is_bool($body['rxRequired'] ?? null)) {
         data_respond(400, ['error' => 'invalid_product', 'message' => 'Prescription status must be specified.']);
     }
-    $validCategories = ['Sleep', 'Weight Loss', 'Energy & Focus', 'Heart & Circulation', 'Digestive Health', 'Daily Wellness', 'Pain & Recovery'];
-    if (!in_array($category, $validCategories, true)) {
-        data_respond(400, ['error' => 'invalid_category', 'message' => 'Choose a supported product category.']);
+    $categoryQuery = $db->prepare('SELECT name FROM product_categories WHERE name = ? AND is_active = 1');
+    $categoryQuery->execute([$category]);
+    $savedCategory = $categoryQuery->fetchColumn();
+    if (!$savedCategory) {
+        data_respond(400, ['error' => 'invalid_category', 'message' => 'Choose an existing active product category.']);
     }
+    $category = (string) $savedCategory;
     return [
         'id' => $id,
         'name' => $name,
@@ -498,15 +546,45 @@ if (!is_string($resource)) {
 if ($method === 'GET' && $resource === 'catalog') {
     $db = data_db();
     $rows = $db->query('SELECT * FROM products WHERE is_active = 1 ORDER BY name')->fetchAll();
-    data_respond(200, ['products' => array_map('data_product_row', $rows)]);
+    $categories = $db->query('SELECT name FROM product_categories WHERE is_active = 1 ORDER BY name')->fetchAll(PDO::FETCH_COLUMN);
+    data_respond(200, ['products' => array_map('data_product_row', $rows), 'categories' => $categories]);
 }
 
 if ($method === 'GET') {
     data_require_admin();
     $db = data_db();
     if ($resource === 'leads') {
-        $rows = $db->query('SELECT id, first_name, last_name, email, phone, lead_source, created_at FROM leads ORDER BY id DESC')->fetchAll();
+        $leadId = $_GET['id'] ?? null;
+        if ($leadId !== null) {
+            $id = filter_var($leadId, FILTER_VALIDATE_INT);
+            if ($id === false || $id < 1) {
+                data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
+            }
+            $find = $db->prepare(
+                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                        COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+                 FROM leads l LEFT JOIN orders o ON o.email = l.email
+                 WHERE l.id = ? GROUP BY l.id LIMIT 1'
+            );
+            $find->execute([$id]);
+            $lead = $find->fetch();
+            if (!$lead) data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+            $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
+            $orderQuery->execute([$lead['email']]);
+            $orders = array_map(static fn (array $row): array => data_order_row($db, $row), $orderQuery->fetchAll());
+            data_respond(200, ['lead' => data_lead_row($lead), 'orders' => $orders]);
+        }
+        $rows = $db->query(
+            'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                    COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+             FROM leads l LEFT JOIN orders o ON o.email = l.email
+             GROUP BY l.id ORDER BY l.id DESC'
+        )->fetchAll();
         data_respond(200, ['leads' => array_map('data_lead_row', $rows)]);
+    }
+    if ($resource === 'categories') {
+        $categories = $db->query('SELECT name FROM product_categories WHERE is_active = 1 ORDER BY name')->fetchAll(PDO::FETCH_COLUMN);
+        data_respond(200, ['categories' => $categories]);
     }
     if ($resource === 'orders') {
         $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
@@ -598,21 +676,48 @@ if ($method === 'GET') {
 
 if ($method === 'POST' && $resource === 'products') {
     data_require_admin();
-    $body = data_read_json();
-    $product = data_product_input($body, false);
+    $body = data_read_json(4194304);
     $db = data_db();
+    $isBulk = array_key_exists('products', $body);
+    if ($isBulk) {
+        if (!is_array($body['products']) || count($body['products']) < 1 || count($body['products']) > 500) {
+            data_respond(400, ['error' => 'invalid_products', 'message' => 'Provide between 1 and 500 products.']);
+        }
+        $products = [];
+        $seenIds = [];
+        $seenSkus = [];
+        foreach ($body['products'] as $entry) {
+            if (!is_array($entry)) {
+                data_respond(400, ['error' => 'invalid_product', 'message' => 'A submitted product is invalid.']);
+            }
+            $product = data_product_input($db, $entry, false);
+            $normalizedSku = strtolower($product['sku']);
+            if (isset($seenIds[$product['id']]) || isset($seenSkus[$normalizedSku])) {
+                data_respond(409, ['error' => 'product_conflict', 'message' => 'The import contains duplicate product IDs or SKUs.']);
+            }
+            $seenIds[$product['id']] = true;
+            $seenSkus[$normalizedSku] = true;
+            $products[] = $product;
+        }
+    } else {
+        $products = [data_product_input($db, $body, false)];
+    }
+
     $db->beginTransaction();
     try {
-        $db->prepare(
+        $insert = $db->prepare(
             'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, price, cost_price, copay_price, stock_count, min_stock_threshold, is_active, last_restocked)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
-        )->execute([
-            $product['id'], $product['name'], $product['category'], $product['description'],
-            (int) $product['rxRequired'], $product['dosage'], $product['sku'], $product['ndcCode'],
-            $product['image'], $product['price'], $product['costPrice'], $product['copayPrice'],
-            $product['stockCount'], $product['minStockThreshold'], $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
-        ]);
-        data_audit($db, 'product.created', 'product', $product['id'], ['sku' => $product['sku']]);
+        );
+        foreach ($products as $product) {
+            $insert->execute([
+                $product['id'], $product['name'], $product['category'], $product['description'],
+                (int) $product['rxRequired'], $product['dosage'], $product['sku'], $product['ndcCode'],
+                $product['image'], $product['price'], $product['costPrice'], $product['copayPrice'],
+                $product['stockCount'], $product['minStockThreshold'], $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
+            ]);
+            data_audit($db, 'product.created', 'product', $product['id'], ['sku' => $product['sku']]);
+        }
         $db->commit();
     } catch (Throwable $error) {
         if ($db->inTransaction()) $db->rollBack();
@@ -620,11 +725,50 @@ if ($method === 'POST' && $resource === 'products') {
             data_respond(409, ['error' => 'product_conflict', 'message' => 'The product ID or SKU is already in use.']);
         }
         error_log('Ambients product creation failed: ' . $error->getMessage());
-        data_respond(500, ['error' => 'product_create_failed', 'message' => 'The product could not be saved.']);
+        data_respond(500, [
+            'error' => 'product_create_failed',
+            'message' => $isBulk ? 'The product import could not be saved.' : 'The product could not be saved.',
+        ]);
     }
     $find = $db->prepare('SELECT * FROM products WHERE id = ?');
-    $find->execute([$product['id']]);
-    data_respond(201, ['product' => data_product_row($find->fetch())]);
+    $savedProducts = [];
+    foreach ($products as $product) {
+        $find->execute([$product['id']]);
+        $savedProducts[] = data_product_row($find->fetch());
+    }
+    data_respond(201, $isBulk ? ['products' => $savedProducts] : ['product' => $savedProducts[0]]);
+}
+
+if ($method === 'POST' && $resource === 'categories') {
+    data_require_admin();
+    $body = data_read_json();
+    $name = data_string($body, 'name', 80);
+    if (
+        $name === ''
+        || preg_match('/[\x00-\x1F\x7F]/', $name)
+        || in_array(strtolower($name), ['all', 'all products'], true)
+    ) {
+        data_respond(400, ['error' => 'invalid_category', 'message' => 'Enter a category name of 1 to 80 characters.']);
+    }
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $db->prepare('INSERT INTO product_categories (name) VALUES (?)')->execute([$name]);
+        data_audit($db, 'category.created', 'category', $name);
+        $db->commit();
+    } catch (PDOException $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        if ((string) $error->getCode() === '23000') {
+            data_respond(409, ['error' => 'category_conflict', 'message' => 'A category with that name already exists.']);
+        }
+        error_log('Ambients product category creation failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'category_create_failed', 'message' => 'The category could not be saved.']);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients product category creation failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'category_create_failed', 'message' => 'The category could not be saved.']);
+    }
+    data_respond(201, ['category' => $name]);
 }
 
 if ($method === 'POST' && $resource === 'staff') {
@@ -696,7 +840,7 @@ if ($method === 'PATCH' && $resource === 'products') {
     $db = data_db();
     if (isset($body['bulkPercent'])) {
         $percent = $body['bulkPercent'];
-        $category = data_string($body, 'category', 32);
+        $category = data_string($body, 'category', 80);
         if (!is_numeric($percent) || (float) $percent < -100 || (float) $percent > 100) {
             data_respond(400, ['error' => 'invalid_adjustment', 'message' => 'Price changes must be between -100% and 100%.']);
         }
@@ -720,7 +864,7 @@ if ($method === 'PATCH' && $resource === 'products') {
         data_respond(200, ['updated' => true]);
     }
 
-    $product = data_product_input($body, true);
+    $product = data_product_input($db, $body, true);
     $db->beginTransaction();
     try {
         $update = $db->prepare(
@@ -973,10 +1117,19 @@ if ($method === 'POST' && $resource === 'leads') {
 
     $db = data_db();
     $insert = $db->prepare(
-        'INSERT INTO leads (first_name, last_name, email, phone, lead_source) VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone)'
+        'INSERT INTO leads (first_name, last_name, email, phone, lead_source, marketing_consent, marketing_consent_at)
+         VALUES (?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL))
+         ON DUPLICATE KEY UPDATE first_name = VALUES(first_name), last_name = VALUES(last_name), phone = VALUES(phone),
+           marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
+           marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at)'
     );
-    $find = $db->prepare('SELECT id, first_name, last_name, email, phone, lead_source, created_at FROM leads WHERE email = ?');
+    $find = $db->prepare(
+        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+         FROM leads l LEFT JOIN orders o ON o.email = l.email
+         WHERE l.email = ? GROUP BY l.id LIMIT 1'
+    );
+    $priorConsent = $db->prepare('SELECT marketing_consent FROM leads WHERE email = ?');
     $saved = [];
     $db->beginTransaction();
     try {
@@ -988,15 +1141,25 @@ if ($method === 'POST' && $resource === 'leads') {
             $lastName = data_string($lead, 'lastName', 100);
             $email = strtolower(data_string($lead, 'email', 254));
             $phone = data_string($lead, 'phone', 40, false);
+            $marketingConsent = $lead['marketingConsent'] ?? false;
+            if (!is_bool($marketingConsent)) {
+                data_respond(400, ['error' => 'invalid_consent', 'message' => 'Marketing consent must be explicitly true or false.']);
+            }
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 data_respond(400, ['error' => 'invalid_email', 'message' => 'A lead has an invalid email address.']);
             }
+            $priorConsent->execute([$email]);
+            $wasOptedIn = (bool) $priorConsent->fetchColumn();
             $source = in_array($lead['leadSource'] ?? '', ['CSV Upload', 'Manual Entry'], true)
                 ? $lead['leadSource']
                 : 'Manual Entry';
-            $insert->execute([$firstName, $lastName, $email, $phone, $source]);
+            $insert->execute([$firstName, $lastName, $email, $phone, $source, (int) $marketingConsent, (int) $marketingConsent]);
             $find->execute([$email]);
-            $saved[] = data_lead_row($find->fetch());
+            $savedLead = $find->fetch();
+            $saved[] = data_lead_row($savedLead);
+            if ($marketingConsent && !$wasOptedIn) {
+                data_audit($db, 'lead.marketing_opt_in', 'lead', (string) $savedLead['id']);
+            }
         }
         $db->commit();
     } catch (Throwable $error) {
@@ -1009,6 +1172,68 @@ if ($method === 'POST' && $resource === 'leads') {
         data_respond(500, ['error' => 'lead_save_failed', 'message' => 'The contact leads could not be saved.']);
     }
     data_respond(201, ['leads' => $saved]);
+}
+
+if ($method === 'PATCH' && $resource === 'leads') {
+    data_require_admin();
+    $body = data_read_json();
+    $id = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
+    if ($id === false || $id < 1) {
+        data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
+    }
+    $status = $body['status'] ?? null;
+    $marketingConsent = $body['marketingConsent'] ?? null;
+    $validStatuses = ['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
+    if (
+        ($status === null && $marketingConsent === null)
+        || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))
+        || ($marketingConsent !== null && !is_bool($marketingConsent))
+    ) {
+        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Choose a valid lead stage or marketing consent value.']);
+    }
+
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT id, email, status, marketing_consent FROM leads WHERE id = ? FOR UPDATE');
+        $find->execute([$id]);
+        $current = $find->fetch();
+        if (!$current) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
+        }
+        $updates = [];
+        $parameters = [];
+        if ($status !== null && $status !== $current['status']) {
+            $updates[] = 'status = ?';
+            $parameters[] = $status;
+            data_audit($db, 'lead.stage_changed', 'lead', (string) $id, ['from' => $current['status'], 'to' => $status]);
+        }
+        if ($marketingConsent !== null && (bool) $marketingConsent !== (bool) $current['marketing_consent']) {
+            $updates[] = 'marketing_consent = ?';
+            $parameters[] = (int) $marketingConsent;
+            $updates[] = 'marketing_consent_at = ?';
+            $parameters[] = $marketingConsent ? gmdate('Y-m-d H:i:s') : null;
+            data_audit($db, $marketingConsent ? 'lead.marketing_opt_in' : 'lead.marketing_opt_out', 'lead', (string) $id);
+        }
+        if ($updates) {
+            $parameters[] = $id;
+            $db->prepare('UPDATE leads SET ' . implode(', ', $updates) . ' WHERE id = ?')->execute($parameters);
+        }
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients contact lead update failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'lead_update_failed', 'message' => 'The contact lead could not be updated.']);
+    }
+    $find = $db->prepare(
+        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at
+         FROM leads l LEFT JOIN orders o ON o.email = l.email
+         WHERE l.id = ? GROUP BY l.id LIMIT 1'
+    );
+    $find->execute([$id]);
+    data_respond(200, ['lead' => data_lead_row($find->fetch())]);
 }
 
 if ($method === 'POST' && $resource === 'order-notes') {

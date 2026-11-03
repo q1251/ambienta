@@ -1,4 +1,5 @@
 import { ContactLead, HealthCategory, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
+import { parseCsvRows } from './csv';
 
 /**
  * Calculates remaining days from a reference date (or today) to a target date string.
@@ -69,62 +70,46 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     return { leads: [], errors: ['CSV content is empty.'], totalParsed: 0 };
   }
 
-  const lines = csvText
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  if (lines.length < 2) {
+  let rows: string[][];
+  try {
+    rows = parseCsvRows(csvText);
+  } catch (error) {
+    return {
+      leads: [],
+      errors: [error instanceof Error ? error.message : 'CSV could not be parsed.'],
+      totalParsed: 0,
+    };
+  }
+  if (rows.length < 2) {
     return { leads: [], errors: ['CSV must have a header row and at least one data row.'], totalParsed: 0 };
   }
+  if (rows.length > 501) {
+    return { leads: [], errors: ['A contact import can contain at most 500 rows.'], totalParsed: 0 };
+  }
 
-  // Parse header
-  const headerLine = lines[0];
-  const headers = headerLine.split(',').map((h) => h.trim().toLowerCase().replace(/['"]/g, ''));
-
-  const findIdx = (names: string[]) => {
-    return headers.findIndex((h) => names.some((n) => h.includes(n)));
-  };
-
+  const headers = rows[0].map((header) => header.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  const findIdx = (names: string[]) => headers.findIndex((header) => names.includes(header));
   const fnIdx = findIdx(['first_name', 'firstname', 'first']);
   const lnIdx = findIdx(['last_name', 'lastname', 'last']);
   const emailIdx = findIdx(['email', 'mail']);
   const phoneIdx = findIdx(['phone', 'mobile', 'tel']);
+  const consentIdx = findIdx(['marketing_consent', 'marketing_opt_in', 'consent']);
   if (emailIdx === -1 || fnIdx === -1 || lnIdx === -1) {
     errors.push('CSV header must contain first_name, last_name, and email columns.');
     return { leads: [], errors, totalParsed: 0 };
   }
 
-  for (let i = 1; i < lines.length; i++) {
-    const rawLine = lines[i];
-    // basic CSV split handling quoted comma values
-    const cols: string[] = [];
-    let insideQuote = false;
-    let currentCell = '';
-
-    for (let charIdx = 0; charIdx < rawLine.length; charIdx++) {
-      const char = rawLine[charIdx];
-      if (char === '"' || char === "'") {
-        insideQuote = !insideQuote;
-      } else if (char === ',' && !insideQuote) {
-        cols.push(currentCell.trim());
-        currentCell = '';
-      } else {
-        currentCell += char;
-      }
-    }
-    cols.push(currentCell.trim());
-
-    const clean = (val?: string) => (val || '').replace(/^["']|["']$/g, '').trim();
-
-    const firstName = clean(cols[fnIdx]);
-    const lastName = clean(cols[lnIdx]);
-    const email = clean(cols[emailIdx]).toLowerCase();
-    const phone = phoneIdx !== -1 ? clean(cols[phoneIdx]) : '';
+  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+    const cols = rows[rowIndex];
+    const firstName = cols[fnIdx] || '';
+    const lastName = cols[lnIdx] || '';
+    const email = (cols[emailIdx] || '').toLowerCase();
+    const phone = phoneIdx !== -1 ? cols[phoneIdx] || '' : '';
     if (!firstName || !lastName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.push(`Row ${i + 1}: Skipped row due to missing name or valid email.`);
+      errors.push(`Row ${rowIndex + 1}: Skipped row due to missing name or valid email.`);
       continue;
     }
+    const consentValue = consentIdx === -1 ? '' : (cols[consentIdx] || '').toLowerCase();
 
     leads.push({
       firstName,
@@ -132,6 +117,8 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
       leadSource: 'CSV Upload',
       email,
       phone,
+      status: 'Cold',
+      marketingConsent: ['yes', 'true', '1', 'opted in'].includes(consentValue),
     });
   }
 
@@ -143,12 +130,12 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
  */
 export function generateSampleCsv(): string {
   return [
-    'first_name,last_name,email,phone',
-    'Robert,Miller,robert.miller@example.com,+1 (555) 304-8891',
-    'Sarah,Jenkins,sarah.j@example.com,+1 (555) 441-9923',
-    'David,Kim,dkim.archive@example.com,+1 (555) 912-3341',
-    'Margaret,Thurston,margaret.t@example.com,+1 (555) 883-1200',
-    'Claire,Delaney,claire.delaney@example.com,+1 (555) 762-4419',
+    'first_name,last_name,email,phone,marketing_consent',
+    'Robert,Miller,robert.miller@example.com,+1 (555) 304-8891,no',
+    'Sarah,Jenkins,sarah.j@example.com,+1 (555) 441-9923,no',
+    'David,Kim,dkim.archive@example.com,+1 (555) 912-3341,no',
+    'Margaret,Thurston,margaret.t@example.com,+1 (555) 883-1200,no',
+    'Claire,Delaney,claire.delaney@example.com,+1 (555) 762-4419,no',
   ].join('\n');
 }
 
