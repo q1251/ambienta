@@ -41,7 +41,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
-  const [profilePhone, setProfilePhone] = useState('');
   const [activityNote, setActivityNote] = useState('');
   const [activitySaving, setActivitySaving] = useState(false);
   const profileRequestId = useRef(0);
@@ -119,7 +118,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     const requestId = ++profileRequestId.current;
     setSelectedLeadId(lead.id);
     setProfile(null);
-    setProfilePhone(lead.phone);
     setProfileError('');
     setProfileSaving(false);
     setActivitySaving(false);
@@ -129,7 +127,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const loadedProfile = await onLoadLeadProfile(lead.id);
       if (requestId === profileRequestId.current) {
         setProfile(loadedProfile);
-        setProfilePhone(loadedProfile.lead.phone);
       }
     } catch (error) {
       if (requestId === profileRequestId.current) {
@@ -160,7 +157,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const lead = await onUpdateLead(leadId, update);
       if (requestId !== profileRequestId.current) return;
       setProfile((current) => current?.lead.id === leadId ? { ...current, lead } : current);
-      if (update.phone !== undefined) setProfilePhone(lead.phone);
       if ((update.status !== undefined || update.phone !== undefined) && onLoadLeadProfile) {
         try {
           const refreshed = await onLoadLeadProfile(lead.id);
@@ -258,12 +254,13 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <div><p className="text-xs font-medium uppercase text-slate-500">Added</p><p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p></div>
               </div>
               <div className="mt-5 grid gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
-                <form onSubmit={(event) => { event.preventDefault(); void updateProfile({ phone: profilePhone.trim() }); }} className="space-y-3">
-                  <label className="block text-sm font-medium text-slate-700">Phone number
-                    <input type="tel" maxLength={40} autoComplete="tel" value={profilePhone} onChange={(event) => setProfilePhone(event.target.value)} placeholder="+1 555 0100" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                <form onSubmit={(event) => void saveActivity(event)} className="space-y-3">
+                  <label className="block text-sm font-medium text-slate-700">Add an internal comment
+                    <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} placeholder="Add an internal comment. Do not enter health, prescription, payment, or other sensitive information." className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
                   </label>
-                  <button disabled={profileSaving || !onUpdateLead || profilePhone.trim() === profile.lead.phone} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    <Phone className="h-4 w-4" /> Save phone
+                  <button type="submit" disabled={activitySaving || !onAddLeadActivity || !activityNote.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                    <MessageSquare className="h-4 w-4" />
+                    {activitySaving ? 'Saving…' : 'Add comment'}
                   </button>
                 </form>
 
@@ -289,18 +286,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><MessageSquare className="h-4 w-4 text-teal-800" />Comments</h3>
-              <form onSubmit={(event) => void saveActivity(event)} className="mt-4 space-y-3 rounded-xl bg-slate-50 p-4">
-                <label className="block text-sm font-medium text-slate-700">Add an internal comment
-                  <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} placeholder="Add an internal comment. Do not enter health, prescription, payment, or other sensitive information." className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2" />
-                </label>
-                <button type="submit" disabled={activitySaving || !onAddLeadActivity || !activityNote.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                  <MessageSquare className="h-4 w-4" />
-                  {activitySaving ? 'Saving…' : 'Add comment'}
-                </button>
-              </form>
-
-              <div className="mt-6">
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><MessageSquare className="h-4 w-4 text-teal-800" />Lead history</h3>
+              <div className="mt-4">
                 <h4 className="mb-3 text-sm font-bold text-slate-900">Status history</h4>
                 {statusActivities.length ? (
                   <ol className="space-y-3">
