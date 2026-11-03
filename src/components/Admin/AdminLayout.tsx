@@ -95,10 +95,10 @@ const navigation: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashbo
   { id: 'orders', label: 'Orders', icon: ClipboardList, group: 'Workspace' },
   { id: 'leads', label: 'Contact leads', icon: FileSpreadsheet, group: 'Workspace' },
   { id: 'inventory', label: 'Products & stock', icon: Package, group: 'Workspace' },
-  { id: 'integrations', label: 'Integrations', icon: Settings2, group: 'Settings' },
-  { id: 'profile', label: 'Profile & security', icon: UserRound, group: 'Settings' },
   { id: 'staff', label: 'Agent management', icon: Users, group: 'Administration' },
   { id: 'audit', label: 'Audit log', icon: ShieldCheck, group: 'Administration' },
+  { id: 'integrations', label: 'Integrations', icon: Settings2, group: 'Settings' },
+  { id: 'profile', label: 'Profile & security', icon: UserRound, group: 'Settings' },
 ];
 const permissionForTab: Partial<Record<AdminTab, string>> = {
   leads: 'leads',
@@ -214,10 +214,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           {visibleNavigation.filter((item) => item.group === 'Workspace').map((item) => (
             <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
           ))}
-          <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
-          {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
-            <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
-          ))}
           {props.role === 'admin' && (
             <>
               <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Administration</p>
@@ -226,9 +222,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               ))}
             </>
           )}
-          <div className="mt-auto rounded-xl border border-amber-100 bg-amber-50 p-3">
+          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
             <p className="text-xs font-semibold text-amber-950">Operational data only</p>
             <p className="mt-1 text-[11px] leading-4 text-amber-900">Do not enter patient, prescription, insurance, or payment-card data.</p>
+          </div>
+          <div className="mt-auto">
+            <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
+            {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
+              <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
+            ))}
           </div>
           <button
             type="button"
