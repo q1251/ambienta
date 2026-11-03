@@ -27,6 +27,7 @@ import {
 import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
 import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChange';
 import { ChatWidget } from './components/ChatWidget';
+import { VisitorSessionTracker } from './components/VisitorSessionTracker';
 import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
 import type { ProductCsvItem } from './utils/productCsv';
 
@@ -963,6 +964,9 @@ export default function App() {
             <span>© 2026 Ambients. All rights reserved.</span>
             <span>Preview storefront · payments and mail are not connected</span>
           </div>
+          <p className="text-center text-[10px] leading-4 text-blue-100/60">
+            We use first-party session activity (pages visited and referral domain) to improve support. Visitor session records do not store IP addresses.
+          </p>
         </div>
       </footer>
 
@@ -987,6 +991,7 @@ export default function App() {
         onOrderSuccess={handleOrderCreated}
         onClearCart={handleClearCart}
       />
+      <VisitorSessionTracker />
       <ChatWidget />
     </div>
   );

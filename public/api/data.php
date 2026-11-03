@@ -215,6 +215,32 @@ function data_ensure_schema(PDO $db): void
             request_count INT UNSIGNED NOT NULL DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS visitor_sessions (
+            session_token_hash CHAR(64) NOT NULL PRIMARY KEY,
+            visitor_token_hash CHAR(64) NOT NULL,
+            current_path VARCHAR(500) NOT NULL,
+            referrer_domain VARCHAR(253) NOT NULL DEFAULT '',
+            country_code CHAR(2) NULL,
+            language VARCHAR(35) NOT NULL DEFAULT '',
+            first_seen DATETIME NOT NULL,
+            last_seen DATETIME NOT NULL,
+            KEY visitor_sessions_recent (last_seen),
+            KEY visitor_sessions_visitor (visitor_token_hash, last_seen),
+            KEY visitor_sessions_country (country_code, last_seen)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS visitor_page_views (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            session_token_hash CHAR(64) NOT NULL,
+            page_path VARCHAR(500) NOT NULL,
+            viewed_at DATETIME NOT NULL,
+            KEY visitor_page_views_session (session_token_hash, id),
+            KEY visitor_page_views_date (viewed_at),
+            CONSTRAINT visitor_page_views_session_fk FOREIGN KEY (session_token_hash) REFERENCES visitor_sessions(session_token_hash) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
     foreach ([
         ['email_activity', 'body', 'MEDIUMTEXT NULL'],
@@ -625,9 +651,9 @@ function data_string(array $source, string $key, int $maxLength, bool $required 
     return $value;
 }
 
-function data_chat_rate_limit(PDO $db, string $scope, int $limit, int $windowSeconds): void
+function data_chat_rate_limit(PDO $db, string $scope, int $limit, int $windowSeconds, ?string $identity = null): void
 {
-    $clientAddress = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    $clientAddress = $identity ?? (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
     $config = data_config();
     $bucketHash = hash_hmac(
         'sha256',
@@ -657,7 +683,7 @@ function data_chat_rate_limit(PDO $db, string $scope, int $limit, int $windowSec
             $update = $db->prepare('UPDATE chat_rate_limits SET request_count = ? WHERE bucket_hash = ?');
             $update->execute([$count, $bucketHash]);
         }
-        if ($scope === 'start') {
+        if ($scope === 'start' || $scope === 'visitor-session-new') {
             $db->exec('DELETE FROM chat_rate_limits WHERE window_started_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 2 DAY)');
         }
         $db->commit();
@@ -2226,6 +2252,108 @@ if ($resource === 'chat') {
     data_respond(405, ['error' => 'method_not_allowed', 'message' => 'Use POST to access or send a chat message.']);
 }
 
+if ($resource === 'visitor-session' && $method === 'POST') {
+    $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+    if ($origin !== '') {
+        $originParts = parse_url($origin);
+        $requestHostHeader = (string) ($_SERVER['HTTP_HOST'] ?? '');
+        $requestHost = parse_url('//' . $requestHostHeader, PHP_URL_HOST);
+        $requestPort = parse_url('//' . $requestHostHeader, PHP_URL_PORT);
+        $requestScheme = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        if ($requestScheme === '') {
+            $https = (string) ($_SERVER['HTTPS'] ?? '');
+            $requestScheme = $https !== '' && strtolower($https) !== 'off' ? 'https' : 'http';
+        }
+        $originScheme = is_array($originParts) ? strtolower((string) ($originParts['scheme'] ?? '')) : '';
+        $originHost = is_array($originParts) ? ($originParts['host'] ?? null) : null;
+        $originPort = is_array($originParts) ? ($originParts['port'] ?? null) : null;
+        $effectiveRequestPort = $requestPort ?? ($requestScheme === 'https' ? 443 : 80);
+        $effectiveOriginPort = $originPort ?? ($originScheme === 'https' ? 443 : 80);
+        if (!is_string($originHost) || !is_string($requestHost)
+            || strcasecmp($originHost, $requestHost) !== 0
+            || $originScheme !== $requestScheme
+            || $effectiveOriginPort !== $effectiveRequestPort) {
+            data_respond(403, ['error' => 'visitor_origin_rejected', 'message' => 'This visitor session could not be verified. Reload the page and try again.']);
+        }
+    }
+
+    $body = data_read_json(4096);
+    $sessionToken = data_string($body, 'sessionToken', 64);
+    $visitorToken = data_string($body, 'visitorToken', 64);
+    if (preg_match('/^[a-f0-9]{64}$/', $sessionToken) !== 1 || preg_match('/^[a-f0-9]{64}$/', $visitorToken) !== 1) {
+        data_respond(400, ['error' => 'invalid_visitor_session', 'message' => 'This visitor session is invalid. Reload the page and try again.']);
+    }
+    $pagePath = data_string($body, 'path', 500);
+    if ($pagePath[0] !== '/' || str_starts_with($pagePath, '//') || strpbrk($pagePath, "?#\r\n") !== false) {
+        data_respond(400, ['error' => 'invalid_visitor_path', 'message' => 'The visitor page could not be recorded.']);
+    }
+    $referrerDomain = strtolower(data_string($body, 'referrerDomain', 253, false));
+    if ($referrerDomain !== '' && preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/', $referrerDomain) !== 1) {
+        data_respond(400, ['error' => 'invalid_visitor_referrer', 'message' => 'The visitor referral source could not be recorded.']);
+    }
+    $language = data_string($body, 'language', 35, false);
+    if ($language !== '' && preg_match('/^[a-zA-Z0-9-]+$/', $language) !== 1) {
+        data_respond(400, ['error' => 'invalid_visitor_language', 'message' => 'The visitor language could not be recorded.']);
+    }
+
+    $countryHeader = strtoupper((string) ($_SERVER['HTTP_CF_IPCOUNTRY'] ?? ''));
+    $countryCode = preg_match('/^[A-Z]{2}$/', $countryHeader) === 1 && !in_array($countryHeader, ['XX', 'T1'], true)
+        ? $countryHeader
+        : null;
+    $sessionHash = hash('sha256', $sessionToken);
+    $visitorHash = hash('sha256', $visitorToken);
+    $db = data_db();
+    data_chat_rate_limit($db, 'visitor-session', 240, 3600, $sessionHash);
+    $exists = $db->prepare('SELECT 1 FROM visitor_sessions WHERE session_token_hash = ? LIMIT 1');
+    $exists->execute([$sessionHash]);
+    if ($exists->fetchColumn() === false) {
+        data_chat_rate_limit($db, 'visitor-session-new', 300, 3600);
+    }
+
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT current_path FROM visitor_sessions WHERE session_token_hash = ? FOR UPDATE');
+        $find->execute([$sessionHash]);
+        $previousPath = $find->fetchColumn();
+        $isNewSession = $previousPath === false;
+        $upsert = $db->prepare(
+            "INSERT INTO visitor_sessions
+                (session_token_hash, visitor_token_hash, current_path, referrer_domain, country_code, language, first_seen, last_seen)
+             VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(), UTC_TIMESTAMP())
+             ON DUPLICATE KEY UPDATE
+                visitor_token_hash = VALUES(visitor_token_hash),
+                current_path = VALUES(current_path),
+                referrer_domain = IF(referrer_domain = '', VALUES(referrer_domain), referrer_domain),
+                country_code = COALESCE(VALUES(country_code), country_code),
+                language = IF(VALUES(language) = '', language, VALUES(language)),
+                last_seen = UTC_TIMESTAMP()"
+        );
+        $upsert->execute([$sessionHash, $visitorHash, $pagePath, $referrerDomain, $countryCode, $language]);
+
+        if ($isNewSession || $previousPath !== $pagePath) {
+            $db->prepare(
+                'INSERT INTO visitor_page_views (session_token_hash, page_path, viewed_at) VALUES (?, ?, UTC_TIMESTAMP())'
+            )->execute([$sessionHash, $pagePath]);
+            $oldestKept = $db->prepare(
+                'SELECT id FROM visitor_page_views WHERE session_token_hash = ? ORDER BY id DESC LIMIT 1 OFFSET 49'
+            );
+            $oldestKept->execute([$sessionHash]);
+            $oldestId = $oldestKept->fetchColumn();
+            if ($oldestId !== false) {
+                $db->prepare('DELETE FROM visitor_page_views WHERE session_token_hash = ? AND id < ?')
+                    ->execute([$sessionHash, (int) $oldestId]);
+            }
+        }
+        $db->exec('DELETE FROM visitor_sessions WHERE last_seen < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY) LIMIT 1000');
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients visitor session could not be saved: ' . $error->getMessage());
+        data_respond(503, ['error' => 'visitor_session_unavailable', 'message' => 'Visitor sessions are temporarily unavailable.']);
+    }
+    data_respond(204, []);
+}
+
 if ($resource === 'email-unsubscribe') {
     $token = $_GET['token'] ?? ($_POST['token'] ?? '');
     if ($method === 'POST' && $token === '') {
@@ -3049,6 +3177,85 @@ if ($method === 'GET' && $resource === 'catalog') {
 if ($method === 'GET') {
     data_require_admin();
     $db = data_db();
+    if ($resource === 'visitor-sessions') {
+        data_require_permission('chat');
+        $sessionId = data_string($_GET, 'session', 64, false);
+        if ($sessionId !== '') {
+            if (preg_match('/^[a-f0-9]{64}$/', $sessionId) !== 1) {
+                data_respond(400, ['error' => 'invalid_visitor_session', 'message' => 'The visitor session identifier is invalid.']);
+            }
+            $find = $db->prepare(
+                'SELECT session_token_hash, visitor_token_hash, current_path, referrer_domain, country_code, language, first_seen, last_seen
+                 FROM visitor_sessions WHERE session_token_hash = ? LIMIT 1'
+            );
+            $find->execute([$sessionId]);
+            $session = $find->fetch();
+            if (!is_array($session)) {
+                data_respond(404, ['error' => 'visitor_session_not_found', 'message' => 'This visitor session is no longer available.']);
+            }
+            $views = $db->prepare(
+                'SELECT page_path AS path, viewed_at AS viewedAt FROM visitor_page_views WHERE session_token_hash = ? ORDER BY id DESC LIMIT 50'
+            );
+            $views->execute([$sessionId]);
+            data_respond(200, [
+                'session' => [
+                    'id' => $session['session_token_hash'],
+                    'visitorId' => substr((string) $session['visitor_token_hash'], 0, 10),
+                    'currentPath' => $session['current_path'],
+                    'referrerDomain' => $session['referrer_domain'],
+                    'countryCode' => $session['country_code'],
+                    'language' => $session['language'],
+                    'firstSeen' => $session['first_seen'],
+                    'lastSeen' => $session['last_seen'],
+                    'active' => strtotime((string) $session['last_seen'] . ' UTC') >= time() - 90,
+                ],
+                'pages' => array_reverse($views->fetchAll()),
+            ]);
+        }
+
+        $filter = data_string($_GET, 'status', 8, false);
+        if ($filter === '') $filter = 'recent';
+        if (!in_array($filter, ['active', 'recent'], true)) {
+            data_respond(400, ['error' => 'invalid_visitor_filter', 'message' => 'Choose active or recent visitor sessions.']);
+        }
+        $where = $filter === 'active'
+            ? 'WHERE s.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)'
+            : 'WHERE s.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)';
+        $activeSummary = $db->query(
+            'SELECT COUNT(*) AS sessions, COUNT(DISTINCT visitor_token_hash) AS visitors
+             FROM visitor_sessions WHERE last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)'
+        )->fetch();
+        $recentSummary = $db->query(
+            'SELECT COUNT(*) AS sessions, COUNT(DISTINCT visitor_token_hash) AS visitors
+             FROM visitor_sessions WHERE last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)'
+        )->fetch();
+        $query = $db->query(
+            'SELECT s.session_token_hash, s.visitor_token_hash, s.current_path, s.referrer_domain, s.country_code, s.language,
+                    s.first_seen, s.last_seen,
+                    (SELECT COUNT(*) FROM visitor_page_views pv WHERE pv.session_token_hash = s.session_token_hash) AS page_count
+             FROM visitor_sessions s ' . $where . ' ORDER BY s.last_seen DESC LIMIT 200'
+        );
+        data_respond(200, [
+            'sessions' => array_map(static fn (array $row): array => [
+                'id' => $row['session_token_hash'],
+                'visitorId' => substr((string) $row['visitor_token_hash'], 0, 10),
+                'currentPath' => $row['current_path'],
+                'referrerDomain' => $row['referrer_domain'],
+                'countryCode' => $row['country_code'],
+                'language' => $row['language'],
+                'firstSeen' => $row['first_seen'],
+                'lastSeen' => $row['last_seen'],
+                'active' => strtotime((string) $row['last_seen'] . ' UTC') >= time() - 90,
+                'pageCount' => (int) $row['page_count'],
+            ], $query->fetchAll()),
+            'summary' => [
+                'activeSessions' => (int) ($activeSummary['sessions'] ?? 0),
+                'activeVisitors' => (int) ($activeSummary['visitors'] ?? 0),
+                'recentSessions' => (int) ($recentSummary['sessions'] ?? 0),
+                'recentVisitors' => (int) ($recentSummary['visitors'] ?? 0),
+            ],
+        ]);
+    }
     if ($resource === 'chat-admin') {
         data_require_permission('chat');
         $conversationValue = data_string($_GET, 'conversation', 20, false);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Circle, LoaderCircle, MessageCircle, RefreshCw, RotateCcw, Search, Send, UserRound, X } from 'lucide-react';
+import { Check, Circle, Clock3, Eye, Globe2, LoaderCircle, MapPin, MessageCircle, RefreshCw, RotateCcw, Search, Send, UserRound, Users, X } from 'lucide-react';
 
 type ConversationStatus = 'open' | 'closed';
 type ConversationFilter = ConversationStatus | 'all';
@@ -40,6 +40,49 @@ interface ChatInboxResponse {
   message?: string;
 }
 
+type LiveChatView = 'inbox' | 'visitors';
+type VisitorFilter = 'active' | 'recent';
+
+interface VisitorSession {
+  id: string;
+  visitorId: string;
+  currentPath: string;
+  referrerDomain: string;
+  countryCode: string | null;
+  language: string;
+  firstSeen: string;
+  lastSeen: string;
+  active: boolean;
+  pageCount: number;
+}
+
+interface VisitorPageView {
+  path: string;
+  viewedAt: string;
+}
+
+interface VisitorSessionResponse {
+  sessions?: VisitorSession[];
+  session?: Omit<VisitorSession, 'pageCount'>;
+  pages?: VisitorPageView[];
+  summary?: {
+    activeSessions: number;
+    activeVisitors: number;
+    recentSessions: number;
+    recentVisitors: number;
+  };
+  message?: string;
+}
+
+const countryName = (countryCode: string | null) => {
+  if (!countryCode) return 'Unavailable';
+  try {
+    return new Intl.DisplayNames(undefined, { type: 'region' }).of(countryCode) || countryCode;
+  } catch {
+    return countryCode;
+  }
+};
+
 const formatDate = (value: string) => new Date(value.replace(' ', 'T') + (value.endsWith('Z') ? '' : 'Z')).toLocaleString([], {
   month: 'short',
   day: 'numeric',
@@ -59,6 +102,14 @@ export const LiveChatInbox: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [view, setView] = useState<LiveChatView>('inbox');
+  const [visitorFilter, setVisitorFilter] = useState<VisitorFilter>('active');
+  const [visitorSessions, setVisitorSessions] = useState<VisitorSession[]>([]);
+  const [visitorSummary, setVisitorSummary] = useState<VisitorSessionResponse['summary']>();
+  const [selectedVisitorSessionId, setSelectedVisitorSessionId] = useState<string | null>(null);
+  const [selectedVisitorSession, setSelectedVisitorSession] = useState<VisitorSessionResponse['session']>();
+  const [visitorPages, setVisitorPages] = useState<VisitorPageView[]>([]);
+  const [visitorLoading, setVisitorLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
@@ -112,6 +163,49 @@ export const LiveChatInbox: React.FC = () => {
     }
   }, []);
 
+  const loadVisitorSessions = useCallback(async () => {
+    try {
+      const parameters = new URLSearchParams({ resource: 'visitor-sessions', status: visitorFilter });
+      const response = await fetch(`/api/data.php?${parameters.toString()}`, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
+      const result = await response.json() as VisitorSessionResponse;
+      if (!response.ok || !Array.isArray(result.sessions) || !result.summary) {
+        throw new Error(result.message || 'Visitor sessions could not be loaded.');
+      }
+      setVisitorSessions(result.sessions);
+      setVisitorSummary(result.summary);
+      setSelectedVisitorSessionId((current) => {
+        if (current && result.sessions?.some((session) => session.id === current)) return current;
+        return result.sessions?.[0]?.id ?? null;
+      });
+      setError('');
+      setVisitorLoading(false);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Visitor sessions could not be loaded.');
+      setVisitorLoading(false);
+    }
+  }, [visitorFilter]);
+
+  const loadVisitorSessionDetails = useCallback(async (sessionId: string) => {
+    try {
+      const parameters = new URLSearchParams({ resource: 'visitor-sessions', session: sessionId });
+      const response = await fetch(`/api/data.php?${parameters.toString()}`, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
+      const result = await response.json() as VisitorSessionResponse;
+      if (!response.ok || !result.session || !Array.isArray(result.pages)) {
+        throw new Error(result.message || 'The visitor session details could not be loaded.');
+      }
+      setSelectedVisitorSession(result.session);
+      setVisitorPages(result.pages);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'The visitor session details could not be loaded.');
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedId === null) {
       setSelectedConversation(null);
@@ -122,6 +216,25 @@ export const LiveChatInbox: React.FC = () => {
     const timer = window.setInterval(() => void loadSelectedConversation(selectedId), 5000);
     return () => window.clearInterval(timer);
   }, [selectedId, loadSelectedConversation]);
+
+  useEffect(() => {
+    if (view !== 'visitors') return;
+    setVisitorLoading(true);
+    void loadVisitorSessions();
+    const timer = window.setInterval(() => void loadVisitorSessions(), 10_000);
+    return () => window.clearInterval(timer);
+  }, [view, loadVisitorSessions]);
+
+  useEffect(() => {
+    if (view !== 'visitors' || selectedVisitorSessionId === null) {
+      setSelectedVisitorSession(undefined);
+      setVisitorPages([]);
+      return;
+    }
+    void loadVisitorSessionDetails(selectedVisitorSessionId);
+    const timer = window.setInterval(() => void loadVisitorSessionDetails(selectedVisitorSessionId), 10_000);
+    return () => window.clearInterval(timer);
+  }, [view, selectedVisitorSessionId, loadVisitorSessionDetails]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -166,19 +279,39 @@ export const LiveChatInbox: React.FC = () => {
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Live chat</h1>
           <p className="mt-2 text-sm text-slate-600">Reply to conversations started from the storefront chat widget.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
-          <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>
-          {filter === 'open' ? `${openCount} open` : `${conversations.length} shown`} <span className="text-slate-300">·</span> {unreadCount} unread
-        </div>
+        {view === 'inbox' ? (
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
+            <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>
+            {filter === 'open' ? `${openCount} open` : `${conversations.length} shown`} <span className="text-slate-300">·</span> {unreadCount} unread
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
+            <span><strong className="text-slate-900">{visitorSummary?.activeVisitors ?? '—'}</strong> live visitors</span>
+            <span><strong className="text-slate-900">{visitorSummary?.activeSessions ?? '—'}</strong> active sessions</span>
+            <span><strong className="text-slate-900">{visitorSummary?.recentVisitors ?? '—'}</strong> visitors · 24h</span>
+          </div>
+        )}
       </header>
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-950">
-        Chat is for general support only. Do not request or share health information, prescription details, or payment card data here.
+        {view === 'inbox'
+          ? 'Chat is for general support only. Do not request or share health information, prescription details, or payment card data here.'
+          : 'Visitor sessions use a first-party random identifier and record page paths, referral domains, and browser language. IP addresses are not saved in visitor-session records. Country is shown only when the hosting edge provides it.'}
       </div>
 
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
       {actionMessage && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{actionMessage}</p>}
 
+      <nav aria-label="Live chat workspace" className="flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+        <button type="button" onClick={() => setView('inbox')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${view === 'inbox' ? 'bg-[#123b68] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+          <MessageCircle className="h-4 w-4" />Inbox
+        </button>
+        <button type="button" onClick={() => setView('visitors')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${view === 'visitors' ? 'bg-[#123b68] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+          <Users className="h-4 w-4" />Visitors
+        </button>
+      </nav>
+
+      {view === 'inbox' ? (
       <section className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)]">
         <aside className={`flex min-h-[500px] flex-col border-b border-slate-200 lg:border-b-0 lg:border-r ${selectedId !== null ? 'hidden lg:flex' : 'flex'}`}>
           <div className="space-y-3 border-b border-slate-100 p-4">
@@ -284,6 +417,109 @@ export const LiveChatInbox: React.FC = () => {
           )}
         </div>
       </section>
+      ) : (
+        <section className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className={`flex min-h-[500px] flex-col border-b border-slate-200 lg:border-b-0 lg:border-r ${selectedVisitorSessionId ? 'hidden lg:flex' : 'flex'}`}>
+            <div className="flex items-center gap-1 border-b border-slate-100 p-4">
+              {(['active', 'recent'] as const).map((value) => (
+                <button key={value} type="button" onClick={() => setVisitorFilter(value)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${visitorFilter === value ? 'bg-teal-50 text-teal-900' : 'text-slate-500 hover:bg-slate-50'}`}>
+                  {value === 'active' ? 'Active now' : 'Last 24 hours'}
+                </button>
+              ))}
+              <button type="button" onClick={() => void loadVisitorSessions()} aria-label="Refresh visitor sessions" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><RefreshCw className="h-3.5 w-3.5" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {visitorLoading && visitorSessions.length === 0 ? (
+                <div role="status" className="flex items-center justify-center gap-2 p-8 text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading visitors…</div>
+              ) : visitorSessions.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <Users className="mx-auto h-8 w-8 text-slate-300" />
+                  <p className="mt-3 text-sm font-medium text-slate-700">No visitors in this period</p>
+                  <p className="mt-1 text-xs text-slate-500">Visitors appear after their storefront page reports a session.</p>
+                </div>
+              ) : visitorSessions.map((session) => (
+                <button key={session.id} type="button" onClick={() => setSelectedVisitorSessionId(session.id)} className={`w-full border-b border-slate-100 px-4 py-4 text-left transition hover:bg-slate-50 ${selectedVisitorSessionId === session.id ? 'bg-teal-50/70' : ''}`}>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${session.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      <span className="truncate text-sm font-semibold text-slate-900">Visitor {session.visitorId}</span>
+                    </span>
+                    <time className="shrink-0 text-[10px] text-slate-400">{formatDate(session.lastSeen)}</time>
+                  </span>
+                  <span className="mt-2 flex items-center gap-1.5 truncate pl-4 text-xs text-slate-700"><Eye className="h-3.5 w-3.5 shrink-0 text-slate-400" />{session.currentPath}</span>
+                  <span className="mt-1 flex items-center gap-1.5 truncate pl-4 text-[11px] text-slate-500"><Globe2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />{countryName(session.countryCode)}{session.referrerDomain ? ` · from ${session.referrerDomain}` : ''}</span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <div className={`min-w-0 flex-col ${selectedVisitorSessionId ? 'flex' : 'hidden lg:flex'}`}>
+            {!selectedVisitorSessionId ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Users className="h-7 w-7" /></span>
+                <p className="mt-4 text-sm font-semibold text-slate-800">Select a visitor session</p>
+                <p className="mt-1 text-xs text-slate-500">See pages visited, referral domain, and available location.</p>
+              </div>
+            ) : !selectedVisitorSession ? (
+              <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" />Loading session details…</div>
+            ) : (
+              <>
+                <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-4 py-5 sm:px-6">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <button type="button" onClick={() => setSelectedVisitorSessionId(null)} aria-label="Back to visitor sessions" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><X className="h-4 w-4" /></button>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-800"><UserRound className="h-5 w-5" /></span>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-sm font-semibold text-slate-950">Visitor {selectedVisitorSession.visitorId}</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">Session started {formatDate(selectedVisitorSession.firstSeen)}</p>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedVisitorSession.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                    <Circle className="h-2 w-2 fill-current" />{selectedVisitorSession.active ? 'Active now' : 'Inactive'}
+                  </span>
+                </header>
+                <div className="grid gap-3 border-b border-slate-100 p-4 sm:grid-cols-2 sm:p-6">
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><MapPin className="h-3.5 w-3.5" />Approximate country</p>
+                    <p className="mt-1.5 text-sm font-semibold text-slate-900">{countryName(selectedVisitorSession.countryCode)}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Globe2 className="h-3.5 w-3.5" />Referral domain</p>
+                    <p className="mt-1.5 truncate text-sm font-semibold text-slate-900">{selectedVisitorSession.referrerDomain || 'Direct / unavailable'}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Eye className="h-3.5 w-3.5" />Current page</p>
+                    <p className="mt-1.5 break-all text-sm font-semibold text-slate-900">{selectedVisitorSession.currentPath}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Clock3 className="h-3.5 w-3.5" />Last seen · language</p>
+                    <p className="mt-1.5 text-sm font-semibold text-slate-900">{formatDate(selectedVisitorSession.lastSeen)} · {selectedVisitorSession.language || 'Unknown'}</p>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">Pages visited</h3>
+                    <span className="text-xs text-slate-500">{visitorPages.length} recent page views</span>
+                  </div>
+                  {visitorPages.length ? (
+                    <ol className="space-y-0">
+                      {visitorPages.map((page, index) => (
+                        <li key={`${page.path}-${page.viewedAt}-${index}`} className="relative flex gap-3 pb-5 last:pb-0">
+                          {index < visitorPages.length - 1 && <span className="absolute bottom-0 left-[7px] top-4 w-px bg-slate-200" />}
+                          <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-teal-600 bg-white" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block break-all text-sm font-medium text-slate-800">{page.path}</span>
+                            <time className="mt-1 block text-[11px] text-slate-400">{formatDate(page.viewedAt)}</time>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : <p className="text-sm text-slate-500">No page history is available for this session.</p>}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 };
