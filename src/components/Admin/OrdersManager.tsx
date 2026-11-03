@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  ArrowLeft,
   Search,
   Truck,
   Printer,
@@ -58,6 +59,9 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [reloadCounter, setReloadCounter] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState<OnlineOrder | null>(null);
+  const [orderPageId, setOrderPageId] = useState(() => new URLSearchParams(window.location.search).get('orderId') || '');
+  const [orderPageLoading, setOrderPageLoading] = useState(false);
+  const [orderPageError, setOrderPageError] = useState('');
 
   // Tracking form inside drawer
   const [carrierInput, setCarrierInput] = useState('');
@@ -85,14 +89,70 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     return () => window.clearTimeout(timer);
   }, [searchQuery, statusFilter, currentPage, reloadCounter, onLoadOrders]);
 
+  useEffect(() => {
+    if (!orderPageId) return;
+    let isCurrent = true;
+    setOrderPageLoading(true);
+    setOrderPageError('');
+    fetch(`/api/data.php?resource=orders&id=${encodeURIComponent(orderPageId)}`, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    }).then(async (response) => {
+      const result = await response.json() as { order?: OnlineOrder; message?: string };
+      if (!response.ok || !result.order) {
+        throw new Error(result.message || 'The order could not be loaded.');
+      }
+      if (isCurrent) setSelectedOrder(result.order);
+    }).catch((error: unknown) => {
+      if (isCurrent) setOrderPageError(error instanceof Error ? error.message : 'The order could not be loaded.');
+    }).finally(() => {
+      if (isCurrent) setOrderPageLoading(false);
+    });
+    return () => { isCurrent = false; };
+  }, [orderPageId]);
+
+  useEffect(() => {
+    const syncOrderPage = () => {
+      const requestedOrderId = new URLSearchParams(window.location.search).get('orderId') || '';
+      setOrderPageId(requestedOrderId);
+      if (!requestedOrderId) setSelectedOrder(null);
+    };
+    window.addEventListener('popstate', syncOrderPage);
+    return () => window.removeEventListener('popstate', syncOrderPage);
+  }, []);
+
   const filteredOrders = orders;
 
   // Open detail drawer and sync inputs
   const handleOpenDetail = (order: OnlineOrder) => {
+    setOrderPageId('');
     setSelectedOrder(order);
     setCarrierInput(order.carrier || '');
     setTrackingInput(order.trackingNumber || '');
     setNewInternalNote('');
+  };
+
+  const handleOpenOrderPage = (order: OnlineOrder) => {
+    setSelectedOrder(order);
+    setCarrierInput(order.carrier || '');
+    setTrackingInput(order.trackingNumber || '');
+    setNewInternalNote('');
+    setOrderPageError('');
+    setOrderPageId(order.id);
+    const url = new URL(window.location.href);
+    url.searchParams.set('section', 'orders');
+    url.searchParams.set('orderId', order.id);
+    window.history.pushState({}, '', url);
+    window.scrollTo(0, 0);
+  };
+
+  const handleCloseOrderPage = () => {
+    setOrderPageId('');
+    setSelectedOrder(null);
+    setOrderPageError('');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('orderId');
+    window.history.replaceState(window.history.state, '', url);
   };
 
   // Update tracking details
@@ -228,6 +288,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   return (
     <div className="space-y-6">
+      <div className={orderPageId ? 'hidden' : ''}>
       {/* Main Order Workspace */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         {/* Workspace Toolbar */}
@@ -340,7 +401,19 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </tr>
               ) : (
                 filteredOrders.map((ord) => (
-                  <tr key={ord.id} className="hover:bg-slate-50 transition-colors">
+                  <tr
+                    key={ord.id}
+                    tabIndex={0}
+                    aria-label={`Open order details for ${ord.orderNumber}`}
+                    onClick={() => handleOpenDetail(ord)}
+                    onKeyDown={(event) => {
+                      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        handleOpenDetail(ord);
+                      }
+                    }}
+                    className="cursor-pointer hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-700"
+                  >
                     {/* Order # and Date */}
                     <td className="py-3.5 px-4 font-mono">
                       <span className="font-bold text-slate-900 block">{ord.orderNumber}</span>
@@ -425,6 +498,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                           }
                           void handleStatusChange(ord.id, nextStatus);
                         }}
+                        onClick={(event) => event.stopPropagation()}
                         className="bg-white border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-teal-700 cursor-pointer"
                       >
                         <option value={ord.status}>{ord.status}</option>
@@ -432,9 +506,14 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       </select>
 
                       <button
-                        onClick={() => handleOpenDetail(ord)}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleOpenOrderPage(ord);
+                        }}
                         className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
-                        title="View Full Order Breakdown"
+                        title="Open order page"
+                        aria-label={`Open order page for ${ord.orderNumber}`}
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -453,11 +532,27 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           </div>
         </div>
       </div>
+      </div>
 
-      {/* Comprehensive Order Detail Modal / Drawer */}
+      {orderPageId && !selectedOrder && (
+        <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white p-8 text-center">
+          {orderPageLoading ? (
+            <p role="status" className="text-sm text-slate-600">Loading order…</p>
+          ) : (
+            <>
+              {orderPageError && <p role="alert" className="mb-4 text-sm text-rose-800">{orderPageError}</p>}
+              <button type="button" onClick={handleCloseOrderPage} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <ArrowLeft className="h-4 w-4" />Back to orders
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Comprehensive Order Detail Modal / Order Page */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className={orderPageId ? 'mx-auto w-full max-w-5xl' : 'fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4'}>
+          <div className={orderPageId ? 'w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm' : 'bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200'}>
             {/* Header */}
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-3">
@@ -483,17 +578,25 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Slip</span>
                 </button>
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                {orderPageId ? (
+                  <button type="button" onClick={handleCloseOrderPage} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-700">
+                    <ArrowLeft className="h-4 w-4" />Back to orders
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Close order details"
+                    onClick={() => setSelectedOrder(null)}
+                    className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-xs">
+            <div className={orderPageId ? 'p-6 space-y-6 text-xs' : 'p-6 overflow-y-auto space-y-6 text-xs'}>
               {/* Top Details Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Customer Info */}

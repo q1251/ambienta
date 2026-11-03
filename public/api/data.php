@@ -929,6 +929,16 @@ if ($method === 'GET') {
     }
     if ($resource === 'orders') {
         data_require_permission('orders');
+        $orderId = data_string($_GET, 'id', 64, false);
+        if ($orderId !== '') {
+            $orderQuery = $db->prepare('SELECT * FROM orders WHERE id = ?');
+            $orderQuery->execute([$orderId]);
+            $order = $orderQuery->fetch();
+            if (!$order) {
+                data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
+            }
+            data_respond(200, ['order' => data_order_row($db, $order)]);
+        }
         $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
         $limit = filter_var($_GET['limit'] ?? '100', FILTER_VALIDATE_INT);
         if ($page === false || $page < 1 || $limit === false || $limit < 1) {
