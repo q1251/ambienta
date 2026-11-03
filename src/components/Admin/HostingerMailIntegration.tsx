@@ -463,7 +463,27 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+      {mode === 'mailbox' && <section className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-medium text-slate-500">Sent from CRM</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-950">{messages.filter((item) => item.status === 'Sent').length}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-medium text-slate-500">Delivered</p>
+            <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-medium text-slate-500">Opened</p>
+            <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-medium text-slate-500">Drafts · Trash</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-950">{drafts.length} · {trash.length}</p>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="rounded-2xl border border-slate-200 bg-white p-3">
           <button
             type="button"
@@ -513,25 +533,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         <div className="min-w-0 space-y-5">
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium text-slate-500">Sent from CRM</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-950">{messages.filter((item) => item.status === 'Sent').length}</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium text-slate-500">Delivered</p>
-              <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium text-slate-500">Opened</p>
-              <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-medium text-slate-500">Drafts · Trash</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-950">{drafts.length} · {trash.length}</p>
-            </div>
-          </div>
 
           {activeFolder === 'compose' && (
             <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -667,6 +668,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <TrashFolder drafts={trash} onRestore={(draft) => void restoreDraft(draft)} onDelete={(draft) => void permanentlyDeleteDraft(draft)} />
             </div>
           )}
+        </div>
         </div>
       </section>}
 
