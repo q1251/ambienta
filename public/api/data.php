@@ -1292,7 +1292,7 @@ if ($method === 'POST' && $resource === 'staff') {
                 $created[] = ['displayName' => $displayName, 'email' => $email, 'temporaryPassword' => $temporaryPassword];
             }
             $db->commit();
-            data_respond(201, ['created' => $created, 'message' => 'New demo passwords are shown only once. Existing demo accounts were left unchanged.']);
+            data_respond(201, ['created' => $created]);
         } catch (Throwable $error) {
             if ($db->inTransaction()) $db->rollBack();
             error_log('Ambients demo agent creation failed: ' . $error->getMessage());
