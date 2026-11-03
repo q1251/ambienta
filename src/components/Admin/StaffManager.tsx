@@ -52,6 +52,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [email, setEmail] = useState('');
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [permissions, setPermissions] = useState<StaffPermission[]>(defaultPermissions);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [profileAccountId, setProfileAccountId] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<AgentProfile | null>(null);
@@ -107,6 +108,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       setDisplayName('');
       setEmail('');
       setTemporaryPassword('');
+      setCreateModalOpen(false);
       setMessage('Agent account created. The agent must replace this temporary password at first sign-in.');
       await loadAccounts();
     } catch (createError) {
@@ -257,6 +259,15 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingId, saving]);
 
+  useEffect(() => {
+    if (!createModalOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) setCreateModalOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createModalOpen, saving]);
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -265,11 +276,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{profileAccountId === null ? 'Agent management' : 'Agent profile'}</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">{profileAccountId === null ? 'Create accounts and select an agent to view their profile, manage access, update credentials, or enter their workspace.' : 'Review and manage this agent’s account, permissions, credentials, and assigned leads.'}</p>
         </div>
-        {profileAccountId === null && (
-          <button type="button" disabled={saving} onClick={() => void createDemoAgents()} className="rounded-xl border border-teal-800 px-4 py-2.5 text-sm font-semibold text-teal-900 hover:bg-teal-50 disabled:opacity-50">
-            {saving ? 'Working…' : 'Create five demo agents'}
-          </button>
-        )}
       </header>
 
       {(profileAccountId === null || editingId === null) && error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
@@ -357,41 +363,15 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </section>
       ) : (
       <>
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-        <div className="mb-4 flex items-center gap-2">
-          <UserPlus className="h-5 w-5 text-teal-800" />
-          <h2 className="font-semibold text-slate-900">Create an agent account</h2>
-        </div>
-        <form onSubmit={createAccount} className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm font-medium text-slate-700">Display name
-            <input required maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">Sign-in email
-            <input type="email" required autoComplete="off" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-          </label>
-          <label className="block text-sm font-medium text-slate-700 md:col-span-2">Temporary password
-            <input type="password" required minLength={12} autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm" />
-          </label>
-          <fieldset className="md:col-span-2">
-            <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
-            <div className="mt-2 flex flex-wrap gap-4">
-              {availablePermissions.map((permission) => (
-                <label key={permission.id} className="inline-flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={permissions.includes(permission.id)} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-teal-800" />
-                  {permission.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <button type="submit" disabled={saving} className="justify-self-start rounded-xl bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
-        </form>
-        <p className="mt-3 text-xs leading-5 text-slate-500">The password is hashed in the database; share it out-of-band. Staff administration and audit access remain superadmin-only.</p>
-      </section>
-
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4">
-          <Users className="h-5 w-5 text-slate-500" />
-          <h2 className="font-semibold text-slate-900">Agents ({accounts.length})</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-slate-500" />
+            <h2 className="font-semibold text-slate-900">Agents ({accounts.length})</h2>
+          </div>
+          <button type="button" onClick={() => { setError(''); setCreateModalOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-900">
+            <UserPlus className="h-4 w-4" />Create agent
+          </button>
         </div>
         <div className="divide-y divide-slate-100">
           {accounts.map((account) => (
@@ -419,6 +399,54 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </div>
       </section>
       </>
+      )}
+      {createModalOpen && profileAccountId === null && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) setCreateModalOpen(false);
+          }}
+        >
+          <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="create-agent-title">
+            <header className="border-b border-slate-200 px-5 py-4 sm:px-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent management</p>
+              <h2 id="create-agent-title" className="mt-1 text-xl font-semibold text-slate-950">Create agent account</h2>
+              <p className="mt-1 text-sm text-slate-600">Choose account details and the operational sections this agent can access.</p>
+            </header>
+            <form onSubmit={createAccount} className="space-y-5 p-5 sm:p-6">
+              {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-700">Display name
+                  <input required autoFocus maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                </label>
+                <label className="block text-sm font-medium text-slate-700">Sign-in email
+                  <input required type="email" autoComplete="off" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                </label>
+              </div>
+              <label className="block text-sm font-medium text-slate-700">Temporary password
+                <input required type="password" minLength={12} maxLength={1024} autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+              </label>
+              <fieldset>
+                <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
+                <p className="mt-1 text-xs text-slate-500">Staff administration and audit access remain superadmin-only.</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {availablePermissions.map((permission) => (
+                    <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
+                      <input type="checkbox" checked={permissions.includes(permission.id)} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-teal-800" />
+                      {permission.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <p className="text-xs leading-5 text-slate-500">The password is stored as a secure hash, and the agent will be required to change it at first sign-in. Share the temporary password out-of-band.</p>
+              <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button type="button" disabled={saving} onClick={() => setCreateModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={saving || !displayName.trim() || !email.trim() || temporaryPassword.length < 12} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
+              </footer>
+            </form>
+          </section>
+        </div>
       )}
       {editingId !== null && selectedProfile && editingId === selectedProfile.id && (
         <div
