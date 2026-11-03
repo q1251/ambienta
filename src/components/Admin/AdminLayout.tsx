@@ -222,7 +222,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               ))}
             </>
           )}
-          <div className="mt-auto">
+          <div>
             <p className="px-3 pb-3 pt-7 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Settings</p>
             {visibleNavigation.filter((item) => item.group === 'Settings').map((item) => (
               <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
