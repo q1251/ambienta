@@ -117,10 +117,11 @@ including fulfillment status and tracking details. Order activity does not
 change the manually managed lead stage; update it from the profile when
 appropriate. Profiles also allow staff to add or correct a phone number, open
 the phone dialer with click-to-call, and add internal comments. Stage changes
-and phone edits are recorded in the activity history with the acting staff
-member and timestamp; comments also retain their author and timestamp. Notes
-are operational only: never enter health, prescription, insurance,
-payment-card, or other sensitive personal information.
+save immediately and appear in a dedicated history with the previous and new
+stage, acting staff member, and timestamp. Phone edits are also audited;
+comments retain their author and timestamp. Notes are operational only: never
+enter health, prescription, insurance, payment-card, or other sensitive
+personal information.
 
 The CRM seeds 20 clearly labeled synthetic demo contacts for interface testing.
 Their addresses use the reserved `example.com` domain, their phone numbers are

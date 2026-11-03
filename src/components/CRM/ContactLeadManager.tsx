@@ -42,8 +42,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileError, setProfileError] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profilePhone, setProfilePhone] = useState('');
-  const [statusDraft, setStatusDraft] = useState<LeadStatus>('Cold');
-  const [statusChangeNote, setStatusChangeNote] = useState('');
   const [activityNote, setActivityNote] = useState('');
   const [activitySaving, setActivitySaving] = useState(false);
   const profileRequestId = useRef(0);
@@ -122,8 +120,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setSelectedLeadId(lead.id);
     setProfile(null);
     setProfilePhone(lead.phone);
-    setStatusDraft(lead.status);
-    setStatusChangeNote('');
     setProfileError('');
     setProfileSaving(false);
     setActivitySaving(false);
@@ -134,7 +130,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       if (requestId === profileRequestId.current) {
         setProfile(loadedProfile);
         setProfilePhone(loadedProfile.lead.phone);
-        setStatusDraft(loadedProfile.lead.status);
       }
     } catch (error) {
       if (requestId === profileRequestId.current) {
@@ -166,10 +161,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       if (requestId !== profileRequestId.current) return;
       setProfile((current) => current?.lead.id === leadId ? { ...current, lead } : current);
       if (update.phone !== undefined) setProfilePhone(lead.phone);
-      if (update.status !== undefined) {
-        setStatusDraft(lead.status);
-        setStatusChangeNote('');
-      }
       if ((update.status !== undefined || update.phone !== undefined) && onLoadLeadProfile) {
         try {
           const refreshed = await onLoadLeadProfile(lead.id);
@@ -210,6 +201,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       if (requestId === profileRequestId.current) setActivitySaving(false);
     }
   };
+
+  const statusActivities = profile?.activities.filter((activity) => activity.type === 'status_change') ?? [];
+  const noteActivities = profile?.activities.filter((activity) => activity.type === 'note') ?? [];
 
   const phoneLink = (value: string) => value.replace(/[^\d+]/g, '');
 
@@ -273,19 +267,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </button>
                 </form>
 
-                <form onSubmit={(event) => { event.preventDefault(); void updateProfile({ status: statusDraft, statusNote: statusChangeNote.trim() }); }} className="space-y-3">
+                <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Pipeline stage
-                    <select disabled={profileSaving || !onUpdateLead} value={statusDraft} onChange={(event) => setStatusDraft(event.target.value as LeadStatus)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2">
+                    <select
+                      disabled={profileSaving || !onUpdateLead}
+                      value={profile.lead.status}
+                      onChange={(event) => void updateProfile({ status: event.target.value as LeadStatus })}
+                      className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2"
+                    >
                       {(['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </label>
-                  <label className="block text-sm font-medium text-slate-700">Comment for this stage change (optional)
-                    <textarea maxLength={2000} rows={2} value={statusChangeNote} onChange={(event) => setStatusChangeNote(event.target.value)} placeholder="Add a brief reason or handoff note." className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                  </label>
-                  <button disabled={profileSaving || !onUpdateLead || statusDraft === profile.lead.status} className="rounded-md bg-teal-800 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    {profileSaving ? 'Saving…' : 'Save stage change'}
-                  </button>
-                </form>
+                  <p aria-live="polite" className="text-xs text-slate-500">{profileSaving ? 'Saving stage…' : 'Stage changes save immediately and are added to the staff history below.'}</p>
+                </div>
 
                 <label className="flex items-start gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700 lg:col-span-2">
                   <input type="checkbox" disabled={profileSaving || !onUpdateLead} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} className="mt-1" />
@@ -307,17 +301,13 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               </form>
 
               <div className="mt-6">
-                <h4 className="mb-3 text-sm font-bold text-slate-900">Comment and status history</h4>
-                {profile.activities.some((activity) => activity.type !== 'call') ? (
+                <h4 className="mb-3 text-sm font-bold text-slate-900">Status history</h4>
+                {statusActivities.length ? (
                   <ol className="space-y-3">
-                    {profile.activities.filter((activity) => activity.type !== 'call').map((activity) => (
+                    {statusActivities.map((activity) => (
                       <li key={activity.id} className="border-l-2 border-teal-200 pl-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900">
-                            {activity.type === 'status_change' ? `Stage changed: ${activity.fromStatus || 'Unknown'} → ${activity.toStatus || 'Unknown'}`
-                              : activity.type === 'phone_updated' ? 'Phone number updated'
-                                : 'Comment added'}
-                          </p>
+                          <p className="text-sm font-semibold text-slate-900">Stage changed: {activity.fromStatus || 'Unknown'} → {activity.toStatus || 'Unknown'}</p>
                           <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
                         </div>
                         <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
@@ -325,7 +315,23 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       </li>
                     ))}
                   </ol>
-                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No comments or status changes have been recorded yet.</p>}
+                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No stage changes have been recorded yet.</p>}
+
+                <h4 className="mb-3 mt-6 text-sm font-bold text-slate-900">Comment history</h4>
+                {noteActivities.length ? (
+                  <ol className="space-y-3">
+                    {noteActivities.map((activity) => (
+                      <li key={activity.id} className="border-l-2 border-slate-200 pl-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-slate-900">Comment added</p>
+                          <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
+                        {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No comments have been recorded yet.</p>}
               </div>
             </section>
 
