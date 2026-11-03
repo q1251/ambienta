@@ -912,15 +912,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
                   <div>
+                    <label htmlFor="campaign-schedule" className="mb-1 block text-sm font-medium text-slate-700">Schedule for</label>
+                    <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:max-w-sm" />
+                  </div>
+                  <div>
                     <label htmlFor="campaign-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
                     <textarea id="campaign-body" value={campaignBody} maxLength={5000} rows={8} required onChange={(event) => setCampaignBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                     <p className="mt-1 text-xs text-slate-500">Each campaign email includes a working unsubscribe link and one-click unsubscribe headers. Do not include sensitive health information.</p>
                   </div>
                   <div className="flex flex-wrap items-end gap-3">
-                    <div className="min-w-56 flex-1">
-                      <label htmlFor="campaign-schedule" className="mb-1 block text-sm font-medium text-slate-700">Schedule for</label>
-                      <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                    </div>
                     <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {isCampaignSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
                       {isCampaignSaving ? 'Saving…' : 'Save draft'}
