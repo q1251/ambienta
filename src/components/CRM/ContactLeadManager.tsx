@@ -390,17 +390,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             <section className="rounded-2xl border border-slate-200 bg-white p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-base font-bold text-slate-900">Contact details</h3>
-                {isSuperadmin && (
-                  <button
-                    type="button"
-                    aria-expanded={contactDetailsEditing}
-                    onClick={() => contactDetailsEditing ? cancelContactDetailsEdit() : setContactDetailsEditing(true)}
-                    className="inline-flex items-center gap-2 rounded-md border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
-                  >
-                    {contactDetailsEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-                    {contactDetailsEditing ? 'Cancel editing' : 'Edit contact details'}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  aria-expanded={contactDetailsEditing}
+                  disabled={!isSuperadmin}
+                  title={isSuperadmin ? undefined : 'Only a superadmin can edit contact details.'}
+                  onClick={() => contactDetailsEditing ? cancelContactDetailsEdit() : setContactDetailsEditing(true)}
+                  className="inline-flex items-center gap-2 rounded-md border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-500 disabled:hover:bg-white"
+                >
+                  {contactDetailsEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                  {isSuperadmin
+                    ? contactDetailsEditing ? 'Cancel editing' : 'Edit contact details'
+                    : 'Edit contact details (admin only)'}
+                </button>
               </div>
               <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
                 <div><p className="text-xs font-medium uppercase text-slate-500">Email</p><p className="mt-1 break-all text-sm text-slate-900">{profile.lead.email}</p></div>
@@ -704,7 +706,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </div>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th><th className="py-3">Actions</th></tr></thead>
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name / Edit</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Stage</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3 pr-3">Source</th></tr></thead>
             <tbody>
               {filteredLeads.map((lead) => (
                 <tr
@@ -717,6 +719,18 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         ? <button type="button" onClick={() => void openProfile(lead)} className="font-semibold text-teal-800 underline-offset-2 hover:underline">{lead.firstName} {lead.lastName}</button>
                         : <span>{lead.firstName} {lead.lastName}</span>}
                       {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
+                      {onLoadLeadProfile && (
+                        <button
+                          type="button"
+                          disabled={!isSuperadmin}
+                          title={isSuperadmin ? `Edit ${lead.firstName} ${lead.lastName}` : 'Only a superadmin can edit contact details.'}
+                          onClick={() => void openProfile(lead, true)}
+                          className="ml-2 inline-flex items-center gap-1 rounded-md border border-teal-700 px-2 py-1 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-500 disabled:hover:bg-white"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          {isSuperadmin ? 'Edit' : 'Admin only'}
+                        </button>
+                      )}
                     </span>
                   </td>
                   <td className="py-3">
@@ -737,20 +751,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
                   <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
                   <td className="py-3">{lead.leadSource}</td>
-                  <td className="py-3 pr-3">
-                    {isSuperadmin && onLoadLeadProfile && (
-                      <button
-                        type="button"
-                        onClick={() => void openProfile(lead, true)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-teal-700 px-2.5 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-50"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Edit
-                      </button>
-                    )}
-                  </td>
                 </tr>
               ))}
-              {!filteredLeads.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
+              {!filteredLeads.length && <tr><td colSpan={7} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
             </tbody>
           </table>
         </div>
