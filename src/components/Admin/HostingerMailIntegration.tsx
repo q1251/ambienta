@@ -483,8 +483,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-3">
+        <div className="grid items-stretch gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <aside className="h-full self-stretch rounded-2xl border border-slate-200 bg-white p-3">
           <button
             type="button"
             onClick={() => setActiveFolder('compose')}
@@ -530,7 +530,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </div>
         </aside>
 
-        <div className="min-w-0 space-y-5">
+        <div className="h-full min-w-0 self-stretch space-y-5">
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
