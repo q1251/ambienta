@@ -862,7 +862,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
 
   return (
-    <div className={mode === 'mailbox' ? 'mx-auto flex h-full min-h-0 max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
+    <div className={mode === 'mailbox' ? 'mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
       <header className={mode === 'mailbox' ? 'shrink-0 flex flex-wrap items-end justify-between gap-x-4 gap-y-2' : undefined}>
         <div className="min-w-0">
           <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${mode === 'settings' ? 'text-violet-700' : 'text-[#315649]'}`}>
