@@ -297,15 +297,15 @@ function data_ensure_schema(PDO $db): void
         if ((int) $columnExists->fetchColumn() === 0) {
             $db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
         }
-        foreach ([
-            ['chat_conversations', 'chat_conversations_owner', 'owner_type, owner_staff_id, status, updated_at'],
-            ['chat_conversations', 'chat_conversations_visitor', 'visitor_id_hash, updated_at'],
-        ] as [$table, $index, $columns]) {
-            $indexExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
-            $indexExists->execute([$databaseName, $table, $index]);
-            if ((int) $indexExists->fetchColumn() === 0) {
-                $db->exec("ALTER TABLE {$table} ADD INDEX {$index} ({$columns})");
-            }
+    }
+    foreach ([
+        ['chat_conversations', 'chat_conversations_owner', 'owner_type, owner_staff_id, status, updated_at'],
+        ['chat_conversations', 'chat_conversations_visitor', 'visitor_id_hash, updated_at'],
+    ] as [$table, $index, $columns]) {
+        $indexExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
+        $indexExists->execute([$databaseName, $table, $index]);
+        if ((int) $indexExists->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE {$table} ADD INDEX {$index} ({$columns})");
         }
     }
     $openTokenIndex = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
