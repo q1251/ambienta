@@ -1,4 +1,4 @@
-import { ContactLead, HealthCategory, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
+import { ContactLead, HealthCategory, OnlineOrder, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
 import { parseCsvRows } from './csv';
 import { getLeadCountry } from './countryOptions';
 export { getLeadCountry } from './countryOptions';
