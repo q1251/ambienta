@@ -851,19 +851,34 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
 
   return (
-    <div className="space-y-5">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">
-          {mode === 'settings' ? 'Connections' : 'Communications'}
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-          {mode === 'settings' ? 'Email integration' : 'Email'}
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          {mode === 'settings'
-            ? 'Configure and test the Hostinger mailbox connection used by the CRM.'
-            : 'Compose customer-support messages and review sent activity.'}
-        </p>
+    <div className={mode === 'mailbox' ? 'mx-auto flex min-h-[calc(100vh-132px)] max-w-[1500px] flex-col gap-5' : 'space-y-5'}>
+      <header className={mode === 'mailbox' ? 'flex flex-wrap items-end justify-between gap-4' : undefined}>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">
+            {mode === 'settings' ? 'Connections' : 'Communications'}
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+            {mode === 'settings' ? 'Email integration' : 'Email'}
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            {mode === 'settings'
+              ? 'Configure and test the Hostinger mailbox connection used by the CRM.'
+              : 'Compose customer-support messages and review sent activity.'}
+          </p>
+        </div>
+        {mode === 'mailbox' && (
+          <div className="flex flex-wrap items-center gap-2" aria-label="Email activity summary">
+            <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+              <strong className="text-slate-900">{messages.filter((item) => item.status === 'Sent').length}</strong> sent from CRM
+            </span>
+            <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+              Delivered <strong className="text-slate-900">not tracked</strong>
+            </span>
+            <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+              Opened <strong className="text-slate-900">{hasOpenTrackedCampaign ? `${totalCampaignOpens} campaign opens` : 'tracking off'}</strong>
+            </span>
+          </div>
+        )}
       </header>
       {mode === 'settings' && <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -929,30 +944,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500">Sent from CRM</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{messages.filter((item) => item.status === 'Sent').length}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500">Delivered</p>
-            <p className="mt-1 text-lg font-semibold text-slate-700">Not tracked</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500">Opened</p>
-            <p className="mt-1 text-lg font-semibold text-slate-700">{hasOpenTrackedCampaign ? `${totalCampaignOpens} campaign opens` : 'Campaign tracking off'}</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-500">Drafts · Trash</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-950">{drafts.length} · {trash.length}</p>
-          </div>
-        </div>
-
-        <div className="grid items-stretch gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className={`rounded-2xl border border-slate-200 bg-white p-3 ${
-          activeFolder === 'compose' || activeFolder === 'campaigns' || activeFolder === 'campaign-history' ? 'h-fit self-start' : 'h-full self-stretch'
-        }`}>
+      {mode === 'mailbox' && <section className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
+          <div className="p-3">
           <button
             type="button"
             onClick={() => setActiveFolder('compose')}
@@ -964,6 +958,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           >
             <Mail className="h-4 w-4" /> Compose
           </button>
+          </div>
           <nav aria-label="Email folders" className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:flex lg:flex-col">
             {([
               ['inbox', 'Inbox', Inbox, ''],
@@ -1021,7 +1016,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               </button>
             </>
           )}
-          <div className="mt-4 hidden border-t border-slate-100 px-2 pt-4 lg:block">
+          <div className="mt-auto hidden border-t border-slate-100 px-5 py-4 lg:block">
             <p className="text-xs font-medium text-slate-500">Mailbox</p>
             <p className="mt-1 truncate text-sm font-medium text-slate-800">{settings.emailAccount}</p>
             <p className={`mt-2 inline-flex items-center gap-1.5 text-xs ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
@@ -1031,7 +1026,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </div>
         </aside>
 
-        <div className="h-full min-w-0 self-stretch space-y-5">
+        <div className="min-h-0 min-w-0 overflow-y-auto bg-[#f7f9fb] p-3 sm:p-5">
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
@@ -1428,10 +1423,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             </section>
           )}
         </div>
-        </div>
       </section>}
 
-      {mode === 'mailbox' && <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+      {mode === 'mailbox' && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">
         Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. Hostinger SMTP confirms acceptance only, not final delivery; campaign opens are approximate and available only when open tracking is enabled for a campaign.
       </p>}
     </div>
