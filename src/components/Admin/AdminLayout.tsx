@@ -235,7 +235,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   };
 
   return (
-    <div className="crm-shell min-h-screen bg-[#f4f5f1] text-slate-900">
+    <div className={`crm-shell bg-[#f4f5f1] text-slate-900 ${
+      activeTab === 'email' || activeTab === 'chat'
+        ? 'flex h-dvh min-h-0 flex-col overflow-hidden'
+        : 'min-h-screen'
+    }`}>
       <header className="sticky top-0 z-30 border-b border-[#e5e7e1] bg-white">
         <div className="flex h-[72px] items-center justify-between gap-4 px-4 sm:px-7">
           <div className="flex min-w-0 items-center gap-3">
@@ -272,7 +276,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         {impersonationError && <p role="alert" className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">{impersonationError}</p>}
       </header>
 
-      <div className="flex min-h-[calc(100vh-72px)]">
+      <div className={`flex ${
+        activeTab === 'email' || activeTab === 'chat'
+          ? 'min-h-0 flex-1'
+          : 'min-h-[calc(100vh-72px)]'
+      }`}>
         <aside className="sticky top-[72px] hidden h-[calc(100vh-72px)] w-[264px] shrink-0 flex-col border-r border-[#e5e7e1] bg-[#fbfcfa] px-4 py-6 lg:flex">
           <div className="mb-6 rounded-xl border border-[#e7e9e3] bg-white px-3.5 py-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Workspace</p>
@@ -322,7 +330,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
 
         <main className={`min-w-0 flex-1 ${
           activeTab === 'email' || activeTab === 'chat'
-            ? 'h-[calc(100dvh-72px)] overflow-hidden px-3 py-3 sm:px-5 sm:py-4 lg:px-6 lg:py-4'
+            ? 'min-h-0 overflow-hidden px-3 py-3 sm:px-5 sm:py-4 lg:px-6 lg:py-4'
             : 'px-4 py-5 sm:px-7 sm:py-8 lg:px-10 lg:py-10'
         }`}>
           <div className={`mx-auto w-full max-w-[1480px] ${
