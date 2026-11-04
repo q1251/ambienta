@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   X,
   CreditCard,
@@ -53,10 +53,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   // Payment tab
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash on Delivery / Pickup');
   const [paymentError, setPaymentError] = useState('');
+  const [stripeCheckoutReady, setStripeCheckoutReady] = useState(false);
+  const [isCheckingStripe, setIsCheckingStripe] = useState(false);
 
   // Order state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<OnlineOrder | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    setIsCheckingStripe(true);
+    void fetch('/api/data.php?resource=payment-config', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    }).then(async (response) => {
+      const result = await response.json() as { stripeConfigured?: boolean };
+      if (!response.ok) throw new Error('Stripe payment configuration could not be checked.');
+      if (active) setStripeCheckoutReady(result.stripeConfigured === true);
+    }).catch(() => {
+      if (active) setStripeCheckoutReady(false);
+    }).finally(() => {
+      if (active) setIsCheckingStripe(false);
+    });
+    return () => { active = false; };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -100,6 +121,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setIsSubmitting(true);
 
     try {
+      if (paymentMethod === 'Credit / Debit Card') {
+        const response = await fetch('/api/data.php?resource=checkout-session', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            customerName: patientName,
+            email,
+            phone,
+            deliveryMethod,
+            deliveryAddress: deliveryMethod === 'Pharmacy Pickup'
+              ? 'Ambients Dispensary Desk - Counter 1 (Ready in 30 mins)'
+              : `${streetAddress}, ${city}, ${state} ${zip}`,
+            couponCode: appliedCoupon?.code || '',
+            items: cartItems.map(({ item, quantity }) => ({ productId: item.id, quantity })),
+          }),
+        });
+        const result = await response.json() as { url?: string; message?: string };
+        if (!response.ok || !result.url) {
+          throw new Error(result.message || 'Secure card checkout could not be started.');
+        }
+        window.location.assign(result.url);
+        return;
+      }
+
       const orderNum = `ORD-${Date.now().toString().slice(-6)}`;
       const fullDeliveryAddress =
         deliveryMethod === 'Pharmacy Pickup'
@@ -199,13 +245,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
                 {completedOrder.paymentMethod === 'Credit / Debit Card'
-                  ? 'Order received · Card payment arranged manually'
+                  ? 'Card authorized · awaiting order review'
                   : 'Order received · Payment due on delivery or pickup'}
               </span>
               <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
                 Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been added to the admin order queue. {completedOrder.paymentMethod === 'Credit / Debit Card'
-                  ? 'Our team will contact you to arrange card payment. Do not send card details by email or chat.'
+                  ? 'The card payment is authorized and can be captured by the pharmacy after order review.'
                   : 'No payment or email has been processed.'}
               </p>
             </div>
@@ -493,16 +539,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <button
                     type="button"
+                    disabled={isCheckingStripe || !stripeCheckoutReady}
                     onClick={() => setPaymentMethod('Credit / Debit Card')}
                     aria-pressed={paymentMethod === 'Credit / Debit Card'}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 font-semibold transition-colors ${
+                    title={stripeCheckoutReady ? 'Pay securely with Stripe; payment is captured after order review' : 'Stripe card checkout is not configured yet'}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                       paymentMethod === 'Credit / Debit Card'
                         ? 'border-teal-700 bg-teal-800 text-white'
                         : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                     }`}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Card (processed manually)</span>
+                    <span>{isCheckingStripe ? 'Checking card checkout…' : stripeCheckoutReady ? 'Card · Stripe' : 'Card · Setup required'}</span>
                   </button>
 
                   <button
@@ -519,18 +567,21 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <span>Pay on delivery/pickup</span>
                   </button>
                 </div>
+                {!stripeCheckoutReady && (
+                  <p className="text-[11px] text-slate-500">Stripe card checkout is unavailable until the Stripe secret key and webhook are configured.</p>
+                )}
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
                   {paymentMethod === 'Credit / Debit Card'
-                    ? 'Your order will be saved for review. Our team will contact you to arrange card payment; this checkout never asks for or stores card details.'
+                    ? 'Continue to Stripe’s secure checkout to enter your card. Your payment will be authorized now and captured by our team after order review.'
                     : 'Pay in person upon delivery or pickup. Your order will be saved for review, and payment will remain pending until confirmed by our team.'}
                 </p>
                 {paymentError && <p role="alert" className="text-xs font-medium text-rose-700">{paymentError}</p>}
 
-                {/* Card orders are coordinated by staff; never collect card credentials here. */}
+                {/* Stripe-hosted checkout securely collects card details and authorizes payment for later capture. */}
                 {paymentMethod === 'Credit / Debit Card' && (
                   <div className="flex items-start gap-2 rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs text-teal-950">
                     <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
-                    <p>Card payment will be arranged by our team after order review. Please do not send card numbers, expiration dates, or security codes through this site, email, or chat.</p>
+                    <p>You’ll enter card details on Stripe, not on this site. We’ll authorize the payment at checkout and capture it after reviewing your order. Ambienta does not receive or store card numbers or security codes.</p>
                   </div>
                 )}
 
@@ -665,10 +716,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   className="w-full py-3.5 bg-teal-700 hover:bg-teal-800 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? (
-                    <span>Securing Transaction &amp; Fulfilling...</span>
+                    <span>{paymentMethod === 'Credit / Debit Card' ? 'Opening secure Stripe checkout…' : 'Placing your order…'}</span>
                   ) : (
                     <>
-                      <span>Place Order &amp; Confirm (${totalAmount.toFixed(2)})</span>
+                      <span>{paymentMethod === 'Credit / Debit Card' ? 'Continue to card payment' : `Place Order (${`$${totalAmount.toFixed(2)}`})`}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

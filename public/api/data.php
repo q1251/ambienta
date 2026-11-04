@@ -45,6 +45,63 @@ function data_config(): array
     return $config;
 }
 
+function data_stripe_request(string $method, string $path, array $parameters = [], ?string $idempotencyKey = null): array
+{
+    $config = data_config();
+    $secretKey = $config['stripe_secret_key'] ?? null;
+    if (!is_string($secretKey) || !preg_match('/^sk_(test|live)_[A-Za-z0-9]+$/', $secretKey)) {
+        throw new RuntimeException('Stripe is not configured.');
+    }
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('The server HTTP client is unavailable.');
+    }
+
+    $headers = ['Authorization: Bearer ' . $secretKey];
+    if ($idempotencyKey !== null) {
+        $headers[] = 'Idempotency-Key: ' . $idempotencyKey;
+    }
+    $handle = curl_init('https://api.stripe.com' . $path);
+    curl_setopt_array($handle, [
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_HTTPHEADER => $headers,
+    ]);
+    if ($method !== 'GET') {
+        curl_setopt($handle, CURLOPT_POSTFIELDS, http_build_query($parameters));
+    }
+
+    $response = curl_exec($handle);
+    $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+    $curlError = curl_error($handle);
+    curl_close($handle);
+    if (!is_string($response)) {
+        error_log('Ambients Stripe request failed: ' . $curlError);
+        throw new RuntimeException('Stripe could not be reached.');
+    }
+
+    $decoded = json_decode($response, true);
+    if (!is_array($decoded) || $status < 200 || $status >= 300) {
+        $stripeCode = is_array($decoded) && is_array($decoded['error'] ?? null)
+            ? (string) ($decoded['error']['code'] ?? 'unknown')
+            : 'invalid_response';
+        error_log('Ambients Stripe request returned HTTP ' . $status . ' (' . $stripeCode . ').');
+        throw new RuntimeException('Stripe could not complete the payment request.');
+    }
+    return $decoded;
+}
+
+function data_stripe_webhook_secret(): string
+{
+    $config = data_config();
+    $secret = $config['stripe_webhook_secret'] ?? null;
+    if (!is_string($secret) || !preg_match('/^whsec_[A-Za-z0-9]+$/', $secret)) {
+        throw new RuntimeException('The Stripe webhook is not configured.');
+    }
+    return $secret;
+}
+
 function data_db(): PDO
 {
     static $connection = null;
@@ -365,6 +422,8 @@ function data_ensure_schema(PDO $db): void
             total_amount DECIMAL(10,2) NOT NULL,
             payment_method VARCHAR(48) NOT NULL,
             payment_status VARCHAR(32) NOT NULL,
+            stripe_checkout_session_id VARCHAR(255) NULL,
+            stripe_payment_intent_id VARCHAR(255) NULL,
             status VARCHAR(32) NOT NULL,
             carrier VARCHAR(120) NULL,
             tracking_number VARCHAR(180) NULL,
@@ -374,6 +433,12 @@ function data_ensure_schema(PDO $db): void
             KEY orders_placed_at (placed_at),
             KEY orders_status (status),
             KEY orders_email (email)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+            event_id VARCHAR(255) NOT NULL PRIMARY KEY,
+            processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
@@ -504,6 +569,16 @@ function data_ensure_schema(PDO $db): void
     $ordersEmailIndex->execute([$databaseName, 'orders', 'orders_email']);
     if ((int) $ordersEmailIndex->fetchColumn() === 0) {
         $db->exec('ALTER TABLE orders ADD KEY orders_email (email)');
+    }
+    $ordersColumn = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    foreach ([
+        'stripe_checkout_session_id' => 'VARCHAR(255) NULL',
+        'stripe_payment_intent_id' => 'VARCHAR(255) NULL',
+    ] as $column => $definition) {
+        $ordersColumn->execute([$databaseName, 'orders', $column]);
+        if ((int) $ordersColumn->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE orders ADD COLUMN `$column` $definition");
+        }
     }
 
     $db->exec('UPDATE products SET sku = id WHERE sku = \'\'');
@@ -2209,6 +2284,7 @@ function data_order_row(PDO $db, array $row): array
         'deliveryAddress' => $row['delivery_address'],
         'paymentMethod' => $row['payment_method'],
         'paymentStatus' => $row['payment_status'],
+        'transactionId' => $row['stripe_payment_intent_id'] ?? null,
         'status' => $row['status'],
         'placedAt' => $row['placed_at'],
         'carrier' => $row['carrier'],
@@ -2217,10 +2293,260 @@ function data_order_row(PDO $db, array $row): array
     ];
 }
 
+function data_stripe_authorize_order(PDO $db, string $orderId, string $sessionId, string $paymentIntentId, int $amountCapturable): bool
+{
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT order_number, total_amount, payment_status, stripe_checkout_session_id, stripe_payment_intent_id FROM orders WHERE id = ? FOR UPDATE');
+        $find->execute([$orderId]);
+        $order = $find->fetch();
+        if (!is_array($order) || !hash_equals((string) $order['stripe_checkout_session_id'], $sessionId)) {
+            $db->rollBack();
+            return false;
+        }
+        if ($order['payment_status'] === 'Authorized' || $order['payment_status'] === 'Paid') {
+            $db->commit();
+            return true;
+        }
+        if (
+            $order['payment_status'] !== 'Awaiting Payment'
+            || (int) round((float) $order['total_amount'] * 100) !== $amountCapturable
+        ) {
+            $db->rollBack();
+            return false;
+        }
+        $db->prepare('UPDATE orders SET payment_status = ?, stripe_payment_intent_id = ? WHERE id = ?')
+            ->execute(['Authorized', $paymentIntentId, $orderId]);
+        data_audit($db, 'order.payment_authorized', 'order', $orderId, ['orderNumber' => $order['order_number']]);
+        $db->commit();
+        return true;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $error;
+    }
+}
+
+function data_stripe_mark_order_paid(PDO $db, string $orderId, string $paymentIntentId, int $amountReceived): bool
+{
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT order_number, total_amount, payment_status, stripe_payment_intent_id FROM orders WHERE id = ? FOR UPDATE');
+        $find->execute([$orderId]);
+        $order = $find->fetch();
+        if (!is_array($order) || !is_string($order['stripe_payment_intent_id'])
+            || !hash_equals($order['stripe_payment_intent_id'], $paymentIntentId)
+            || (int) round((float) $order['total_amount'] * 100) !== $amountReceived) {
+            $db->rollBack();
+            return false;
+        }
+        if ($order['payment_status'] === 'Paid') {
+            $db->commit();
+            return true;
+        }
+        if ($order['payment_status'] !== 'Authorized') {
+            $db->rollBack();
+            return false;
+        }
+        $db->prepare('UPDATE orders SET payment_status = ? WHERE id = ?')->execute(['Paid', $orderId]);
+        data_audit($db, 'order.payment_captured', 'order', $orderId, ['orderNumber' => $order['order_number']]);
+        $db->commit();
+        return true;
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $error;
+    }
+}
+
+function data_stripe_expire_order(PDO $db, string $sessionId): void
+{
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT id, order_number, payment_status, status FROM orders WHERE stripe_checkout_session_id = ? FOR UPDATE');
+        $find->execute([$sessionId]);
+        $order = $find->fetch();
+        if (!is_array($order) || $order['payment_status'] !== 'Awaiting Payment' || $order['status'] === 'Cancelled') {
+            $db->commit();
+            return;
+        }
+        $db->prepare(
+            'UPDATE products p INNER JOIN order_items i ON i.product_id = p.id SET p.stock_count = p.stock_count + i.quantity WHERE i.order_id = ?'
+        )->execute([$order['id']]);
+        $db->prepare('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?')
+            ->execute(['Payment Failed', 'Cancelled', $order['id']]);
+        data_audit($db, 'order.payment_expired', 'order', (string) $order['id'], ['orderNumber' => $order['order_number']]);
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        throw $error;
+    }
+}
+
+function data_stripe_signature_is_valid(string $payload, string $signatureHeader, string $secret): bool
+{
+    $timestamp = null;
+    $signatures = [];
+    foreach (explode(',', $signatureHeader) as $component) {
+        [$key, $value] = array_pad(explode('=', trim($component), 2), 2, '');
+        if ($key === 't' && ctype_digit($value)) $timestamp = (int) $value;
+        if ($key === 'v1' && preg_match('/^[a-f0-9]{64}$/i', $value)) $signatures[] = $value;
+    }
+    if ($timestamp === null || abs(time() - $timestamp) > 300 || $signatures === []) return false;
+    $expected = hash_hmac('sha256', $timestamp . '.' . $payload, $secret);
+    foreach ($signatures as $signature) {
+        if (hash_equals($expected, $signature)) return true;
+    }
+    return false;
+}
+
 $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? ''));
 $resource = $_GET['resource'] ?? '';
 if (!is_string($resource)) {
     data_respond(400, ['error' => 'invalid_resource', 'message' => 'The requested resource is invalid.']);
+}
+
+if ($resource === 'stripe-webhook' && $method === 'POST') {
+    $payload = file_get_contents('php://input');
+    $signature = (string) ($_SERVER['HTTP_STRIPE_SIGNATURE'] ?? '');
+    try {
+        $secret = data_stripe_webhook_secret();
+        if (!is_string($payload) || strlen($payload) > 1048576 || !data_stripe_signature_is_valid($payload, $signature, $secret)) {
+            data_respond(400, ['error' => 'invalid_webhook_signature', 'message' => 'The Stripe event signature is invalid.']);
+        }
+        $event = json_decode($payload, true);
+        if (!is_array($event) || !is_string($event['id'] ?? null) || !is_string($event['type'] ?? null) || !is_array($event['data']['object'] ?? null)) {
+            data_respond(400, ['error' => 'invalid_webhook_event', 'message' => 'The Stripe event payload is invalid.']);
+        }
+        $db = data_db();
+        $seen = $db->prepare('SELECT event_id FROM stripe_webhook_events WHERE event_id = ?');
+        $seen->execute([$event['id']]);
+        if ($seen->fetchColumn() !== false) data_respond(200, ['received' => true]);
+        $object = $event['data']['object'];
+        if ($event['type'] === 'checkout.session.completed') {
+            $sessionId = $object['id'] ?? '';
+            $orderId = $object['metadata']['order_id'] ?? '';
+            $paymentIntentId = $object['payment_intent'] ?? '';
+            if (
+                !is_string($sessionId) || !preg_match('/^cs_(test|live)_[A-Za-z0-9]+$/', $sessionId)
+                || !is_string($orderId) || !preg_match('/^[a-f0-9]{32}$/', $orderId)
+                || !is_string($paymentIntentId) || !preg_match('/^pi_[A-Za-z0-9]+$/', $paymentIntentId)
+            ) {
+                data_respond(400, ['error' => 'invalid_checkout_event', 'message' => 'The Stripe checkout event is incomplete.']);
+            }
+            $intent = data_stripe_request('GET', '/v1/payment_intents/' . rawurlencode($paymentIntentId));
+            if (($intent['status'] ?? '') === 'requires_capture') {
+                if (!data_stripe_authorize_order($db, $orderId, $sessionId, $paymentIntentId, (int) ($intent['amount_capturable'] ?? 0))) {
+                    throw new RuntimeException('The Stripe card authorization did not match its order.');
+                }
+            } elseif (($intent['status'] ?? '') === 'succeeded') {
+                if (!data_stripe_mark_order_paid($db, $orderId, $paymentIntentId, (int) ($intent['amount_received'] ?? 0))) {
+                    throw new RuntimeException('The captured Stripe payment did not match its order.');
+                }
+            } elseif (($intent['status'] ?? '') !== 'canceled') {
+                throw new RuntimeException('The Stripe card authorization did not match its order.');
+            }
+        } elseif ($event['type'] === 'payment_intent.succeeded') {
+            $paymentIntentId = $object['id'] ?? '';
+            $orderId = $object['metadata']['order_id'] ?? '';
+            if (
+                !is_string($paymentIntentId) || !preg_match('/^pi_[A-Za-z0-9]+$/', $paymentIntentId)
+                || !is_string($orderId) || !preg_match('/^[a-f0-9]{32}$/', $orderId)
+                || !data_stripe_mark_order_paid($db, $orderId, $paymentIntentId, (int) ($object['amount_received'] ?? 0))
+            ) {
+                throw new RuntimeException('The captured Stripe payment did not match its order.');
+            }
+        } elseif ($event['type'] === 'checkout.session.expired') {
+            $sessionId = $object['id'] ?? '';
+            if (is_string($sessionId) && preg_match('/^cs_(test|live)_[A-Za-z0-9]+$/', $sessionId)) {
+                data_stripe_expire_order($db, $sessionId);
+            }
+        }
+        $db->prepare('INSERT IGNORE INTO stripe_webhook_events (event_id) VALUES (?)')->execute([$event['id']]);
+        data_respond(200, ['received' => true]);
+    } catch (Throwable $error) {
+        error_log('Ambients Stripe webhook processing failed: ' . $error->getMessage());
+        data_respond(502, ['error' => 'webhook_processing_failed', 'message' => 'The Stripe event could not be processed.']);
+    }
+}
+
+if ($resource === 'checkout-result' && $method === 'GET') {
+    $sessionId = data_string($_GET, 'session_id', 255);
+    if (!preg_match('/^cs_(test|live)_[A-Za-z0-9]+$/', $sessionId)) {
+        data_respond(400, ['error' => 'invalid_checkout_session', 'message' => 'The checkout session is invalid.']);
+    }
+    try {
+        $session = data_stripe_request('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId));
+        $orderId = $session['metadata']['order_id'] ?? '';
+        $paymentIntentId = $session['payment_intent'] ?? '';
+        if (($session['status'] ?? '') !== 'complete' || !is_string($orderId) || !preg_match('/^[a-f0-9]{32}$/', $orderId)
+            || !is_string($paymentIntentId) || !preg_match('/^pi_[A-Za-z0-9]+$/', $paymentIntentId)) {
+            data_respond(409, ['error' => 'checkout_not_complete', 'message' => 'The card authorization has not completed.']);
+        }
+        $intent = data_stripe_request('GET', '/v1/payment_intents/' . rawurlencode($paymentIntentId));
+        if (($intent['status'] ?? '') !== 'requires_capture') {
+            data_respond(409, ['error' => 'checkout_not_authorized', 'message' => 'The card could not be authorized. Please contact the pharmacy.']);
+        }
+        $db = data_db();
+        if (!data_stripe_authorize_order($db, $orderId, $sessionId, $paymentIntentId, (int) ($intent['amount_capturable'] ?? 0))) {
+            data_respond(409, ['error' => 'order_authorization_mismatch', 'message' => 'The payment authorization could not be matched to the order. Contact the pharmacy before retrying.']);
+        }
+        $find = $db->prepare('SELECT order_number, total_amount, payment_status FROM orders WHERE id = ? AND stripe_checkout_session_id = ?');
+        $find->execute([$orderId, $sessionId]);
+        $order = $find->fetch();
+        if (!is_array($order)) data_respond(404, ['error' => 'order_not_found', 'message' => 'The authorized order was not found.']);
+        data_respond(200, [
+            'orderNumber' => $order['order_number'],
+            'totalAmount' => (float) $order['total_amount'],
+            'paymentStatus' => $order['payment_status'],
+        ]);
+    } catch (Throwable $error) {
+        error_log('Ambients Stripe checkout confirmation failed: ' . $error->getMessage());
+        data_respond(502, ['error' => 'checkout_confirmation_failed', 'message' => 'The payment authorization could not be confirmed. Contact the pharmacy before retrying.']);
+    }
+}
+
+if ($resource === 'checkout-cancel' && $method === 'POST') {
+    $body = data_read_json();
+    $orderId = data_string($body, 'orderId', 64);
+    if (!preg_match('/^[a-f0-9]{32}$/', $orderId)) {
+        data_respond(400, ['error' => 'invalid_order_id', 'message' => 'The order identifier is invalid.']);
+    }
+    $db = data_db();
+    $find = $db->prepare('SELECT stripe_checkout_session_id, payment_status FROM orders WHERE id = ?');
+    $find->execute([$orderId]);
+    $order = $find->fetch();
+    if (!is_array($order) || $order['payment_status'] !== 'Awaiting Payment' || !is_string($order['stripe_checkout_session_id'])) {
+        data_respond(409, ['error' => 'checkout_not_cancellable', 'message' => 'This checkout can no longer be cancelled.']);
+    }
+    try {
+        $session = data_stripe_request('GET', '/v1/checkout/sessions/' . rawurlencode($order['stripe_checkout_session_id']));
+        if (($session['status'] ?? '') === 'complete') {
+            data_respond(409, ['error' => 'checkout_already_complete', 'message' => 'Payment may already be authorized. Refresh the page to confirm its status.']);
+        }
+        if (($session['status'] ?? '') === 'open') {
+            data_stripe_request('POST', '/v1/checkout/sessions/' . rawurlencode($order['stripe_checkout_session_id']) . '/expire');
+        } elseif (($session['status'] ?? '') !== 'expired') {
+            data_respond(409, ['error' => 'checkout_not_cancellable', 'message' => 'This checkout can no longer be cancelled.']);
+        }
+        data_stripe_expire_order($db, $order['stripe_checkout_session_id']);
+        data_respond(200, ['cancelled' => true]);
+    } catch (Throwable $error) {
+        error_log('Ambients Stripe checkout cancellation failed: ' . $error->getMessage());
+        data_respond(409, ['error' => 'checkout_cancel_failed', 'message' => 'Checkout could not be cancelled. If you completed payment, contact the pharmacy.']);
+    }
+}
+
+if ($resource === 'payment-config' && $method === 'GET') {
+    try {
+        $config = data_config();
+        $secretReady = is_string($config['stripe_secret_key'] ?? null)
+            && preg_match('/^sk_(test|live)_[A-Za-z0-9]+$/', $config['stripe_secret_key']) === 1;
+        $webhookReady = is_string($config['stripe_webhook_secret'] ?? null)
+            && preg_match('/^whsec_[A-Za-z0-9]+$/', $config['stripe_webhook_secret']) === 1;
+        data_respond(200, ['stripeConfigured' => $secretReady && $webhookReady && function_exists('curl_init')]);
+    } catch (Throwable $error) {
+        error_log('Ambients payment configuration status failed: ' . $error->getMessage());
+        data_respond(503, ['error' => 'payment_config_unavailable', 'message' => 'Payment configuration status is unavailable.']);
+    }
 }
 
 if ($resource === 'chat') {
@@ -4639,6 +4965,167 @@ if ($method === 'POST' && $resource === 'manual-orders') {
     }
 }
 
+if ($method === 'POST' && $resource === 'checkout-session') {
+    $body = data_read_json();
+    $customerName = data_string($body, 'customerName', 160);
+    $email = strtolower(data_string($body, 'email', 254));
+    $phone = data_string($body, 'phone', 40);
+    $deliveryMethod = data_string($body, 'deliveryMethod', 32);
+    $deliveryAddress = data_string($body, 'deliveryAddress', 500);
+    $couponCode = strtoupper(data_string($body, 'couponCode', 32, false));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        data_respond(400, ['error' => 'invalid_email', 'message' => 'Enter a valid email address.']);
+    }
+    if (!in_array($deliveryMethod, ['Express Courier', 'Pharmacy Pickup', 'Discreet Mail'], true)) {
+        data_respond(400, ['error' => 'invalid_delivery', 'message' => 'Select a valid delivery method.']);
+    }
+    if (!is_array($body['items'] ?? null) || count($body['items']) < 1 || count($body['items']) > 30) {
+        data_respond(400, ['error' => 'invalid_items', 'message' => 'The order items are invalid.']);
+    }
+    if (!in_array($couponCode, ['AURA10', 'SAVE10', 'CRYPTO5', 'FREESHIP', ''], true)) {
+        data_respond(400, ['error' => 'invalid_coupon', 'message' => 'The coupon code is invalid.']);
+    }
+    $requestedItems = [];
+    foreach ($body['items'] as $requestedItem) {
+        if (
+            !is_array($requestedItem)
+            || !is_string($requestedItem['productId'] ?? null)
+            || !is_int($requestedItem['quantity'] ?? null)
+            || $requestedItem['quantity'] < 1
+            || $requestedItem['quantity'] > 50
+        ) {
+            data_respond(400, ['error' => 'invalid_items', 'message' => 'An order item is invalid.']);
+        }
+        $productId = $requestedItem['productId'];
+        $requestedItems[$productId] = ($requestedItems[$productId] ?? 0) + $requestedItem['quantity'];
+        if ($requestedItems[$productId] > 50) {
+            data_respond(400, ['error' => 'invalid_items', 'message' => 'The requested quantity is too large.']);
+        }
+    }
+
+    try {
+        data_stripe_webhook_secret();
+    } catch (Throwable $error) {
+        data_respond(503, ['error' => 'stripe_not_configured', 'message' => 'Stripe checkout is not ready yet. Please choose pay on delivery/pickup.']);
+    }
+
+    $db = data_db();
+    $db->beginTransaction();
+    $sessionId = '';
+    try {
+        $subtotalCents = 0;
+        $items = [];
+        $productQuery = $db->prepare('SELECT id, name, category, price, stock_count FROM products WHERE id = ? AND is_active = 1 FOR UPDATE');
+        foreach ($requestedItems as $productId => $quantity) {
+            $productQuery->execute([$productId]);
+            $product = $productQuery->fetch();
+            if (!$product || (int) $product['stock_count'] < $quantity) {
+                throw new DomainException('An item is unavailable or has insufficient stock.');
+            }
+            $unitPriceCents = (int) round((float) $product['price'] * 100);
+            $subtotalCents += $unitPriceCents * $quantity;
+            $items[] = [
+                'id' => (string) $product['id'],
+                'name' => (string) $product['name'],
+                'category' => (string) $product['category'],
+                'quantity' => $quantity,
+                'unitPriceCents' => $unitPriceCents,
+            ];
+        }
+
+        $discountRate = in_array($couponCode, ['AURA10', 'SAVE10'], true) ? 0.10 : ($couponCode === 'CRYPTO5' ? 0.05 : 0.0);
+        $discountCents = (int) round($subtotalCents * $discountRate);
+        $shippingCents = $deliveryMethod === 'Express Courier' && $subtotalCents < 3500 && $couponCode !== 'FREESHIP' ? 1200 : 0;
+        $totalCents = max(0, $subtotalCents - $discountCents + $shippingCents);
+        if ($totalCents < 50) {
+            throw new DomainException('The order total is too small for card checkout.');
+        }
+        $orderId = bin2hex(random_bytes(16));
+        $orderNumber = 'ORD-' . gmdate('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
+        $description = implode(', ', array_map(
+            static fn (array $item): string => $item['name'] . ' × ' . $item['quantity'],
+            $items
+        ));
+        if ($shippingCents > 0) $description .= ' · Express delivery';
+        if ($discountCents > 0) $description .= ' · Coupon ' . $couponCode;
+        $session = data_stripe_request('POST', '/v1/checkout/sessions', [
+            'mode' => 'payment',
+            'payment_method_types[0]' => 'card',
+            'success_url' => 'https://ambienta.io/?checkout_result={CHECKOUT_SESSION_ID}',
+            'cancel_url' => 'https://ambienta.io/?checkout_cancelled=1&order_id=' . rawurlencode($orderId),
+            'customer_email' => $email,
+            'expires_at' => time() + 3600,
+            'line_items[0][price_data][currency]' => 'usd',
+            'line_items[0][price_data][product_data][name]' => 'Ambienta order ' . $orderNumber,
+            'line_items[0][price_data][product_data][description]' => substr($description, 0, 500),
+            'line_items[0][price_data][unit_amount]' => $totalCents,
+            'line_items[0][quantity]' => 1,
+            'payment_intent_data[capture_method]' => 'manual',
+            'payment_intent_data[metadata][order_id]' => $orderId,
+            'metadata[order_id]' => $orderId,
+            'metadata[order_number]' => $orderNumber,
+        ]);
+        $sessionId = is_string($session['id'] ?? null) ? $session['id'] : '';
+        $sessionUrl = is_string($session['url'] ?? null) ? $session['url'] : '';
+        if (!preg_match('/^cs_(test|live)_[A-Za-z0-9]+$/', $sessionId) || !str_starts_with($sessionUrl, 'https://checkout.stripe.com/')) {
+            throw new RuntimeException('Stripe returned an invalid checkout session.');
+        }
+
+        $placedAt = gmdate('Y-m-d H:i:s');
+        $db->prepare(
+            'INSERT INTO orders (id, order_number, customer_name, email, phone, delivery_method, delivery_address, subtotal, shipping_fee, discount_amount, coupon_code, total_amount, payment_method, payment_status, stripe_checkout_session_id, status, placed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod, $deliveryAddress,
+            $subtotalCents / 100, $shippingCents / 100, $discountCents / 100, $couponCode === '' ? null : $couponCode,
+            $totalCents / 100, 'Credit / Debit Card', 'Awaiting Payment', $sessionId, 'Pending', $placedAt,
+        ]);
+        $insertItem = $db->prepare(
+            'INSERT INTO order_items (order_id, product_id, product_name, category, quantity, unit_price) VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $reserveStock = $db->prepare('UPDATE products SET stock_count = stock_count - ? WHERE id = ? AND stock_count >= ?');
+        foreach ($items as $item) {
+            $insertItem->execute([$orderId, $item['id'], $item['name'], $item['category'], $item['quantity'], $item['unitPriceCents'] / 100]);
+            $reserveStock->execute([$item['quantity'], $item['id'], $item['quantity']]);
+            if ($reserveStock->rowCount() !== 1) {
+                throw new DomainException('Stock changed while creating the order. Please try again.');
+            }
+        }
+        $nameParts = preg_split('/\s+/', $customerName, 2) ?: [$customerName];
+        $db->prepare(
+            "INSERT INTO leads (first_name, last_name, email, phone, lead_source) VALUES (?, ?, ?, ?, 'Online Order')
+             ON DUPLICATE KEY UPDATE id = id"
+        )->execute([$nameParts[0], $nameParts[1] ?? '', $email, $phone]);
+        data_audit($db, 'order.checkout_started', 'order', $orderId, ['orderNumber' => $orderNumber, 'total' => $totalCents / 100]);
+        $db->commit();
+        data_respond(201, ['url' => $sessionUrl, 'orderNumber' => $orderNumber]);
+    } catch (DomainException $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        if ($sessionId !== '') {
+            try {
+                data_stripe_request('POST', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '/expire');
+            } catch (Throwable $expireError) {
+                error_log('Ambients orphan Stripe checkout session could not be expired: ' . $expireError->getMessage());
+            }
+        }
+        data_respond(409, ['error' => 'checkout_conflict', 'message' => $error->getMessage()]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        if ($sessionId !== '') {
+            try {
+                data_stripe_request('POST', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '/expire');
+            } catch (Throwable $expireError) {
+                error_log('Ambients orphan Stripe checkout session could not be expired: ' . $expireError->getMessage());
+            }
+        }
+        error_log('Ambients Stripe checkout session creation failed: ' . $error->getMessage());
+        $message = $error->getMessage() === 'Stripe is not configured.'
+            ? 'Secure card checkout is not configured yet. Please choose pay on delivery/pickup.'
+            : 'Secure card checkout could not be started. Please try again or choose pay on delivery/pickup.';
+        data_respond(503, ['error' => 'checkout_unavailable', 'message' => $message]);
+    }
+}
+
 if ($method === 'POST' && $resource === 'orders') {
     $body = data_read_json();
     $db = data_db();
@@ -4657,9 +5144,8 @@ if ($method === 'POST' && $resource === 'orders') {
     if (!is_array($body['items'] ?? null) || count($body['items']) < 1 || count($body['items']) > 30) {
         data_respond(400, ['error' => 'invalid_items', 'message' => 'The order items are invalid.']);
     }
-    $paymentMethod = $body['paymentMethod'] ?? 'Cash on Delivery / Pickup';
-    if (!is_string($paymentMethod) || !in_array($paymentMethod, ['Credit / Debit Card', 'Cash on Delivery / Pickup'], true)) {
-        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Select a supported payment method.']);
+    if (isset($body['paymentMethod']) && $body['paymentMethod'] !== 'Cash on Delivery / Pickup') {
+        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Use secure card checkout or select pay on delivery/pickup.']);
     }
 
     $requestedItems = [];
@@ -4726,7 +5212,7 @@ if ($method === 'POST' && $resource === 'orders') {
         )->execute([
             $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod, $deliveryAddress,
             $subtotal, $shippingFee, $discountAmount, $couponCode === '' ? null : $couponCode,
-            $totalAmount, $paymentMethod, 'Pending Verification', 'Pending', $placedAt,
+            $totalAmount, 'Cash on Delivery / Pickup', 'Pending Verification', 'Pending', $placedAt,
         ]);
 
         $insertItem = $db->prepare(
@@ -5122,6 +5608,56 @@ if ($method === 'POST' && $resource === 'order-notes') {
     }
 }
 
+if ($method === 'POST' && $resource === 'order-capture') {
+    data_require_admin('admin');
+    $body = data_read_json();
+    $orderId = data_string($body, 'orderId', 64);
+    $db = data_db();
+    $find = $db->prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE');
+    $db->beginTransaction();
+    try {
+        $find->execute([$orderId]);
+        $order = $find->fetch();
+        if (!is_array($order)) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
+        }
+        if ($order['payment_status'] === 'Paid') {
+            $db->commit();
+            data_respond(200, ['order' => data_order_row($db, $order)]);
+        }
+        if ($order['payment_method'] !== 'Credit / Debit Card' || $order['payment_status'] !== 'Authorized'
+            || !is_string($order['stripe_payment_intent_id']) || $order['stripe_payment_intent_id'] === '') {
+            $db->rollBack();
+            data_respond(409, ['error' => 'payment_not_capturable', 'message' => 'This order does not have an authorized Stripe card payment to capture.']);
+        }
+        $intent = data_stripe_request(
+            'POST',
+            '/v1/payment_intents/' . rawurlencode($order['stripe_payment_intent_id']) . '/capture',
+            [],
+            'ambienta-order-capture-' . $orderId
+        );
+        if (($intent['status'] ?? '') !== 'succeeded') {
+            $db->rollBack();
+            data_respond(409, ['error' => 'payment_capture_failed', 'message' => 'Stripe did not confirm the card payment capture.']);
+        }
+        $update = $db->prepare('UPDATE orders SET payment_status = ? WHERE id = ? AND payment_status = ?');
+        $update->execute(['Paid', $orderId, 'Authorized']);
+        if ($update->rowCount() === 1) {
+            data_audit($db, 'order.payment_captured', 'order', $orderId, ['orderNumber' => $order['order_number']]);
+        }
+        $db->commit();
+        $find->execute([$orderId]);
+        $savedOrder = $find->fetch();
+        if (!is_array($savedOrder)) data_respond(404, ['error' => 'order_not_found', 'message' => 'The order could not be reloaded.']);
+        data_respond(200, ['order' => data_order_row($db, $savedOrder)]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients Stripe payment capture failed: ' . $error->getMessage());
+        data_respond(502, ['error' => 'payment_capture_failed', 'message' => 'Stripe could not capture this authorization. Confirm its status in Stripe before retrying.']);
+    }
+}
+
 if ($method === 'PATCH' && $resource === 'orders') {
     data_require_permission('orders');
     $body = data_read_json();
@@ -5138,7 +5674,7 @@ if ($method === 'PATCH' && $resource === 'orders') {
     $db = data_db();
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT status, carrier, tracking_number FROM orders WHERE id = ? FOR UPDATE');
+        $find = $db->prepare('SELECT status, carrier, tracking_number, payment_status, payment_method, stripe_checkout_session_id, stripe_payment_intent_id FROM orders WHERE id = ? FOR UPDATE');
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
@@ -5147,7 +5683,33 @@ if ($method === 'PATCH' && $resource === 'orders') {
         }
         $nextCarrier = $carrierProvided ? ($carrier === '' ? null : $carrier) : $current['carrier'];
         $nextTrackingNumber = $trackingNumberProvided ? ($trackingNumber === '' ? null : $trackingNumber) : $current['tracking_number'];
+        $nextPaymentStatus = $current['payment_status'];
         if ($current['status'] !== 'Cancelled' && $status === 'Cancelled') {
+            if ($current['payment_status'] === 'Paid') {
+                $db->rollBack();
+                data_respond(409, ['error' => 'refund_required', 'message' => 'Refund this captured payment in Stripe before cancelling the order.']);
+            }
+            if ($current['payment_status'] === 'Awaiting Payment' && is_string($current['stripe_checkout_session_id'])) {
+                data_stripe_request(
+                    'POST',
+                    '/v1/checkout/sessions/' . rawurlencode($current['stripe_checkout_session_id']) . '/expire',
+                    [],
+                    'ambienta-order-cancel-' . $id
+                );
+                $nextPaymentStatus = 'Payment Failed';
+            } elseif ($current['payment_status'] === 'Authorized' && is_string($current['stripe_payment_intent_id'])) {
+                $intent = data_stripe_request(
+                    'POST',
+                    '/v1/payment_intents/' . rawurlencode($current['stripe_payment_intent_id']) . '/cancel',
+                    [],
+                    'ambienta-order-cancel-' . $id
+                );
+                if (($intent['status'] ?? '') !== 'canceled') {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'authorization_cancel_failed', 'message' => 'The card authorization could not be cancelled in Stripe.']);
+                }
+                $nextPaymentStatus = 'Payment Failed';
+            }
             $restock = $db->prepare(
                 'UPDATE products p INNER JOIN order_items i ON i.product_id = p.id SET p.stock_count = p.stock_count + i.quantity WHERE i.order_id = ?'
             );
@@ -5176,8 +5738,8 @@ if ($method === 'PATCH' && $resource === 'orders') {
                 }
             }
         }
-        $update = $db->prepare('UPDATE orders SET status = ?, carrier = ?, tracking_number = ? WHERE id = ?');
-        $update->execute([$status, $nextCarrier, $nextTrackingNumber, $id]);
+        $update = $db->prepare('UPDATE orders SET status = ?, carrier = ?, tracking_number = ?, payment_status = ? WHERE id = ?');
+        $update->execute([$status, $nextCarrier, $nextTrackingNumber, $nextPaymentStatus, $id]);
         if ($current['status'] !== $status) {
             data_audit($db, 'order.status_changed', 'order', $id, ['from' => $current['status'], 'to' => $status]);
         }

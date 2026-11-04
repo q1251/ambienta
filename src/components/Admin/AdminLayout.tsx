@@ -366,6 +366,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
                 onAddOrderInternalNote={props.onAddOrderInternalNote}
                 onCreateManualOrder={props.onCreateManualOrder}
                 catalogItems={props.catalogItems}
+                canCapturePayments={props.role === 'admin'}
               />
             )}
             {activeTab === 'inventory' && (

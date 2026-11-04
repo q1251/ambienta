@@ -151,20 +151,28 @@ and contact leads; only the primary administrator can manage staff accounts or
 view the audit log. Deactivated operator accounts are denied access on their
 next protected API request.
 
-Mail is not connected: lead profiles can compose a message and hand it off to
-the staff member's default email application, but the CRM does not send
-messages or track delivery, opens, or replies. Staff must verify that a message
-is lawful to send; do not use the composer for promotional outreach without
-recorded marketing opt-in. Card and PayPal processing are disabled, and
-cryptocurrency remains disabled. The audit log is available only through the
-authenticated admin API.
+The CRM connects to Hostinger mail when mailbox settings have been saved and
+verified. SMTP acceptance does not prove final delivery; open tracking is
+approximate and only available when enabled for a campaign. Use promotional
+campaigns only for contacts with recorded marketing consent.
 
-Storefront checkout currently accepts cash on delivery/pickup only. Card,
-PayPal, and cryptocurrency processing are disabled until a server-side payment
-provider is configured; no payment is captured by this API. To enable payment
-or mailbox features, configure provider credentials only through protected
-server/GitHub Actions secrets and complete provider webhook, delivery, and
-security verification before representing those integrations as active.
+Storefront checkout accepts pay-on-delivery/pickup and Stripe card payments
+when Stripe is configured. Add `STRIPE_SECRET_KEY` and
+`STRIPE_WEBHOOK_SECRET` as GitHub Actions secrets, then deploy. Configure the
+Stripe webhook endpoint at
+`https://ambienta.io/api/data.php?resource=stripe-webhook` for
+`checkout.session.completed`, `checkout.session.expired`, and
+`payment_intent.succeeded`. Until both secrets and the webhook are configured,
+card checkout stays disabled.
+
+Stripe Checkout collects card details directly; Ambienta stores only Stripe
+payment identifiers and status. Card checkout authorizes the amount but does
+not immediately capture it. An administrator can capture an authorized
+payment from the order details after review. Capture before the authorization
+expires (often within seven days; the exact window depends on the card/network).
+PayPal and cryptocurrency processing are not enabled. Never put card details
+in CRM order notes. The audit log is available only through the authenticated
+admin API.
 
 For local development, start the PHP API from a second terminal with
 `php -S 127.0.0.1:8001 -t public`; Vite proxies `/api` requests to it. Create

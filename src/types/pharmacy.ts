@@ -141,7 +141,7 @@ export type PaymentMethod =
   | 'Cryptocurrency (USDC / BTC / ETH / SOL)'
   | 'Cash on Delivery / Pickup';
 
-export type PaymentStatus = 'Paid' | 'Pending Verification' | 'Refunded';
+export type PaymentStatus = 'Awaiting Payment' | 'Authorized' | 'Paid' | 'Pending Verification' | 'Payment Failed' | 'Refunded';
 
 export interface OrderItem {
   productId: string;

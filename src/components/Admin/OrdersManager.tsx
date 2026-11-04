@@ -39,6 +39,7 @@ interface OrdersManagerProps {
     quantity: number;
   }) => Promise<OnlineOrder>;
   catalogItems?: CatalogItem[];
+  canCapturePayments?: boolean;
 }
 
 const orderStatuses: OnlineOrder['status'][] = [
@@ -63,6 +64,13 @@ const orderStatusClasses: Record<OnlineOrder['status'], string> = {
   Delivered: 'border-emerald-300 bg-emerald-50 text-emerald-800',
   Completed: 'border-emerald-300 bg-emerald-50 text-emerald-800',
   Cancelled: 'border-rose-300 bg-rose-50 text-rose-800',
+};
+
+const paymentStatusClass = (status?: OnlineOrder['paymentStatus']): string => {
+  if (status === 'Paid') return 'bg-emerald-50 text-emerald-700';
+  if (status === 'Authorized') return 'bg-sky-50 text-sky-800';
+  if (status === 'Payment Failed' || status === 'Refunded') return 'bg-rose-50 text-rose-700';
+  return 'bg-amber-50 text-amber-800';
 };
 
 const OrderStatusTag: React.FC<{
@@ -92,6 +100,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   onAddOrderInternalNote,
   onCreateManualOrder,
   catalogItems = [],
+  canCapturePayments = false,
 }) => {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,6 +119,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [orderSaveError, setOrderSaveError] = useState('');
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
+  const [isCapturingPayment, setIsCapturingPayment] = useState(false);
 
   // Manual Order Modal
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -295,6 +305,30 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       setOrderSaveError(error instanceof Error ? error.message : 'Order status could not be saved.');
     } finally {
       setIsSavingStatus(false);
+    }
+  };
+
+  const handleCapturePayment = async () => {
+    if (!selectedOrder) return;
+    setOrderSaveError('');
+    setIsCapturingPayment(true);
+    try {
+      const response = await fetch('/api/data.php?resource=order-capture', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ orderId: selectedOrder.id }),
+      });
+      const result = await response.json() as { order?: OnlineOrder; message?: string };
+      if (!response.ok || !result.order) {
+        throw new Error(result.message || 'The authorized card payment could not be captured.');
+      }
+      setSelectedOrder(result.order);
+      setReloadCounter((counter) => counter + 1);
+    } catch (error) {
+      setOrderSaveError(error instanceof Error ? error.message : 'The authorized card payment could not be captured.');
+    } finally {
+      setIsCapturingPayment(false);
     }
   };
 
@@ -639,7 +673,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[10px] text-slate-500">{ord.paymentMethod || 'Not specified'}</span>
-                        <span className={`rounded px-1 text-[10px] font-bold ${ord.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+                        <span className={`rounded px-1 text-[10px] font-bold ${paymentStatusClass(ord.paymentStatus)}`}>
                           {ord.paymentStatus || 'Unknown'}
                         </span>
                       </div>
@@ -757,7 +791,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">{ord.deliveryMethod}</span>
-                  <span className={`rounded-md px-2 py-1 font-semibold ${ord.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+                  <span className={`rounded-md px-2 py-1 font-semibold ${paymentStatusClass(ord.paymentStatus)}`}>
                     {ord.paymentStatus || 'Payment unverified'}
                   </span>
                 </div>
@@ -899,12 +933,25 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Payment Status:</span>
-                    <span className="font-bold text-amber-800">{selectedOrder.paymentStatus || 'Unknown'}</span>
+                    <span className={`font-bold ${paymentStatusClass(selectedOrder.paymentStatus)}`}>{selectedOrder.paymentStatus || 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Transaction ID:</span>
                     <span className="font-mono text-slate-700">{selectedOrder.transactionId || 'Not available'}</span>
                   </div>
+                  {canCapturePayments && selectedOrder.paymentMethod === 'Credit / Debit Card' && selectedOrder.paymentStatus === 'Authorized' && (
+                    <button
+                      type="button"
+                      onClick={() => void handleCapturePayment()}
+                      disabled={isCapturingPayment}
+                      className="mt-2 w-full rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isCapturingPayment ? 'Capturing payment…' : `Capture $${selectedOrder.totalAmount.toFixed(2)} in Stripe`}
+                    </button>
+                  )}
+                  {selectedOrder.paymentMethod === 'Credit / Debit Card' && selectedOrder.paymentStatus === 'Authorized' && (
+                    <p className="text-[11px] leading-5 text-slate-500">The card is authorized, not yet charged. Capture it before the authorization expires.</p>
+                  )}
                 </div>
               </div>
 
