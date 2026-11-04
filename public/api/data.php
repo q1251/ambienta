@@ -2462,10 +2462,18 @@ if ($resource === 'visitor-session' && $method === 'POST') {
                     ->execute([$sessionHash, (int) $oldestId]);
             }
         } else {
-            $db->prepare(
-                'UPDATE visitor_page_views SET page_title = IF(? = \'\', page_title, ?), product_id = ?
-                 WHERE session_token_hash = ? ORDER BY id DESC LIMIT 1'
-            )->execute([$pageTitle, $pageTitle, $productId === '' ? null : $productId, $sessionHash]);
+            $latestView = $db->prepare('SELECT id FROM visitor_page_views WHERE session_token_hash = ? ORDER BY id DESC LIMIT 1');
+            $latestView->execute([$sessionHash]);
+            $latestViewId = $latestView->fetchColumn();
+            if ($latestViewId !== false) {
+                if ($pageTitle === '') {
+                    $db->prepare('UPDATE visitor_page_views SET product_id = ? WHERE id = ? AND session_token_hash = ?')
+                        ->execute([$productId === '' ? null : $productId, (int) $latestViewId, $sessionHash]);
+                } else {
+                    $db->prepare('UPDATE visitor_page_views SET page_title = ?, product_id = ? WHERE id = ? AND session_token_hash = ?')
+                        ->execute([$pageTitle, $productId === '' ? null : $productId, (int) $latestViewId, $sessionHash]);
+                }
+            }
         }
         $db->exec('DELETE FROM visitor_sessions WHERE last_seen < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY) LIMIT 1000');
         $db->commit();
