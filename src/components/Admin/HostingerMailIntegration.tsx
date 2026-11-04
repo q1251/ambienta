@@ -1013,7 +1013,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 type="button"
                 aria-current={activeFolder === 'campaign-history' ? 'page' : undefined}
                 onClick={() => setActiveFolder('campaign-history')}
-                className={`hidden items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors xl:flex ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === 'campaign-history'
                     ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
