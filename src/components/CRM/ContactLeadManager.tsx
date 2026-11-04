@@ -9,8 +9,10 @@ type NewLead = ContactLeadInput;
 
 interface ContactLeadManagerProps {
   role?: 'admin' | 'operator';
+  canSendEmail?: boolean;
   leads: ContactLead[];
   dataError?: string;
+  onOpenEmailCampaigns?: () => void;
   onSaveLeads: (leads: NewLead[]) => Promise<void>;
   onLoadLeadProfile?: (leadId: number) => Promise<LeadProfile>;
   onUpdateLead?: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
@@ -27,8 +29,10 @@ interface AgentOption {
 
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   role,
+  canSendEmail = false,
   leads,
   dataError,
+  onOpenEmailCampaigns,
   onSaveLeads,
   onLoadLeadProfile,
   onUpdateLead,
@@ -73,6 +77,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [copiedField, setCopiedField] = useState('');
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
@@ -425,11 +431,35 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     );
   };
 
-  const openEmailComposer = (event: React.FormEvent, recipient: string) => {
+  const sendLeadEmail = async (event: React.FormEvent) => {
     event.preventDefault();
-    const mailto = `mailto:${recipient}?subject=${encodeURIComponent(emailSubject.trim())}&body=${encodeURIComponent(emailBody.trim())}`;
-    window.location.href = mailto;
-    setEmailComposerOpen(false);
+    if (!profile || !canSendEmail) return;
+    setEmailError('');
+    setEmailSending(true);
+    try {
+      const response = await fetch('/api/data.php?resource=email-send', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipientEmail: profile.lead.email,
+          subject: emailSubject.trim(),
+          body: emailBody.trim(),
+        }),
+      });
+      const result = await response.json() as { sent?: boolean; message?: string };
+      if (!response.ok || result.sent !== true) {
+        throw new Error(result.message || 'The email could not be sent through Hostinger.');
+      }
+      setEmailComposerOpen(false);
+      setEmailSubject('');
+      setEmailBody('');
+      setSuccess(result.message || 'Hostinger accepted the email for sending.');
+    } catch (error) {
+      setEmailError(error instanceof Error ? error.message : 'The email could not be sent through Hostinger.');
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   if (selectedLeadId !== null) {
@@ -505,7 +535,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       <p className="text-xs font-medium uppercase text-slate-500">Added</p>
                       <p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <button type="button" disabled={!canEditSelectedLead} title={!canEditSelectedLead ? 'Assign this new lead before contacting them from the CRM.' : undefined} onClick={() => setEmailComposerOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
+                    <button type="button" disabled={!canEditSelectedLead || !canSendEmail} title={!canEditSelectedLead ? 'Assign this new lead before contacting them from the CRM.' : !canSendEmail ? 'Your account does not have permission to send email.' : undefined} onClick={() => { setEmailError(''); setEmailComposerOpen(true); }} className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
                       <Mail className="h-4 w-4" /> Compose email
                     </button>
                   </div>
@@ -602,16 +632,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <div className="flex items-start justify-between border-b border-slate-200 p-5">
                     <div>
                       <h3 id="lead-email-title" className="flex items-center gap-2 text-lg font-bold text-slate-900"><Mail className="h-5 w-5 text-teal-800" />Compose email</h3>
-                      <p className="mt-1 text-sm text-slate-600">This opens your default email app. CRM sending, delivery status, replies, and tracking are not connected.</p>
+                      <p className="mt-1 text-sm text-slate-600">Send through the connected Hostinger account. The message will be logged in CRM email activity.</p>
                     </div>
-                    <button type="button" onClick={() => setEmailComposerOpen(false)} aria-label="Close email composer" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+                    <button type="button" disabled={emailSending} onClick={() => setEmailComposerOpen(false)} aria-label="Close email composer" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
                   </div>
-                  <form onSubmit={(event) => openEmailComposer(event, profile.lead.email)} className="space-y-4 p-5">
+                  <form onSubmit={(event) => void sendLeadEmail(event)} className="space-y-4 p-5">
                     <label className="block text-sm font-medium text-slate-700">To
                       <input type="email" readOnly value={profile.lead.email} className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-slate-600" />
                     </label>
                     <label className="block text-sm font-medium text-slate-700">Subject
-                      <input required maxLength={200} value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                      <input required maxLength={180} value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
                     </label>
                     <label className="block text-sm font-medium text-slate-700">Message
                       <textarea required maxLength={10000} rows={7} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
@@ -621,10 +651,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         This contact has not opted in to marketing. Do not use this composer for promotional outreach unless valid consent is recorded.
                       </p>
                     )}
+                    {emailError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{emailError}</p>}
                     <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                      <button type="button" onClick={() => setEmailComposerOpen(false)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-                      <button type="submit" disabled={!emailSubject.trim() || !emailBody.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                        <Send className="h-4 w-4" /> Open email app
+                      <button type="button" disabled={emailSending} onClick={() => setEmailComposerOpen(false)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+                      <button type="submit" disabled={emailSending || !emailSubject.trim() || !emailBody.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                        <Send className="h-4 w-4" /> {emailSending ? 'Sending…' : 'Send via Hostinger'}
                       </button>
                     </div>
                   </form>
@@ -807,9 +838,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             <button type="button" onClick={downloadContacts} disabled={!leads.length} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
               <Download className="h-4 w-4" /> Download contacts
             </button>
-            <button type="button" disabled title="Mail is not connected; sending is disabled until credentials are configured privately." className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-400">
-              <Mail className="h-4 w-4" /> Bulk email unavailable
-            </button>
+            {isSuperadmin && onOpenEmailCampaigns && (
+              <button type="button" onClick={onOpenEmailCampaigns} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <Mail className="h-4 w-4" /> Bulk email campaigns
+              </button>
+            )}
             <label className="relative">
               <span className="sr-only">Search leads</span>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -821,7 +854,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             </select>
           </div>
         </div>
-        <div className="mt-3 overflow-x-auto">
+        <div className="mt-3 hidden overflow-x-auto min-[1800px]:block">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Status</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th>{isSuperadmin && <th className="py-3">Assigned agent</th>}<th className="py-3 pr-5 text-right">Actions</th></tr></thead>
             <tbody>
@@ -904,6 +937,74 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               {!filteredLeads.length && <tr><td colSpan={isSuperadmin ? 9 : 8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="grid gap-3 p-3 min-[1800px]:hidden sm:grid-cols-2 sm:p-4">
+          {filteredLeads.map((lead) => (
+            <article key={lead.id} className="min-w-0 rounded-xl border border-[#e5e8e1] bg-white p-4 transition hover:border-[#c8d4c8] sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <button type="button" disabled={!onLoadLeadProfile} onClick={() => void openProfile(lead)} className="block max-w-full truncate text-left text-sm font-bold text-[#315649] hover:underline disabled:cursor-default disabled:no-underline">
+                    {lead.firstName} {lead.lastName}
+                  </button>
+                  <div className="mt-1 flex min-w-0 items-center">
+                    <a href={`mailto:${lead.email}`} onClick={(event) => event.stopPropagation()} className="truncate text-xs text-slate-600 hover:text-[#315649] hover:underline">{lead.email}</a>
+                    {copyButton(lead, 'email', lead.email)}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full bg-[#edf2ed] px-2.5 py-1 text-[11px] font-semibold text-[#456953]">{lead.status}</span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4 text-xs">
+                <div className="min-w-0">
+                  <p className="font-semibold uppercase tracking-wide text-slate-400">Phone</p>
+                  {lead.phone
+                    ? <div className="mt-1 flex min-w-0 items-center"><a href={`tel:${phoneLink(lead.phone)}`} className="truncate font-medium text-slate-700 hover:text-[#315649]">{lead.phone}</a>{copyButton(lead, 'phone', lead.phone)}</div>
+                    : <p className="mt-1 text-slate-500">Not provided</p>}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold uppercase tracking-wide text-slate-400">Country</p>
+                  <p className="mt-1 truncate text-slate-700">{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</p>
+                </div>
+                <div>
+                  <p className="font-semibold uppercase tracking-wide text-slate-400">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</p>
+                  <p className="mt-1 font-semibold text-slate-800">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold uppercase tracking-wide text-slate-400">Source</p>
+                  <p className="mt-1 truncate text-slate-700">{lead.leadSource}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                {isSuperadmin ? (
+                  <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
+                    <span className="shrink-0">Assigned to</span>
+                    <select
+                      aria-label={`Assign ${lead.firstName} ${lead.lastName}`}
+                      value={lead.assignedStaffId ?? ''}
+                      onChange={(event) => void assignLead(lead, event.target.value)}
+                      className="min-w-0 max-w-44 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
+                    >
+                      <option value="">Unassigned</option>
+                      {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || agent.email}</option>)}
+                    </select>
+                  </label>
+                ) : <span className="text-xs text-slate-500">{lead.assignedStaffName || 'Assigned to you'}</span>}
+                <button
+                  type="button"
+                  disabled={!isSuperadmin}
+                  title={isSuperadmin ? `Edit ${lead.firstName} ${lead.lastName}` : 'Only a superadmin can edit contact details.'}
+                  onClick={() => { if (isSuperadmin) openLeadEditor(lead); }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#bdcdbf] hover:bg-[#f5f8f4] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+              </div>
+            </article>
+          ))}
+          {!filteredLeads.length && (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500 sm:col-span-2">
+              {!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}
+            </p>
+          )}
         </div>
       </div>
 

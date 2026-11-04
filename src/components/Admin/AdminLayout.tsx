@@ -133,6 +133,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   });
   const [logoutError, setLogoutError] = useState('');
   const [impersonationError, setImpersonationError] = useState('');
+  const [emailInitialFolder, setEmailInitialFolder] = useState<'inbox' | 'campaigns'>('inbox');
   useEffect(() => {
     let failureReported = false;
     const presencePermission = activeTab === 'orders' ? 'orders'
@@ -172,6 +173,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     return () => window.clearInterval(timer);
   }, [activeTab, props.role, props.permissions]);
   const selectTab = (tab: AdminTab) => {
+    setEmailInitialFolder('inbox');
     const neededPermission = tab === 'leads' ? 'leads'
       : tab === 'orders' ? 'orders'
         : tab === 'inventory' ? 'products'
@@ -189,6 +191,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     if (tab !== 'leads') url.searchParams.delete('leadId');
     window.history.replaceState(window.history.state, '', url);
     setActiveTab(tab);
+    window.scrollTo(0, 0);
+  };
+  const openEmailCampaigns = () => {
+    selectTab('email');
+    setEmailInitialFolder('campaigns');
   };
   const permissionsKey = props.permissions.join(',');
   const visibleNavigation = useMemo(() => navigation.filter((item) => {
@@ -342,11 +349,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             )}
             {activeTab === 'leads' && (
               <Suspense fallback={<p role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">Loading contact leads…</p>}>
-                <ContactLeadManager role={props.role} leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
+                <ContactLeadManager role={props.role} canSendEmail={props.role === 'admin' || props.permissions.includes('integrations')} leads={props.leads} dataError={props.leadDataError} onOpenEmailCampaigns={openEmailCampaigns} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
               </Suspense>
             )}
             {activeTab === 'chat' && <LiveChatInbox role={props.role} />}
-            {activeTab === 'email' && <HostingerMailIntegration role={props.role} mode="mailbox" />}
+            {activeTab === 'email' && <HostingerMailIntegration role={props.role} mode="mailbox" initialFolder={emailInitialFolder} />}
             {activeTab === 'integrations' && <IntegrationStatus role={props.role} />}
             {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
             {activeTab === 'staff' && props.role === 'admin' && <StaffManager onEnterAccount={props.onEnterAccount} />}

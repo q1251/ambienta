@@ -16,6 +16,7 @@ import {
 interface HostingerMailIntegrationProps {
   role: 'admin' | 'operator';
   mode: 'settings' | 'mailbox';
+  initialFolder?: 'inbox' | 'campaigns';
 }
 
 interface MailSettings {
@@ -185,7 +186,7 @@ const requestMailApi = async (resource: string, method: 'GET' | 'POST' | 'DELETE
   return result;
 };
 
-export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> = ({ role, mode }) => {
+export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> = ({ role, mode, initialFolder = 'inbox' }) => {
   const [settings, setSettings] = useState<MailSettings>({
     configured: false,
     verified: false,
@@ -224,7 +225,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [inboxFolderAvailable, setInboxFolderAvailable] = useState(true);
   const [sentFolderAvailable, setSentFolderAvailable] = useState(false);
   const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
-  const [activeFolder, setActiveFolder] = useState<MailboxFolder>('inbox');
+  const [activeFolder, setActiveFolder] = useState<MailboxFolder>(initialFolder);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');

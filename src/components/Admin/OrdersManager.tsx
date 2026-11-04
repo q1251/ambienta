@@ -424,7 +424,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         </div>
 
         {/* Orders Table */}
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto 2xl:block">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
               <tr>
@@ -536,6 +536,61 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="grid gap-3 p-3 2xl:hidden sm:p-4">
+          {isLoading ? (
+            <p role="status" className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">Loading orders…</p>
+          ) : filteredOrders.length === 0 ? (
+            <p className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">No orders match this search and status filter.</p>
+          ) : filteredOrders.map((ord) => (
+            <article
+              key={ord.id}
+              className="rounded-xl border border-[#e5e8e1] bg-white p-4 transition hover:border-[#c8d4c8] sm:p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <button type="button" onClick={() => handleOpenDetail(ord)} className="min-w-0 text-left">
+                  <span className="block break-all text-sm font-bold tracking-tight text-[#315649]">{ord.orderNumber}</span>
+                  <span className="mt-1 block text-xs text-slate-500">{ord.placedAt}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold tracking-tight text-slate-900">${ord.totalAmount.toFixed(2)}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenOrderPage(ord)}
+                    className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50 hover:text-[#315649]"
+                    title="Open order page"
+                    aria-label={`Open order page for ${ord.orderNumber}`}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900">{ord.patientName}</p>
+                  <p className="mt-0.5 break-all text-xs text-slate-500">{ord.email}</p>
+                  {ord.phone && <p className="mt-0.5 text-xs text-slate-500">{ord.phone}</p>}
+                </div>
+                <div className="min-w-0 sm:text-right">
+                  <p className="text-sm font-medium text-slate-800">{ord.medicationName}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{ord.items?.length ? `${ord.items.length} line item(s)` : 'Single product order'}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">{ord.deliveryMethod}</span>
+                  <span className={`rounded-md px-2 py-1 font-semibold ${ord.paymentStatus === 'Paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>
+                    {ord.paymentStatus || 'Payment unverified'}
+                  </span>
+                </div>
+                <div onClick={(event) => event.stopPropagation()}>
+                  <OrderStatusTag order={ord} onChange={requestStatusChange} />
+                </div>
+              </div>
+              {ord.trackingNumber && <p className="mt-3 text-xs text-slate-500">Tracking: <span className="font-medium text-slate-700">{ord.carrier ? `${ord.carrier} · ` : ''}{ord.trackingNumber}</span></p>}
+            </article>
+          ))}
         </div>
         <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
           <p className="text-xs text-slate-500">Page {pagination.page} of {Math.max(1, pagination.pages)} · {pagination.total} total orders</p>
