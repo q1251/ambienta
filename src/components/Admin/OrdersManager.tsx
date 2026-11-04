@@ -573,7 +573,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
       {/* Comprehensive Order Detail Modal / Order Page */}
       {selectedOrder && (
-        <div className={orderPageId ? 'w-full space-y-6' : 'fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4'}>
+        <div className={orderPageId ? 'w-full space-y-6' : 'fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4'}>
           {orderPageId && (
             <div className="flex flex-col gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -831,7 +831,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
       {/* Manual Phone/Walk-in Order Modal */}
       {isManualModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 space-y-4 text-xs font-sans">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="font-bold text-base text-slate-900">

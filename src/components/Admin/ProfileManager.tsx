@@ -74,7 +74,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
       {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{message}</p>}
 
       <form onSubmit={saveProfile} className="grid flex-1 grid-cols-1 content-start gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 lg:grid-cols-2 lg:gap-6 lg:p-8">
-        <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <UserRound className="h-5 w-5 text-teal-800" />
             <h2 className="font-semibold text-slate-900">Account details</h2>
@@ -89,7 +89,7 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-teal-800" />
             <h2 className="font-semibold text-slate-900">Change password</h2>

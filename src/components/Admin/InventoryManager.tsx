@@ -772,7 +772,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       </div>
 
       {previewItem && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`${previewItem.name} storefront preview`} onClick={() => setPreviewItem(null)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label={`${previewItem.name} storefront preview`} onClick={() => setPreviewItem(null)}>
           <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div>
@@ -825,7 +825,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       )}
 
       {isProductCsvOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
           <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
@@ -891,7 +891,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
       {/* MODAL 1: ADD / UPLOAD PRODUCT MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -1115,7 +1115,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
       {/* MODAL 2: EDIT PRODUCT DETAILS & PRICING */}
       {editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -1371,7 +1371,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
       {/* MODAL 3: BULK PRICE ADJUSTMENT */}
       {isBulkPriceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
