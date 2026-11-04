@@ -278,7 +278,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Workspace</p>
             <p className="mt-1 text-sm font-semibold text-[#213936]">{props.role === 'admin' ? 'Administration' : 'Team workspace'}</p>
           </div>
-          <nav aria-label="Workspace navigation" className="flex min-h-0 flex-1 flex-col">
+          <nav aria-label="Workspace navigation" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div>
               {visibleNavigation.filter((item) => item.group === 'Workspace').map((item) => (
                 <NavButton key={item.id} item={item} label={labelForItem(item)} active={activeTab === item.id} onSelect={selectTab} />
