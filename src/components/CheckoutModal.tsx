@@ -18,6 +18,43 @@ import {
 } from 'lucide-react';
 import { CartItem, OnlineOrder, PaymentMethod, OrderItem } from '../types/pharmacy';
 
+const PaymentBrandMark: React.FC<{ method: PaymentMethod }> = ({ method }) => {
+  if (method === 'Credit / Debit Card') {
+    return (
+      <span aria-hidden="true" className="flex items-center gap-1">
+        <span className="font-black italic tracking-tight text-[#1434CB]">VISA</span>
+        <span className="relative flex h-5 w-7 items-center">
+          <span className="absolute left-0 h-4 w-4 rounded-full bg-[#EB001B]" />
+          <span className="absolute right-0 h-4 w-4 rounded-full bg-[#F79E1B] mix-blend-multiply" />
+        </span>
+      </span>
+    );
+  }
+
+  if (method === 'PayPal') {
+    return (
+      <span aria-hidden="true" className="flex items-center gap-1">
+        <span className="flex h-5 w-5 items-center justify-center rounded bg-[#003087] text-sm font-black italic leading-none text-white">P</span>
+        <span className="font-bold tracking-tight text-[#003087]">PayPal</span>
+      </span>
+    );
+  }
+
+  if (method === 'Cryptocurrency (USDC / BTC / ETH / SOL)') {
+    return (
+      <span aria-hidden="true" className="flex items-center gap-1">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#F7931A] text-sm font-bold text-white">₿</span>
+        <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#627EEA]" fill="currentColor">
+          <path d="M12 1.8 5.8 12 12 15.7 18.2 12 12 1.8Zm0 14.9-6.2-3.7L12 22.2l6.2-9.2-6.2 3.7Z" />
+        </svg>
+        <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#2775CA] text-[9px] font-bold text-[#2775CA]">$</span>
+      </span>
+    );
+  }
+
+  return <Building aria-hidden="true" className="h-5 w-5 text-slate-600" />;
+};
+
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -146,8 +183,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         internalNotes: [
           `Payment due via ${paymentMethod}`,
           paymentMethod === 'Cash on Delivery / Pickup'
-            ? 'Order saved for administrator review.'
-            : 'A payment link will be sent by email after order review.',
+            ? 'Order received for review.'
+            : 'Payment link to be sent by email after order review.',
         ],
       };
 
@@ -178,7 +215,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Place an order for admin review
+                Secure, straightforward checkout
               </p>
             </div>
           </div>
@@ -201,14 +238,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
                 {completedOrder.paymentMethod === 'Cash on Delivery / Pickup'
-                  ? 'Order received · pay on delivery or pickup'
-                  : 'Order received · payment link by email'}
+                  ? 'Order received · payment on delivery or pickup'
+                  : 'Order received · payment instructions by email'}
               </span>
               <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been added to the admin order queue. {completedOrder.paymentMethod === 'Cash on Delivery / Pickup'
-                  ? 'The team will review your order and confirm payment on delivery or pickup.'
-                  : 'After review, the team will email you a payment link for your selected payment method.'}
+                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been received. {completedOrder.paymentMethod === 'Cash on Delivery / Pickup'
+                  ? 'Payment is due when your order is delivered or collected.'
+                  : `We’ll review your order and email payment instructions and a secure ${completedOrder.paymentMethod === 'Credit / Debit Card' ? 'card' : completedOrder.paymentMethod} payment link to ${completedOrder.email}. Enter your payment details on the provider’s secure page.`}
               </p>
             </div>
 
@@ -504,28 +541,50 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       type="button"
                       onClick={() => setPaymentMethod(method)}
                       aria-pressed={paymentMethod === method}
-                      className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 font-semibold transition-colors ${
-                        paymentMethod === method
-                          ? 'border-teal-700 bg-teal-800 text-white'
-                          : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                      className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border bg-white px-2 py-2 text-[11px] font-semibold transition-all ${
+                        method === 'Credit / Debit Card'
+                          ? paymentMethod === method
+                            ? 'border-[#1434CB] bg-blue-50 ring-2 ring-[#1434CB]/15'
+                            : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/50'
+                          : method === 'PayPal'
+                            ? paymentMethod === method
+                              ? 'border-[#003087] bg-blue-50 ring-2 ring-[#003087]/15'
+                              : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/50'
+                            : method === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                              ? paymentMethod === method
+                                ? 'border-[#627EEA] bg-indigo-50 ring-2 ring-[#627EEA]/15'
+                                : 'border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50'
+                              : paymentMethod === method
+                                ? 'border-slate-500 bg-slate-100 ring-2 ring-slate-500/15'
+                                : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50'
                       }`}
                     >
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span>{label}</span>
+                      {method === 'Cash on Delivery / Pickup'
+                        ? <Icon aria-hidden="true" className="h-5 w-5 text-slate-600" />
+                        : <PaymentBrandMark method={method} />}
+                      <span className={
+                        method === 'Credit / Debit Card' ? 'text-[#1434CB]'
+                          : method === 'PayPal' ? 'text-[#003087]'
+                            : method === 'Cryptocurrency (USDC / BTC / ETH / SOL)' ? 'text-[#334155]'
+                              : 'text-slate-700'
+                      }>{label}</span>
+                      {method === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && (
+                        <span className="text-[9px] font-medium tracking-wide text-slate-500">BTC · ETH · USDC · SOL</span>
+                      )}
                     </button>
                   ))}
                 </div>
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
                   {paymentMethod === 'Cash on Delivery / Pickup'
-                    ? 'Pay in person upon delivery or pickup. Your order will be saved for review, and payment will remain pending until confirmed by our team.'
-                    : `Choose ${paymentMethod === 'Credit / Debit Card' ? 'card' : paymentMethod} now. After the team reviews your order, they will email a payment link to ${email || 'the email address above'}.`}
+                    ? 'Pay in person when your order is delivered or collected.'
+                    : `We’ll email payment instructions and a secure ${paymentMethod === 'Credit / Debit Card' ? 'card' : paymentMethod} payment link to ${email || 'the email address above'}. Enter your payment details on the provider’s secure page.`}
                 </p>
                 {paymentError && <p role="alert" className="text-xs font-medium text-rose-700">{paymentError}</p>}
 
                 {paymentMethod !== 'Cash on Delivery / Pickup' && (
                   <div className="flex items-start gap-2 rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs text-teal-950">
                     <Mail className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
-                    <p>No payment details are entered here. Once your order has been reviewed, we’ll email a payment link for your selected method.</p>
+                    <p>Payment instructions and your secure payment link will arrive by email after your order is reviewed. You’ll enter your payment details directly on the provider’s secure page.</p>
                   </div>
                 )}
 
@@ -534,7 +593,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-950 space-y-2">
                     <span className="font-bold block">Pay in Person at Counter or Upon Delivery</span>
                     <p className="text-[11px] text-amber-800 leading-relaxed">
-                      Your order will be added to the admin review queue. Payment and fulfillment will be confirmed by the team.
+                      Payment is due when your order is delivered or collected.
                     </p>
                   </div>
                 )}
@@ -672,12 +731,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="flex items-center justify-center gap-4 text-[11px] text-slate-500">
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Admin review required</span>
+                    <span>Secure order review</span>
                   </span>
                   <span>·</span>
                   <span className="flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-teal-700" />
-                    <span>Order saved for admin review</span>
+                    <span>Order details protected</span>
                   </span>
                 </div>
               </div>
