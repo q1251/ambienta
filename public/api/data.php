@@ -2186,6 +2186,15 @@ if ($resource === 'chat') {
                     "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
                      VALUES (?, 'visitor', ?, ?)"
                 )->execute([$conversationId, $visitorName, $message]);
+                if ($visitorEmail !== '') {
+                    $nameParts = preg_split('/\s+/u', trim($visitorName), 2) ?: [$visitorName];
+                    $createLead = $db->prepare(
+                        "INSERT INTO leads (first_name, last_name, email, phone, lead_source, status, marketing_consent)
+                         VALUES (?, ?, ?, '', 'Live chat', 'New', 0)
+                         ON DUPLICATE KEY UPDATE id = id"
+                    );
+                    $createLead->execute([$nameParts[0], $nameParts[1] ?? '', $visitorEmail]);
+                }
                 $db->commit();
             } catch (Throwable $error) {
                 if ($db->inTransaction()) $db->rollBack();
@@ -4338,7 +4347,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
     if ($assignedStaffProvided && $assignedStaffId !== null && (!is_int($assignedStaffId) || $assignedStaffId < 1)) {
         data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent or leave the lead unassigned.']);
     }
-    $validStatuses = ['Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
+    $validStatuses = ['New', 'Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
     if (
         ($status === null && $marketingConsent === null && !$contactDetailsProvided && !$assignedStaffProvided)
         || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))

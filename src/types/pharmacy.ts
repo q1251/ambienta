@@ -68,7 +68,7 @@ export interface ContactLead {
   email: string;
   phone: string;
   country?: string;
-  leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo';
+  leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo' | 'Live chat';
   createdAt: string;
   status: LeadStatus;
   marketingConsent: boolean;
@@ -86,7 +86,7 @@ export type ContactLeadInput = Pick<
   'firstName' | 'lastName' | 'email' | 'phone' | 'leadSource' | 'status' | 'marketingConsent' | 'country'
 >;
 
-export type LeadStatus = 'Cold' | 'Contacted' | 'Qualified' | 'Customer' | 'Inactive';
+export type LeadStatus = 'New' | 'Cold' | 'Contacted' | 'Qualified' | 'Customer' | 'Inactive';
 
 export type LeadCallOutcome =
   | 'Connected'
