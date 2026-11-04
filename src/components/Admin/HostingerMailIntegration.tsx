@@ -100,6 +100,14 @@ interface CampaignAudienceFilter {
   source: string;
 }
 
+const formatMailboxDate = (value: string, includeTime = false) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], includeTime
+    ? { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }
+    : { month: 'short', day: 'numeric' });
+};
+
 interface ApiResponse {
   message?: string;
   error?: string;
@@ -226,6 +234,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [sentFolderAvailable, setSentFolderAvailable] = useState(false);
   const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
   const [activeFolder, setActiveFolder] = useState<MailboxFolder>(initialFolder);
+  const [selectedMailboxMessageId, setSelectedMailboxMessageId] = useState<string | null>(null);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -849,12 +858,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
   const totalCampaignOpens = campaigns.reduce((total, campaign) => total + campaign.openCount, 0);
   const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
+  const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
 
   return (
     <div className={mode === 'mailbox' ? 'mx-auto flex min-h-[calc(100vh-132px)] max-w-[1500px] flex-col gap-5' : 'space-y-5'}>
       <header className={mode === 'mailbox' ? 'flex flex-wrap items-end justify-between gap-4' : undefined}>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">
+          <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${mode === 'settings' ? 'text-violet-700' : 'text-[#315649]'}`}>
             {mode === 'settings' ? 'Connections' : 'Communications'}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
@@ -944,22 +954,20 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="flex min-h-0 flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
-          <div className="p-3">
+      {mode === 'mailbox' && <section className="flex min-h-[min(560px,calc(100vh-300px))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white p-2">
           <button
             type="button"
             onClick={() => setActiveFolder('compose')}
-            className={`mb-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold shadow-sm transition-colors ${
+            className={`mr-1 inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
               activeFolder === 'compose'
-                ? 'bg-violet-800 text-white'
-                : 'bg-violet-700 text-white hover:bg-violet-800'
+                ? 'bg-[#315649] text-white'
+                : 'bg-[#315649] text-white hover:bg-[#26483b]'
             }`}
           >
             <Mail className="h-4 w-4" /> Compose
           </button>
-          </div>
-          <nav aria-label="Email folders" className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:flex lg:flex-col">
+          <nav aria-label="Email folders" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {([
               ['inbox', 'Inbox', Inbox, ''],
               ['sent', 'Sent', Send, ''],
@@ -974,9 +982,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   setMailboxPage(1);
                   setActiveFolder(folder);
                 }}
-                className={`flex min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`flex min-w-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === folder
-                    ? 'bg-violet-50 text-violet-900'
+                    ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                 }`}
               >
@@ -987,14 +995,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             ))}
           </nav>
           {role === 'admin' && (
-            <>
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 aria-current={activeFolder === 'campaigns' || activeFolder === 'campaign-history' ? 'page' : undefined}
                 onClick={() => setActiveFolder('campaigns')}
-                className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === 'campaigns' || activeFolder === 'campaign-history'
-                    ? 'bg-violet-50 text-violet-900'
+                    ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                 }`}
               >
@@ -1005,28 +1013,23 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 type="button"
                 aria-current={activeFolder === 'campaign-history' ? 'page' : undefined}
                 onClick={() => setActiveFolder('campaign-history')}
-                className={`ml-7 flex w-[calc(100%-1.75rem)] items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors ${
+                className={`hidden items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors xl:flex ${
                   activeFolder === 'campaign-history'
-                    ? 'bg-violet-50 text-violet-900'
+                    ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
-                <span className="h-1 w-1 shrink-0 rounded-full bg-current" />
                 <span className="min-w-0 flex-1 truncate">Campaign history</span>
               </button>
-            </>
+            </div>
           )}
-          <div className="mt-auto hidden border-t border-slate-100 px-5 py-4 lg:block">
-            <p className="text-xs font-medium text-slate-500">Mailbox</p>
-            <p className="mt-1 truncate text-sm font-medium text-slate-800">{settings.emailAccount}</p>
-            <p className={`mt-2 inline-flex items-center gap-1.5 text-xs ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${settings.verified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              {settings.verified ? 'Connected' : 'Connection not verified'}
-            </p>
-          </div>
-        </aside>
+          <span className={`ml-auto hidden shrink-0 items-center gap-1.5 px-2 text-xs lg:inline-flex ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${settings.verified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            {settings.verified ? 'Connected' : 'Not verified'}
+          </span>
+        </div>
 
-        <div className="min-h-0 min-w-0 overflow-y-auto bg-[#f7f9fb] p-3 sm:p-5">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fb] p-3 sm:p-4">
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
@@ -1091,47 +1094,95 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
 
           {activeFolder === 'inbox' && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-slate-950">Inbox</h2>
-                  <p className="mt-1 text-sm text-slate-600">Recent Hostinger INBOX messages. Refreshes automatically every minute.</p>
+            <section className="grid min-h-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.4fr)]">
+              <div className="flex min-h-0 flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-slate-950">Inbox</h2>
+                    <p className="mt-1 text-xs text-slate-500">{mailboxTotal} messages · syncs automatically</p>
+                  </div>
+                  <button type="button" onClick={() => void refreshInbox()} disabled={!settings.verified || isSyncingInbox} aria-label="Sync inbox" className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    <RefreshCw className={`h-4 w-4 ${isSyncingInbox ? 'animate-spin' : ''}`} /> {isSyncingInbox ? 'Syncing' : 'Sync'}
+                  </button>
                 </div>
-                <button type="button" onClick={() => void refreshInbox()} disabled={!settings.verified || isSyncingInbox} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                  <RefreshCw className={`h-4 w-4 ${isSyncingInbox ? 'animate-spin' : ''}`} /> {isSyncingInbox ? 'Syncing…' : 'Sync inbox'}
-                </button>
-              </div>
-              <MailboxSearchControls
-                searchInput={mailboxSearchInput}
-                page={mailboxPage}
-                total={mailboxTotal}
-                disabled={!settings.verified}
-                onSearchChange={setMailboxSearchInput}
-                onSearch={(event) => {
-                  event.preventDefault();
-                  setMailboxPage(1);
-                  setMailboxSearch(mailboxSearchInput.trim());
-                }}
-                onPageChange={setMailboxPage}
-              />
-              {!settings.configured ? (
-                <p className="py-8 text-center text-sm text-slate-500">Configure the Hostinger mailbox under Integrations to load the inbox.</p>
-              ) : !inboxFolderAvailable ? (
-                <p className="py-8 text-center text-sm text-rose-700">The Hostinger inbox folder is unavailable.</p>
-              ) : isSyncingInbox ? (
-                <p role="status" className="py-8 text-center text-sm text-slate-500">Synchronizing inbox…</p>
-              ) : inboxMessages.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">No inbox messages were returned. Use Sync inbox to check again.</p>
-              ) : (
-                <MailboxThreadList
-                  messages={inboxMessages}
-                  onReply={replyToInbox}
-                  onForward={(message) => void forwardInboxMessage(message)}
-                  onSetRead={(message, seen) => void setMessageReadState(message, 'inbox', seen)}
-                  onTrash={(message) => void moveMailToTrash(message)}
-                  onLoadDetails={(message) => void loadMessageDetails(message, 'inbox')}
+                <MailboxSearchControls
+                  searchInput={mailboxSearchInput}
+                  page={mailboxPage}
+                  total={mailboxTotal}
+                  disabled={!settings.verified}
+                  onSearchChange={setMailboxSearchInput}
+                  onSearch={(event) => {
+                    event.preventDefault();
+                    setMailboxPage(1);
+                    setMailboxSearch(mailboxSearchInput.trim());
+                  }}
+                  onPageChange={setMailboxPage}
                 />
-              )}
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {!settings.configured ? (
+                    <p className="p-6 text-center text-sm text-slate-500">Configure the Hostinger mailbox under Integrations to load the inbox.</p>
+                  ) : !inboxFolderAvailable ? (
+                    <p className="p-6 text-center text-sm text-rose-700">The Hostinger inbox folder is unavailable.</p>
+                  ) : isSyncingInbox && inboxMessages.length === 0 ? (
+                    <p role="status" className="p-6 text-center text-sm text-slate-500">Synchronizing inbox…</p>
+                  ) : inboxMessages.length === 0 ? (
+                    <p className="p-6 text-center text-sm text-slate-500">No inbox messages. Use Sync to check again.</p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100">
+                      {inboxMessages.map((message) => (
+                        <li key={message.id}>
+                          <button type="button" onClick={() => setSelectedMailboxMessageId(message.id)} aria-current={selectedMailboxMessage?.id === message.id ? 'true' : undefined} className={`w-full border-l-2 px-4 py-3 text-left transition-colors ${selectedMailboxMessage?.id === message.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                            <span className="flex items-center justify-between gap-2">
+                              <span className={`truncate text-sm ${message.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{message.from.split('<')[0].trim() || message.from}</span>
+                              <time className="shrink-0 text-[10px] text-slate-500" title={message.date}>{formatMailboxDate(message.date)}</time>
+                            </span>
+                            <span className="mt-1 block truncate text-sm text-slate-800">{message.subject || '(no subject)'}</span>
+                            <span className="mt-1 block truncate text-xs text-slate-500">{message.body || 'Open message to view details'}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              <div className="min-h-[300px] min-w-0 bg-white">
+                {selectedMailboxMessage ? (
+                  <article className="flex h-full flex-col">
+                    <header className="border-b border-slate-100 px-5 py-4 sm:px-6">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="break-words text-lg font-semibold tracking-tight text-slate-950">{selectedMailboxMessage.subject || '(no subject)'}</h3>
+                          <p className="mt-2 break-all text-sm font-medium text-slate-700">{selectedMailboxMessage.from}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatMailboxDate(selectedMailboxMessage.date, true)}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedMailboxMessage.unread ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                          {selectedMailboxMessage.unread ? 'Unread' : 'Read'}
+                        </span>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => replyToInbox(selectedMailboxMessage)} className="rounded-lg bg-[#315649] px-3 py-2 text-xs font-semibold text-white hover:bg-[#26483b]">Reply</button>
+                        <button type="button" onClick={() => void forwardInboxMessage(selectedMailboxMessage)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Forward</button>
+                        <button type="button" onClick={() => void setMessageReadState(selectedMailboxMessage, 'inbox', selectedMailboxMessage.unread)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{selectedMailboxMessage.unread ? 'Mark read' : 'Mark unread'}</button>
+                        <button type="button" onClick={() => void moveMailToTrash(selectedMailboxMessage)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
+                      </div>
+                    </header>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                      {selectedMailboxMessage.body ? (
+                        <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{selectedMailboxMessage.body}</div>
+                      ) : (
+                        <p className="text-sm text-slate-500">Load the full message to view its content.</p>
+                      )}
+                      <MessageAttachmentActions message={selectedMailboxMessage} onLoad={() => void loadMessageDetails(selectedMailboxMessage, 'inbox')} />
+                    </div>
+                  </article>
+                ) : (
+                  <div className="flex h-full min-h-[300px] flex-col items-center justify-center px-6 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#edf3ee] text-[#315649]"><Inbox className="h-5 w-5" /></span>
+                    <p className="mt-3 text-sm font-semibold text-slate-800">Select a message</p>
+                    <p className="mt-1 text-xs text-slate-500">Choose an email from the list to read it here.</p>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
@@ -1425,9 +1476,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         </div>
       </section>}
 
-      {mode === 'mailbox' && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">
-        Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. Hostinger SMTP confirms acceptance only, not final delivery; campaign opens are approximate and available only when open tracking is enabled for a campaign.
-      </p>}
+      {mode === 'mailbox' && <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
+        <summary className="cursor-pointer font-medium text-slate-700">Email sync and tracking information</summary>
+        <p className="mt-2">Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. Hostinger SMTP confirms acceptance only, not final delivery; campaign opens are approximate and available only when open tracking is enabled for a campaign.</p>
+      </details>}
     </div>
   );
 };
@@ -1447,83 +1499,6 @@ interface MailboxSearchControlsProps {
   onSearch: (event: React.FormEvent) => void;
   onPageChange: (page: number) => void;
 }
-
-interface MailboxThreadListProps {
-  messages: InboxMessage[];
-  onReply: (message: InboxMessage) => void;
-  onForward: (message: InboxMessage) => void;
-  onSetRead: (message: InboxMessage, seen: boolean) => void;
-  onTrash: (message: InboxMessage) => void;
-  onLoadDetails: (message: InboxMessage) => void;
-}
-
-const MailboxThreadList: React.FC<MailboxThreadListProps> = ({
-  messages,
-  onReply,
-  onForward,
-  onSetRead,
-  onTrash,
-  onLoadDetails,
-}) => {
-  const threads = new Map<string, InboxMessage[]>();
-  messages.forEach((message) => {
-    const rootMessageId = message.references?.trim().split(/\s+/)[0] || message.inReplyTo || message.messageId;
-    const key = rootMessageId || message.id;
-    threads.set(key, [...(threads.get(key) || []), message]);
-  });
-  threads.forEach((threadMessages) => {
-    threadMessages.sort((first, second) => Date.parse(first.date) - Date.parse(second.date));
-  });
-  return (
-    <ul className="divide-y divide-slate-100">
-      {Array.from(threads.entries()).map(([threadId, threadMessages]) => (
-        <li key={threadId} className="py-3">
-          {threadMessages.length > 1 ? (
-            <details open>
-              <summary className="cursor-pointer text-sm font-semibold text-slate-900">
-                {threadMessages[0].subject} · {threadMessages.length} messages in conversation
-              </summary>
-              <div className="mt-2 divide-y divide-slate-100 pl-2">
-                {threadMessages.map((message) => (
-                  <MailboxMessageRow key={message.id} message={message} onReply={onReply} onForward={onForward} onSetRead={onSetRead} onTrash={onTrash} onLoadDetails={onLoadDetails} />
-                ))}
-              </div>
-            </details>
-          ) : (
-            <MailboxMessageRow message={threadMessages[0]} onReply={onReply} onForward={onForward} onSetRead={onSetRead} onTrash={onTrash} onLoadDetails={onLoadDetails} />
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-};
-
-interface MailboxMessageRowProps extends Omit<MailboxThreadListProps, 'messages'> {
-  message: InboxMessage;
-}
-
-const MailboxMessageRow: React.FC<MailboxMessageRowProps> = ({ message, onReply, onForward, onSetRead, onTrash, onLoadDetails }) => (
-  <div className="py-2">
-    <p className={`truncate text-sm ${message.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{message.subject}</p>
-    <p className="mt-1 truncate text-xs text-slate-600">{message.from}</p>
-    <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-      <p className="text-xs text-slate-500">{message.date} {message.unread ? '· Unread' : ''}</p>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => onReply(message)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Reply</button>
-        <button type="button" onClick={() => onForward(message)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Forward</button>
-        <button type="button" onClick={() => onSetRead(message, message.unread)} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">{message.unread ? 'Mark read' : 'Mark unread'}</button>
-        <button type="button" onClick={() => onTrash(message)} className="rounded-md border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
-      </div>
-    </div>
-    {message.body && (
-      <details className="mt-2 text-xs text-slate-600">
-        <summary className="cursor-pointer font-medium" onClick={() => { if (message.unread) onSetRead(message, true); }}>Read message preview</summary>
-        <p className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3">{message.body}</p>
-      </details>
-    )}
-    <MessageAttachmentActions message={message} onLoad={() => onLoadDetails(message)} />
-  </div>
-);
 
 const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
   searchInput,
