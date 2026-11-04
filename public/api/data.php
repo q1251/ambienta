@@ -186,11 +186,16 @@ function data_ensure_schema(PDO $db): void
             visitor_name VARCHAR(100) NOT NULL,
             visitor_email VARCHAR(254) NOT NULL DEFAULT '',
             visitor_token_hash CHAR(64) NOT NULL,
+            visitor_id_hash CHAR(64) NULL,
+            owner_type VARCHAR(16) NOT NULL DEFAULT 'queue',
+            owner_staff_id BIGINT UNSIGNED NULL,
             status VARCHAR(16) NOT NULL DEFAULT 'open',
             last_visitor_message_at DATETIME NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY chat_conversations_token (visitor_token_hash),
+            KEY chat_conversations_owner (owner_type, owner_staff_id, status, updated_at),
+            KEY chat_conversations_visitor (visitor_id_hash, updated_at),
             KEY chat_conversations_status_updated (status, updated_at, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -235,11 +240,33 @@ function data_ensure_schema(PDO $db): void
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             session_token_hash CHAR(64) NOT NULL,
             page_path VARCHAR(500) NOT NULL,
+            page_title VARCHAR(180) NOT NULL DEFAULT '',
+            product_id VARCHAR(64) NULL,
+            dwell_seconds INT UNSIGNED NOT NULL DEFAULT 0,
             viewed_at DATETIME NOT NULL,
             KEY visitor_page_views_session (session_token_hash, id),
             KEY visitor_page_views_date (viewed_at),
             CONSTRAINT visitor_page_views_session_fk FOREIGN KEY (session_token_hash) REFERENCES visitor_sessions(session_token_hash) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS staff_presence (
+            staff_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+            session_started_at DATETIME NOT NULL,
+            last_seen_at DATETIME NOT NULL,
+            current_section VARCHAR(32) NOT NULL DEFAULT 'overview',
+            KEY staff_presence_last_seen (last_seen_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS crm_routing_settings (
+            setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
+            setting_value VARCHAR(16) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "INSERT IGNORE INTO crm_routing_settings (setting_key, setting_value)
+         VALUES ('agents_may_claim_chat_when_admin_online', '0')"
     );
     $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
     foreach ([
@@ -258,11 +285,27 @@ function data_ensure_schema(PDO $db): void
         ['email_campaign_recipients', 'open_token', 'MEDIUMTEXT NULL'],
         ['email_campaign_recipients', 'opened_at', 'DATETIME NULL'],
         ['chat_conversations', 'visitor_phone', "VARCHAR(40) NOT NULL DEFAULT ''"],
+        ['chat_conversations', 'visitor_id_hash', 'CHAR(64) NULL'],
+        ['chat_conversations', 'owner_type', "VARCHAR(16) NOT NULL DEFAULT 'queue'"],
+        ['chat_conversations', 'owner_staff_id', 'BIGINT UNSIGNED NULL'],
+        ['visitor_page_views', 'page_title', "VARCHAR(180) NOT NULL DEFAULT ''"],
+        ['visitor_page_views', 'product_id', 'VARCHAR(64) NULL'],
+        ['visitor_page_views', 'dwell_seconds', 'INT UNSIGNED NOT NULL DEFAULT 0'],
     ] as [$table, $column, $definition]) {
         $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
         $columnExists->execute([$databaseName, $table, $column]);
         if ((int) $columnExists->fetchColumn() === 0) {
             $db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+        }
+        foreach ([
+            ['chat_conversations', 'chat_conversations_owner', 'owner_type, owner_staff_id, status, updated_at'],
+            ['chat_conversations', 'chat_conversations_visitor', 'visitor_id_hash, updated_at'],
+        ] as [$table, $index, $columns]) {
+            $indexExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
+            $indexExists->execute([$databaseName, $table, $index]);
+            if ((int) $indexExists->fetchColumn() === 0) {
+                $db->exec("ALTER TABLE {$table} ADD INDEX {$index} ({$columns})");
+            }
         }
     }
     $openTokenIndex = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
@@ -580,7 +623,7 @@ function data_require_admin(string $requiredRole = 'operator'): void
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $permissions = json_decode((string) $staff['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations', 'chat'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
     }
     if ($requiredRole === 'admin' && $_SESSION['admin_role'] !== 'admin') {
@@ -598,28 +641,70 @@ function data_require_permission(string $permission): void
     }
 }
 
-function data_require_lead_access(PDO $db, int $leadId): void
+function data_require_lead_access(PDO $db, int $leadId, bool $allowUnassignedNew = false): void
 {
     if (($_SESSION['admin_role'] ?? '') === 'admin') return;
-    $owner = $db->prepare('SELECT assigned_staff_id FROM leads WHERE id = ?');
+    $owner = $db->prepare('SELECT assigned_staff_id, status FROM leads WHERE id = ?');
     $owner->execute([$leadId]);
-    $assignedStaffId = $owner->fetchColumn();
-    if ($assignedStaffId === false) {
+    $lead = $owner->fetch();
+    if (!is_array($lead)) {
         data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
     }
-    if ($assignedStaffId === null || (int) $assignedStaffId !== (int) ($_SESSION['staff_id'] ?? 0)) {
+    $isAssigned = $lead['assigned_staff_id'] !== null && (int) $lead['assigned_staff_id'] === (int) ($_SESSION['staff_id'] ?? 0);
+    $canViewNew = $allowUnassignedNew
+        && $lead['assigned_staff_id'] === null
+        && $lead['status'] === 'New'
+        && in_array('new_leads', $_SESSION['admin_permissions'] ?? [], true);
+    if (!$isAssigned && !$canViewNew) {
         data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
     }
 }
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'orders', 'products', 'integrations', 'chat'];
+    $validPermissions = ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
     }
-    return array_values(array_unique($permissions));
+    $permissions = array_values(array_unique($permissions));
+    if (in_array('new_leads', $permissions, true) && !in_array('leads', $permissions, true)) return null;
+    return $permissions;
+}
+
+function data_chat_admin_online(PDO $db): bool
+{
+    $query = $db->query('SELECT last_seen_at FROM staff_presence WHERE staff_id = 0 LIMIT 1');
+    $lastSeen = $query->fetchColumn();
+    return is_string($lastSeen) && strtotime($lastSeen . ' UTC') >= time() - 90;
+}
+
+function data_chat_agents_can_claim(PDO $db): bool
+{
+    $setting = $db->query(
+        "SELECT setting_value FROM crm_routing_settings
+         WHERE setting_key = 'agents_may_claim_chat_when_admin_online' LIMIT 1"
+    )->fetchColumn();
+    return !data_chat_admin_online($db) || $setting === '1';
+}
+
+function data_visitor_session_duration(string $firstSeen, string $lastSeen): int
+{
+    $start = strtotime($firstSeen . ' UTC');
+    $end = strtotime($lastSeen . ' UTC');
+    if ($start === false || $end === false) return 0;
+    if ($end >= time() - 90) $end = time();
+    return max(0, $end - $start);
+}
+
+function data_chat_conversation_accessible(PDO $db, array $conversation): bool
+{
+    if (($_SESSION['admin_role'] ?? '') === 'admin') return true;
+    $staffId = (int) ($_SESSION['staff_id'] ?? 0);
+    if ($conversation['owner_type'] === 'agent' && (int) $conversation['owner_staff_id'] === $staffId) return true;
+    return in_array($conversation['owner_type'], ['queue', 'admin'], true)
+        && $conversation['status'] === 'open'
+        && data_chat_agents_can_claim($db);
 }
 
 function data_read_json(int $maxBytes = 262144): array
@@ -2169,6 +2254,10 @@ if ($resource === 'chat') {
             $visitorName = data_string($body, 'name', 100);
             $visitorEmail = strtolower(data_string($body, 'email', 254, false));
             $visitorPhone = data_string($body, 'phone', 40, false);
+            $visitorId = data_string($body, 'visitorId', 64, false);
+            if ($visitorId !== '' && preg_match('/^[a-f0-9]{64}$/', $visitorId) !== 1) {
+                data_respond(400, ['error' => 'invalid_visitor_id', 'message' => 'The visitor session could not be linked to this conversation. Reload the page and try again.']);
+            }
             if ($visitorEmail !== '' && filter_var($visitorEmail, FILTER_VALIDATE_EMAIL) === false) {
                 data_respond(400, ['error' => 'invalid_chat_email', 'message' => 'Enter a valid email address or leave it blank.']);
             }
@@ -2179,10 +2268,16 @@ if ($resource === 'chat') {
             $db->beginTransaction();
             try {
                 $create = $db->prepare(
-                    "INSERT INTO chat_conversations (visitor_name, visitor_email, visitor_phone, visitor_token_hash, last_visitor_message_at)
-                     VALUES (?, ?, ?, ?, UTC_TIMESTAMP())"
+                    "INSERT INTO chat_conversations (visitor_name, visitor_email, visitor_phone, visitor_token_hash, visitor_id_hash, last_visitor_message_at)
+                     VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP())"
                 );
-                $create->execute([$visitorName, $visitorEmail, $visitorPhone, hash('sha256', $token)]);
+                $create->execute([
+                    $visitorName,
+                    $visitorEmail,
+                    $visitorPhone,
+                    hash('sha256', $token),
+                    $visitorId === '' ? null : hash('sha256', $visitorId),
+                ]);
                 $conversationId = (int) $db->lastInsertId();
                 $db->prepare(
                     "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
@@ -2298,6 +2393,11 @@ if ($resource === 'visitor-session' && $method === 'POST') {
     if ($pagePath[0] !== '/' || str_starts_with($pagePath, '//') || strpbrk($pagePath, "?#\r\n") !== false) {
         data_respond(400, ['error' => 'invalid_visitor_path', 'message' => 'The visitor page could not be recorded.']);
     }
+    $pageTitle = data_string($body, 'title', 720, false);
+    $productId = data_string($body, 'productId', 64, false);
+    if ($productId !== '' && preg_match('/^[a-zA-Z0-9._-]+$/', $productId) !== 1) {
+        data_respond(400, ['error' => 'invalid_product_activity', 'message' => 'The product activity could not be recorded.']);
+    }
     $referrerDomain = strtolower(data_string($body, 'referrerDomain', 253, false));
     if ($referrerDomain !== '' && preg_match('/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/', $referrerDomain) !== 1) {
         data_respond(400, ['error' => 'invalid_visitor_referrer', 'message' => 'The visitor referral source could not be recorded.']);
@@ -2323,10 +2423,17 @@ if ($resource === 'visitor-session' && $method === 'POST') {
 
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT current_path FROM visitor_sessions WHERE session_token_hash = ? FOR UPDATE');
+        $find = $db->prepare('SELECT current_path, last_seen FROM visitor_sessions WHERE session_token_hash = ? FOR UPDATE');
         $find->execute([$sessionHash]);
-        $previousPath = $find->fetchColumn();
-        $isNewSession = $previousPath === false;
+        $previousSession = $find->fetch();
+        $previousPath = is_array($previousSession) ? $previousSession['current_path'] : false;
+        $isNewSession = $previousSession === false;
+        if (!$isNewSession) {
+            $db->prepare(
+                'UPDATE visitor_page_views SET dwell_seconds = LEAST(3600, dwell_seconds + LEAST(60, GREATEST(0, TIMESTAMPDIFF(SECOND, ?, UTC_TIMESTAMP()))))
+                 WHERE session_token_hash = ? ORDER BY id DESC LIMIT 1'
+            )->execute([$previousSession['last_seen'], $sessionHash]);
+        }
         $upsert = $db->prepare(
             "INSERT INTO visitor_sessions
                 (session_token_hash, visitor_token_hash, current_path, referrer_domain, country_code, language, first_seen, last_seen)
@@ -2343,8 +2450,8 @@ if ($resource === 'visitor-session' && $method === 'POST') {
 
         if ($isNewSession || $previousPath !== $pagePath) {
             $db->prepare(
-                'INSERT INTO visitor_page_views (session_token_hash, page_path, viewed_at) VALUES (?, ?, UTC_TIMESTAMP())'
-            )->execute([$sessionHash, $pagePath]);
+                'INSERT INTO visitor_page_views (session_token_hash, page_path, page_title, product_id, viewed_at) VALUES (?, ?, ?, ?, UTC_TIMESTAMP())'
+            )->execute([$sessionHash, $pagePath, $pageTitle, $productId === '' ? null : $productId]);
             $oldestKept = $db->prepare(
                 'SELECT id FROM visitor_page_views WHERE session_token_hash = ? ORDER BY id DESC LIMIT 1 OFFSET 49'
             );
@@ -2354,6 +2461,11 @@ if ($resource === 'visitor-session' && $method === 'POST') {
                 $db->prepare('DELETE FROM visitor_page_views WHERE session_token_hash = ? AND id < ?')
                     ->execute([$sessionHash, (int) $oldestId]);
             }
+        } else {
+            $db->prepare(
+                'UPDATE visitor_page_views SET page_title = IF(? = \'\', page_title, ?), product_id = ?
+                 WHERE session_token_hash = ? ORDER BY id DESC LIMIT 1'
+            )->execute([$pageTitle, $pageTitle, $productId === '' ? null : $productId, $sessionHash]);
         }
         $db->exec('DELETE FROM visitor_sessions WHERE last_seen < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY) LIMIT 1000');
         $db->commit();
@@ -3129,7 +3241,7 @@ if ($method === 'POST' && $resource === 'staff-session') {
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $permissions = json_decode((string) $staff['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'orders', 'products', 'integrations', 'chat'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
         $_SESSION['last_activity'] = time();
         data_respond(200, [
@@ -3170,7 +3282,7 @@ if ($method === 'POST' && $resource === 'staff-session') {
             'role' => 'admin',
             'email' => $_SESSION['admin_email'],
             'displayName' => $_SESSION['admin_display_name'],
-            'permissions' => ['leads', 'orders', 'products', 'integrations', 'chat'],
+            'permissions' => ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'],
             'impersonating' => false,
             'mustChangePassword' => false,
         ]);
@@ -3196,8 +3308,20 @@ if ($method === 'GET') {
                 data_respond(400, ['error' => 'invalid_visitor_session', 'message' => 'The visitor session identifier is invalid.']);
             }
             $find = $db->prepare(
-                'SELECT session_token_hash, visitor_token_hash, current_path, referrer_domain, country_code, language, first_seen, last_seen
-                 FROM visitor_sessions WHERE session_token_hash = ? LIMIT 1'
+                'SELECT s.session_token_hash, s.visitor_token_hash, s.current_path, s.referrer_domain, s.country_code, s.language, s.first_seen, s.last_seen,
+                        current_view.page_title AS current_title, current_view.product_id AS current_product_id,
+                        current_product.name AS current_product_name,
+                        cc.id AS chat_id, cc.status AS chat_status, cc.owner_type, cc.owner_staff_id, owner.display_name AS chat_owner_name
+                 FROM visitor_sessions s
+                 LEFT JOIN visitor_page_views current_view ON current_view.id = (
+                     SELECT pv.id FROM visitor_page_views pv WHERE pv.session_token_hash = s.session_token_hash ORDER BY pv.id DESC LIMIT 1
+                 )
+                 LEFT JOIN products current_product ON current_product.id = current_view.product_id
+                 LEFT JOIN chat_conversations cc ON cc.id = (
+                     SELECT c.id FROM chat_conversations c WHERE c.visitor_id_hash = s.visitor_token_hash ORDER BY c.updated_at DESC, c.id DESC LIMIT 1
+                 )
+                 LEFT JOIN staff_users owner ON owner.id = cc.owner_staff_id
+                 WHERE s.session_token_hash = ? LIMIT 1'
             );
             $find->execute([$sessionId]);
             $session = $find->fetch();
@@ -3205,7 +3329,10 @@ if ($method === 'GET') {
                 data_respond(404, ['error' => 'visitor_session_not_found', 'message' => 'This visitor session is no longer available.']);
             }
             $views = $db->prepare(
-                'SELECT page_path AS path, viewed_at AS viewedAt FROM visitor_page_views WHERE session_token_hash = ? ORDER BY id DESC LIMIT 50'
+                'SELECT pv.page_path AS path, pv.page_title AS title, pv.product_id AS productId, p.name AS productName,
+                        pv.dwell_seconds AS dwellSeconds, pv.viewed_at AS viewedAt
+                 FROM visitor_page_views pv LEFT JOIN products p ON p.id = pv.product_id
+                 WHERE pv.session_token_hash = ? ORDER BY pv.id DESC LIMIT 50'
             );
             $views->execute([$sessionId]);
             data_respond(200, [
@@ -3213,12 +3340,19 @@ if ($method === 'GET') {
                     'id' => $session['session_token_hash'],
                     'visitorId' => substr((string) $session['visitor_token_hash'], 0, 10),
                     'currentPath' => $session['current_path'],
+                    'currentTitle' => $session['current_title'] ?: $session['current_path'],
+                    'currentProduct' => $session['current_product_name'] ?: $session['current_product_id'],
                     'referrerDomain' => $session['referrer_domain'],
                     'countryCode' => $session['country_code'],
                     'language' => $session['language'],
                     'firstSeen' => $session['first_seen'],
                     'lastSeen' => $session['last_seen'],
                     'active' => strtotime((string) $session['last_seen'] . ' UTC') >= time() - 90,
+                    'durationSeconds' => data_visitor_session_duration((string) $session['first_seen'], (string) $session['last_seen']),
+                    'chatId' => $session['chat_id'] === null ? null : (int) $session['chat_id'],
+                    'chatStatus' => $session['chat_status'],
+                    'chatOwner' => $session['owner_type'] === 'queue' ? 'Waiting for staff' : ($session['owner_type'] === 'admin' ? 'Administrator' : ($session['chat_owner_name'] ?: 'Agent')),
+                    'chatEngaged' => $session['owner_type'] !== null && $session['owner_type'] !== 'queue',
                 ],
                 'pages' => array_reverse($views->fetchAll()),
             ]);
@@ -3243,14 +3377,27 @@ if ($method === 'GET') {
         $query = $db->query(
             'SELECT s.session_token_hash, s.visitor_token_hash, s.current_path, s.referrer_domain, s.country_code, s.language,
                     s.first_seen, s.last_seen,
-                    (SELECT COUNT(*) FROM visitor_page_views pv WHERE pv.session_token_hash = s.session_token_hash) AS page_count
-             FROM visitor_sessions s ' . $where . ' ORDER BY s.last_seen DESC LIMIT 200'
+                    current_view.page_title AS current_title, current_view.product_id AS current_product_id, current_product.name AS current_product_name,
+                    (SELECT COUNT(*) FROM visitor_page_views pv WHERE pv.session_token_hash = s.session_token_hash) AS page_count,
+                    cc.id AS chat_id, cc.status AS chat_status, cc.owner_type, cc.owner_staff_id, owner.display_name AS chat_owner_name
+             FROM visitor_sessions s
+             LEFT JOIN visitor_page_views current_view ON current_view.id = (
+                 SELECT pv.id FROM visitor_page_views pv WHERE pv.session_token_hash = s.session_token_hash ORDER BY pv.id DESC LIMIT 1
+             )
+             LEFT JOIN products current_product ON current_product.id = current_view.product_id
+             LEFT JOIN chat_conversations cc ON cc.id = (
+                 SELECT c.id FROM chat_conversations c WHERE c.visitor_id_hash = s.visitor_token_hash ORDER BY c.updated_at DESC, c.id DESC LIMIT 1
+             )
+             LEFT JOIN staff_users owner ON owner.id = cc.owner_staff_id
+             ' . $where . ' ORDER BY s.last_seen DESC LIMIT 200'
         );
         data_respond(200, [
             'sessions' => array_map(static fn (array $row): array => [
                 'id' => $row['session_token_hash'],
                 'visitorId' => substr((string) $row['visitor_token_hash'], 0, 10),
                 'currentPath' => $row['current_path'],
+                'currentTitle' => $row['current_title'] ?: $row['current_path'],
+                'currentProduct' => $row['current_product_name'] ?: $row['current_product_id'],
                 'referrerDomain' => $row['referrer_domain'],
                 'countryCode' => $row['country_code'],
                 'language' => $row['language'],
@@ -3258,6 +3405,11 @@ if ($method === 'GET') {
                 'lastSeen' => $row['last_seen'],
                 'active' => strtotime((string) $row['last_seen'] . ' UTC') >= time() - 90,
                 'pageCount' => (int) $row['page_count'],
+                'durationSeconds' => data_visitor_session_duration((string) $row['first_seen'], (string) $row['last_seen']),
+                'chatId' => $row['chat_id'] === null ? null : (int) $row['chat_id'],
+                'chatStatus' => $row['chat_status'],
+                'chatOwner' => $row['owner_type'] === 'queue' ? 'Waiting for staff' : ($row['owner_type'] === 'admin' ? 'Administrator' : ($row['chat_owner_name'] ?: 'Agent')),
+                'chatEngaged' => $row['owner_type'] !== null && $row['owner_type'] !== 'queue',
             ], $query->fetchAll()),
             'summary' => [
                 'activeSessions' => (int) ($activeSummary['sessions'] ?? 0),
@@ -3269,6 +3421,9 @@ if ($method === 'GET') {
     }
     if ($resource === 'chat-admin') {
         data_require_permission('chat');
+        $isPrimaryAdmin = ($_SESSION['admin_role'] ?? '') === 'admin';
+        $staffId = (int) ($_SESSION['staff_id'] ?? 0);
+        $agentsMayClaim = data_chat_agents_can_claim($db);
         $conversationValue = data_string($_GET, 'conversation', 20, false);
         if ($conversationValue !== '') {
             $conversationId = filter_var($conversationValue, FILTER_VALIDATE_INT);
@@ -3276,13 +3431,18 @@ if ($method === 'GET') {
                 data_respond(400, ['error' => 'invalid_chat_id', 'message' => 'The conversation identifier is invalid.']);
             }
             $find = $db->prepare(
-                'SELECT id, visitor_name, visitor_email, visitor_phone, status, created_at, updated_at
-                 FROM chat_conversations WHERE id = ? LIMIT 1'
+                'SELECT c.id, c.visitor_name, c.visitor_email, c.visitor_phone, c.status, c.created_at, c.updated_at,
+                        c.owner_type, c.owner_staff_id, owner.display_name AS owner_name
+                 FROM chat_conversations c LEFT JOIN staff_users owner ON owner.id = c.owner_staff_id
+                 WHERE c.id = ? LIMIT 1'
             );
             $find->execute([(int) $conversationId]);
             $conversation = $find->fetch();
             if (!is_array($conversation)) {
                 data_respond(404, ['error' => 'chat_not_found', 'message' => 'The conversation could not be found.']);
+            }
+            if (!$isPrimaryAdmin && !data_chat_conversation_accessible($db, $conversation)) {
+                data_respond(404, ['error' => 'chat_not_found', 'message' => 'This conversation is not available to your account.']);
             }
             $db->prepare(
                 "UPDATE chat_messages SET read_at = UTC_TIMESTAMP() WHERE conversation_id = ? AND sender_type = 'visitor' AND read_at IS NULL"
@@ -3296,6 +3456,10 @@ if ($method === 'GET') {
                     'status' => $conversation['status'],
                     'createdAt' => $conversation['created_at'],
                     'updatedAt' => $conversation['updated_at'],
+                    'ownerType' => $conversation['owner_type'],
+                    'ownerStaffId' => $conversation['owner_staff_id'] === null ? null : (int) $conversation['owner_staff_id'],
+                    'ownerName' => $conversation['owner_type'] === 'queue' ? 'Waiting for staff' : ($conversation['owner_type'] === 'admin' ? 'Administrator' : ($conversation['owner_name'] ?: 'Agent')),
+                    'canClaim' => !$isPrimaryAdmin && $conversation['owner_type'] !== 'agent' && $conversation['status'] === 'open' && $agentsMayClaim,
                 ],
                 'messages' => data_chat_message_rows($db, (int) $conversationId),
             ]);
@@ -3319,15 +3483,34 @@ if ($method === 'GET') {
             $parameters[] = '%' . $search . '%';
             $parameters[] = '%' . $search . '%';
         }
+        if (!$isPrimaryAdmin) {
+            $where[] = "((c.owner_type = 'agent' AND c.owner_staff_id = ?) OR (c.owner_type IN ('queue', 'admin') AND c.status = 'open' AND ? = 1))";
+            $parameters[] = $staffId;
+            $parameters[] = (int) $agentsMayClaim;
+        }
         $whereSql = $where === [] ? '' : ' WHERE ' . implode(' AND ', $where);
         $query = $db->prepare(
             'SELECT c.id, c.visitor_name, c.visitor_email, c.visitor_phone, c.status, c.created_at, c.updated_at,
+                    c.owner_type, c.owner_staff_id, owner.display_name AS owner_name,
                     (SELECT body FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
                     (SELECT sender_type FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_sender,
                     (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id AND sender_type = \'visitor\' AND read_at IS NULL) AS unread_count
-             FROM chat_conversations c' . $whereSql . ' ORDER BY c.updated_at DESC, c.id DESC LIMIT 100'
+             FROM chat_conversations c LEFT JOIN staff_users owner ON owner.id = c.owner_staff_id' . $whereSql . ' ORDER BY c.updated_at DESC, c.id DESC LIMIT 100'
         );
         $query->execute($parameters);
+        $assignableAgents = [];
+        if ($isPrimaryAdmin) {
+            $staffRows = $db->query('SELECT id, display_name, email, permissions FROM staff_users WHERE is_active = 1 ORDER BY display_name, email')->fetchAll();
+            foreach ($staffRows as $staffRow) {
+                $permissions = data_staff_permissions(json_decode((string) $staffRow['permissions'], true));
+                if ($permissions !== null && in_array('chat', $permissions, true)) {
+                    $assignableAgents[] = [
+                        'id' => (int) $staffRow['id'],
+                        'displayName' => $staffRow['display_name'] ?: $staffRow['email'],
+                    ];
+                }
+            }
+        }
         data_respond(200, ['conversations' => array_map(static fn (array $row): array => [
             'id' => (int) $row['id'],
             'visitorName' => $row['visitor_name'],
@@ -3339,7 +3522,11 @@ if ($method === 'GET') {
             'lastMessage' => $row['last_message'],
             'lastSender' => $row['last_sender'],
             'unreadCount' => (int) $row['unread_count'],
-        ], $query->fetchAll())]);
+            'ownerType' => $row['owner_type'],
+            'ownerStaffId' => $row['owner_staff_id'] === null ? null : (int) $row['owner_staff_id'],
+            'ownerName' => $row['owner_type'] === 'queue' ? 'Waiting for staff' : ($row['owner_type'] === 'admin' ? 'Administrator' : ($row['owner_name'] ?: 'Agent')),
+            'canClaim' => !$isPrimaryAdmin && $row['owner_type'] !== 'agent' && $row['status'] === 'open' && $agentsMayClaim,
+        ], $query->fetchAll()), 'adminOnline' => data_chat_admin_online($db), 'agentsMayClaimWhenAdminOnline' => $agentsMayClaim && data_chat_admin_online($db), 'assignableAgents' => $assignableAgents]);
     }
     if ($resource === 'products') {
         data_require_permission('products');
@@ -3354,7 +3541,7 @@ if ($method === 'GET') {
             if ($id === false || $id < 1) {
                 data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
             }
-            data_require_lead_access($db, (int) $id);
+            data_require_lead_access($db, (int) $id, true);
             $find = $db->prepare(
                 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                         l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
@@ -3388,7 +3575,10 @@ if ($method === 'GET') {
                     (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
              FROM leads l LEFT JOIN orders o ON o.email = l.email';
         if (($_SESSION['admin_role'] ?? '') === 'operator') {
-            $listSql .= ' WHERE l.assigned_staff_id = ?';
+            $canViewNewLeads = in_array('new_leads', $_SESSION['admin_permissions'] ?? [], true);
+            $listSql .= $canViewNewLeads
+                ? " WHERE l.assigned_staff_id = ? OR (l.assigned_staff_id IS NULL AND l.status = 'New')"
+                : ' WHERE l.assigned_staff_id = ?';
             $listSql .= ' GROUP BY l.id ORDER BY l.id DESC';
             $listQuery = $db->prepare($listSql);
             $listQuery->execute([(int) ($_SESSION['staff_id'] ?? 0)]);
@@ -3509,6 +3699,50 @@ if ($method === 'GET') {
         unset($row);
         data_respond(200, ['staff' => $rows]);
     }
+    if ($resource === 'staff-presence') {
+        data_require_admin('admin');
+        $rows = $db->query(
+            'SELECT s.id, s.display_name, s.email, s.is_active, p.session_started_at, p.last_seen_at, p.current_section
+             FROM staff_users s LEFT JOIN staff_presence p ON p.staff_id = s.id
+             ORDER BY s.display_name, s.email'
+        )->fetchAll();
+        $now = time();
+        data_respond(200, [
+            'admin' => (static function () use ($db, $now): array {
+                $row = $db->query("SELECT session_started_at, last_seen_at, current_section FROM staff_presence WHERE staff_id = 0 LIMIT 1")->fetch();
+                $online = is_array($row) && strtotime((string) $row['last_seen_at'] . ' UTC') >= $now - 90;
+                return [
+                    'online' => $online,
+                    'durationSeconds' => $online ? max(0, $now - strtotime((string) $row['session_started_at'] . ' UTC')) : 0,
+                    'currentSection' => $online ? $row['current_section'] : null,
+                ];
+            })(),
+            'staff' => array_map(static function (array $row) use ($now): array {
+                $lastSeen = is_string($row['last_seen_at']) ? strtotime($row['last_seen_at'] . ' UTC') : false;
+                $online = $lastSeen !== false && $lastSeen >= $now - 90 && (bool) $row['is_active'];
+                return [
+                    'id' => (int) $row['id'],
+                    'displayName' => $row['display_name'],
+                    'email' => $row['email'],
+                    'active' => (bool) $row['is_active'],
+                    'online' => $online,
+                    'durationSeconds' => $online && is_string($row['session_started_at'])
+                        ? max(0, $now - strtotime($row['session_started_at'] . ' UTC'))
+                        : 0,
+                    'currentSection' => $online ? $row['current_section'] : null,
+                    'lastSeenAt' => $row['last_seen_at'],
+                ];
+            }, $rows),
+        ]);
+    }
+    if ($resource === 'crm-routing-settings') {
+        data_require_admin('admin');
+        $allowAgents = $db->query(
+            "SELECT setting_value FROM crm_routing_settings
+             WHERE setting_key = 'agents_may_claim_chat_when_admin_online' LIMIT 1"
+        )->fetchColumn() === '1';
+        data_respond(200, ['agentsMayClaimWhenAdminOnline' => $allowAgents]);
+    }
     if ($resource === 'overview') {
         $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin' || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
         $canViewLeads = ($_SESSION['admin_role'] ?? '') === 'admin' || in_array('leads', $_SESSION['admin_permissions'] ?? [], true);
@@ -3530,7 +3764,10 @@ if ($method === 'GET') {
             if (($_SESSION['admin_role'] ?? '') === 'admin') {
                 $leadCount = (int) $db->query('SELECT COUNT(*) FROM leads')->fetchColumn();
             } else {
-                $leadCountQuery = $db->prepare('SELECT COUNT(*) FROM leads WHERE assigned_staff_id = ?');
+                $canViewNewLeads = in_array('new_leads', $_SESSION['admin_permissions'] ?? [], true);
+                $leadCountQuery = $db->prepare($canViewNewLeads
+                    ? "SELECT COUNT(*) FROM leads WHERE assigned_staff_id = ? OR (assigned_staff_id IS NULL AND status = 'New')"
+                    : 'SELECT COUNT(*) FROM leads WHERE assigned_staff_id = ?');
                 $leadCountQuery->execute([(int) ($_SESSION['staff_id'] ?? 0)]);
                 $leadCount = (int) $leadCountQuery->fetchColumn();
             }
@@ -3553,6 +3790,68 @@ if ($method === 'GET') {
     data_respond(404, ['error' => 'not_found', 'message' => 'The requested resource was not found.']);
 }
 
+if ($method === 'POST' && $resource === 'staff-presence') {
+    data_require_admin();
+    $body = data_read_json(2048);
+    $section = data_string($body, 'section', 32);
+    $validSections = ['overview', 'orders', 'inventory', 'leads', 'chat', 'email', 'integrations', 'profile', 'staff', 'audit'];
+    if (!in_array($section, $validSections, true)) {
+        data_respond(400, ['error' => 'invalid_presence_section', 'message' => 'Choose a valid CRM section.']);
+    }
+    if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+        $sectionPermissions = ['orders' => 'orders', 'inventory' => 'products', 'leads' => 'leads', 'chat' => 'chat', 'email' => 'integrations', 'integrations' => 'integrations'];
+        if (in_array($section, ['staff', 'audit'], true)
+            || (isset($sectionPermissions[$section]) && !in_array($sectionPermissions[$section], $_SESSION['admin_permissions'] ?? [], true))) {
+            data_respond(403, ['error' => 'invalid_presence_section', 'message' => 'You cannot report activity in that CRM section.']);
+        }
+    }
+    $presenceId = ($_SESSION['admin_role'] ?? '') === 'admin' ? 0 : (int) ($_SESSION['staff_id'] ?? 0);
+    if ($presenceId < 0 || ($presenceId === 0 && ($_SESSION['admin_role'] ?? '') !== 'admin')) {
+        data_respond(401, ['error' => 'invalid_staff_session', 'message' => 'Sign in again to update your presence.']);
+    }
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $db->query(
+            "SELECT setting_value FROM crm_routing_settings
+             WHERE setting_key = 'agents_may_claim_chat_when_admin_online' FOR UPDATE"
+        )->fetchColumn();
+        $upsert = $db->prepare(
+            'INSERT INTO staff_presence (staff_id, session_started_at, last_seen_at, current_section)
+             VALUES (?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?)
+             ON DUPLICATE KEY UPDATE
+                session_started_at = IF(last_seen_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND), UTC_TIMESTAMP(), session_started_at),
+                last_seen_at = UTC_TIMESTAMP(),
+                current_section = VALUES(current_section)'
+        );
+        $upsert->execute([$presenceId, $section]);
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients staff presence could not be updated: ' . $error->getMessage());
+        data_respond(503, ['error' => 'staff_presence_unavailable', 'message' => 'Staff presence is temporarily unavailable.']);
+    }
+    data_respond(204, []);
+}
+
+if ($method === 'POST' && $resource === 'crm-routing-settings') {
+    data_require_admin('admin');
+    $body = data_read_json(2048);
+    if (!isset($body['agentsMayClaimWhenAdminOnline']) || !is_bool($body['agentsMayClaimWhenAdminOnline'])) {
+        data_respond(400, ['error' => 'invalid_routing_setting', 'message' => 'Choose whether chat-enabled agents may claim chats while the administrator is online.']);
+    }
+    $db = data_db();
+    $db->prepare(
+        "INSERT INTO crm_routing_settings (setting_key, setting_value)
+         VALUES ('agents_may_claim_chat_when_admin_online', ?)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
+    )->execute([$body['agentsMayClaimWhenAdminOnline'] ? '1' : '0']);
+    data_audit($db, 'chat.routing_setting_updated', 'chat', 'routing', [
+        'agentsMayClaimWhenAdminOnline' => $body['agentsMayClaimWhenAdminOnline'],
+    ]);
+    data_respond(200, ['agentsMayClaimWhenAdminOnline' => $body['agentsMayClaimWhenAdminOnline']]);
+}
+
 if ($method === 'POST' && $resource === 'chat-admin') {
     data_require_permission('chat');
     $body = data_read_json(4096);
@@ -3565,7 +3864,52 @@ if ($method === 'POST' && $resource === 'chat-admin') {
     $db = data_db();
     $db->beginTransaction();
     try {
-        $find = $db->prepare('SELECT id, status FROM chat_conversations WHERE id = ? FOR UPDATE');
+        $isPrimaryAdmin = ($_SESSION['admin_role'] ?? '') === 'admin';
+        $staffId = (int) ($_SESSION['staff_id'] ?? 0);
+        $staffName = trim((string) ($_SESSION['admin_display_name'] ?? ''));
+        if ($staffName === '') $staffName = (string) ($_SESSION['admin_email'] ?? 'Ambients team');
+        $assignedStaffId = null;
+        $agent = null;
+
+        if ($action === 'claim') {
+            $claimingAgent = $db->prepare('SELECT is_active, permissions FROM staff_users WHERE id = ? FOR UPDATE');
+            $claimingAgent->execute([$staffId]);
+            $agentAccount = $claimingAgent->fetch();
+            $agentPermissions = is_array($agentAccount)
+                ? data_staff_permissions(json_decode((string) $agentAccount['permissions'], true))
+                : null;
+            if ($isPrimaryAdmin || !is_array($agentAccount) || !(bool) $agentAccount['is_active']
+                || $agentPermissions === null || !in_array('chat', $agentPermissions, true)) {
+                $db->rollBack();
+                data_respond(403, ['error' => 'chat_permission_required', 'message' => 'An active account with Live chat permission is required to claim chats.']);
+            }
+            $db->query(
+                "SELECT setting_value FROM crm_routing_settings
+                 WHERE setting_key = 'agents_may_claim_chat_when_admin_online' FOR UPDATE"
+            )->fetchColumn();
+        } elseif ($action === 'assign') {
+            if (!$isPrimaryAdmin) {
+                $db->rollBack();
+                data_respond(403, ['error' => 'admin_required', 'message' => 'Only the administrator can transfer chat ownership.']);
+            }
+            $assignedStaffId = filter_var($body['staffId'] ?? null, FILTER_VALIDATE_INT);
+            if ($assignedStaffId === false || $assignedStaffId < 1) {
+                $db->rollBack();
+                data_respond(400, ['error' => 'invalid_chat_assignment', 'message' => 'Choose an active agent with live chat access.']);
+            }
+            $agentQuery = $db->prepare('SELECT display_name, permissions FROM staff_users WHERE id = ? AND is_active = 1 LIMIT 1 FOR UPDATE');
+            $agentQuery->execute([$assignedStaffId]);
+            $agent = $agentQuery->fetch();
+            $agentPermissions = is_array($agent) ? data_staff_permissions(json_decode((string) $agent['permissions'], true)) : null;
+            if (!is_array($agent) || $agentPermissions === null || !in_array('chat', $agentPermissions, true)) {
+                $db->rollBack();
+                data_respond(400, ['error' => 'invalid_chat_assignment', 'message' => 'Choose an active agent with live chat access.']);
+            }
+        }
+
+        $find = $db->prepare(
+            'SELECT id, status, owner_type, owner_staff_id FROM chat_conversations WHERE id = ? FOR UPDATE'
+        );
         $find->execute([(int) $conversationId]);
         $conversation = $find->fetch();
         if (!is_array($conversation)) {
@@ -3573,14 +3917,73 @@ if ($method === 'POST' && $resource === 'chat-admin') {
             data_respond(404, ['error' => 'chat_not_found', 'message' => 'The conversation could not be found.']);
         }
 
-        if ($action === 'reply') {
+        if ($action === 'claim') {
+            if (!in_array($conversation['owner_type'], ['queue', 'admin'], true) || $conversation['status'] !== 'open'
+                || !data_chat_agents_can_claim($db)) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'chat_claim_unavailable', 'message' => 'This chat is no longer available to claim. Refresh the inbox and try again.']);
+            }
+            $db->prepare("UPDATE chat_conversations SET owner_type = 'agent', owner_staff_id = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?")
+                ->execute([$staffId, (int) $conversationId]);
+            $db->prepare(
+                "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                 VALUES (?, 'system', 'Ambienta support', ?)"
+            )->execute([(int) $conversationId, $staffName . ' joined the conversation.']);
+            data_audit($db, 'chat.claimed', 'chat', (string) $conversationId);
+        } elseif ($action === 'takeover' || $action === 'assign') {
+            if (!$isPrimaryAdmin) {
+                $db->rollBack();
+                data_respond(403, ['error' => 'admin_required', 'message' => 'Only the administrator can transfer chat ownership.']);
+            }
+            $previousOwner = $conversation['owner_type'] === 'admin' ? 'the administrator' : 'the shared queue';
+            if ($conversation['owner_type'] === 'agent') {
+                $ownerQuery = $db->prepare('SELECT display_name FROM staff_users WHERE id = ? LIMIT 1');
+                $ownerQuery->execute([(int) $conversation['owner_staff_id']]);
+                $previousOwner = (string) ($ownerQuery->fetchColumn() ?: 'the assigned agent');
+            }
+            if ($action === 'takeover') {
+                $db->prepare("UPDATE chat_conversations SET owner_type = 'admin', owner_staff_id = NULL, updated_at = UTC_TIMESTAMP() WHERE id = ?")
+                    ->execute([(int) $conversationId]);
+                $handoff = 'Administrator took over the conversation from ' . ($previousOwner !== '' ? $previousOwner : 'the agent') . '.';
+            } else {
+                if ($conversation['owner_type'] === 'agent' && (int) $conversation['owner_staff_id'] === (int) $assignedStaffId) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'chat_already_assigned', 'message' => 'This agent already owns the conversation.']);
+                }
+                $db->prepare("UPDATE chat_conversations SET owner_type = 'agent', owner_staff_id = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?")
+                    ->execute([(int) $assignedStaffId, (int) $conversationId]);
+                $handoff = 'Administrator transferred this conversation from ' . $previousOwner . ' to ' . ($agent['display_name'] ?: 'an agent') . '.';
+            }
+            $db->prepare(
+                "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                 VALUES (?, 'system', 'Ambienta support', ?)"
+            )->execute([(int) $conversationId, $handoff]);
+            data_audit($db, 'chat.' . $action, 'chat', (string) $conversationId, ['previousOwner' => $previousOwner]);
+        } elseif ($action === 'reply') {
             $message = data_string($body, 'message', 2000);
             if ($conversation['status'] !== 'open') {
                 $db->rollBack();
                 data_respond(409, ['error' => 'chat_closed', 'message' => 'Reopen this conversation before replying.']);
             }
-            $staffName = trim((string) ($_SESSION['admin_display_name'] ?? ''));
-            if ($staffName === '') $staffName = (string) ($_SESSION['admin_email'] ?? 'Ambients team');
+            if (!$isPrimaryAdmin && ($conversation['owner_type'] !== 'agent' || (int) $conversation['owner_staff_id'] !== $staffId)) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'chat_not_owned', 'message' => 'Claim this chat before replying. Another staff member may already own it.']);
+            }
+            if ($isPrimaryAdmin && $conversation['owner_type'] !== 'admin') {
+                $previousOwner = $conversation['owner_type'] === 'admin' ? 'the administrator' : 'the shared queue';
+                if ($conversation['owner_type'] === 'agent') {
+                    $ownerQuery = $db->prepare('SELECT display_name FROM staff_users WHERE id = ? LIMIT 1');
+                    $ownerQuery->execute([(int) $conversation['owner_staff_id']]);
+                    $previousOwner = (string) ($ownerQuery->fetchColumn() ?: 'the assigned agent');
+                }
+                $handoff = 'Administrator took over the conversation from ' . ($previousOwner !== '' ? $previousOwner : 'the agent') . '.';
+                $db->prepare("UPDATE chat_conversations SET owner_type = 'admin', owner_staff_id = NULL WHERE id = ?")
+                    ->execute([(int) $conversationId]);
+                $db->prepare(
+                    "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                     VALUES (?, 'system', 'Ambienta support', ?)"
+                )->execute([(int) $conversationId, $handoff]);
+            }
             $db->prepare(
                 "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
                  VALUES (?, 'staff', ?, ?)"
@@ -3589,13 +3992,17 @@ if ($method === 'POST' && $resource === 'chat-admin') {
                 ->execute([(int) $conversationId]);
             data_audit($db, 'chat.replied', 'chat', (string) $conversationId);
         } elseif ($action === 'close' || $action === 'reopen') {
+            if (!$isPrimaryAdmin && ($conversation['owner_type'] !== 'agent' || (int) $conversation['owner_staff_id'] !== $staffId)) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'chat_not_owned', 'message' => 'Only the staff member currently handling this chat can change its status.']);
+            }
             $nextStatus = $action === 'close' ? 'closed' : 'open';
             $db->prepare('UPDATE chat_conversations SET status = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?')
                 ->execute([$nextStatus, (int) $conversationId]);
             data_audit($db, 'chat.' . $action, 'chat', (string) $conversationId);
         } else {
             $db->rollBack();
-            data_respond(400, ['error' => 'invalid_chat_action', 'message' => 'Choose reply, close, or reopen.']);
+            data_respond(400, ['error' => 'invalid_chat_action', 'message' => 'Choose claim, reply, transfer, close, or reopen.']);
         }
 
         $db->commit();
@@ -3804,41 +4211,6 @@ if ($method === 'POST' && $resource === 'staff') {
     data_require_admin('admin');
     $body = data_read_json();
     $db = data_db();
-    if (($body['createDemoAgents'] ?? false) === true) {
-        $demoAgents = [
-            ['Agent One', 'agent.one@example.com'],
-            ['Agent Two', 'agent.two@example.com'],
-            ['Agent Three', 'agent.three@example.com'],
-            ['Agent Four', 'agent.four@example.com'],
-            ['Agent Five', 'agent.five@example.com'],
-        ];
-        $permissionsJson = json_encode(['leads', 'orders', 'products', 'integrations', 'chat']);
-        $created = [];
-        $db->beginTransaction();
-        try {
-            foreach ($demoAgents as [$displayName, $email]) {
-                $exists = $db->prepare('SELECT id FROM staff_users WHERE email = ?');
-                $exists->execute([$email]);
-                if ($exists->fetchColumn()) continue;
-                $temporaryPassword = bin2hex(random_bytes(16));
-                $hash = password_hash($temporaryPassword, PASSWORD_DEFAULT);
-                if (!is_string($hash) || !is_string($permissionsJson)) {
-                    throw new RuntimeException('Demo agent credentials could not be generated.');
-                }
-                $db->prepare('INSERT INTO staff_users (email, display_name, password_hash, role, permissions, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, ?)')
-                    ->execute([$email, $displayName, $hash, 'operator', $permissionsJson, $_SESSION['admin_email']]);
-                $id = (string) $db->lastInsertId();
-                data_audit($db, 'staff.created', 'staff', $id, ['email' => $email, 'role' => 'operator', 'demo' => true]);
-                $created[] = ['displayName' => $displayName, 'email' => $email, 'temporaryPassword' => $temporaryPassword];
-            }
-            $db->commit();
-            data_respond(201, ['created' => $created]);
-        } catch (Throwable $error) {
-            if ($db->inTransaction()) $db->rollBack();
-            error_log('Ambients demo agent creation failed: ' . $error->getMessage());
-            data_respond(500, ['error' => 'demo_staff_create_failed', 'message' => 'The demo agent accounts could not be created.']);
-        }
-    }
 
     $email = strtolower(data_string($body, 'email', 254));
     $displayName = data_string($body, 'displayName', 120);
@@ -3880,7 +4252,7 @@ if ($method === 'PATCH' && $resource === 'staff') {
         data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'The staff account update is invalid.']);
     }
     $db = data_db();
-    $find = $db->prepare('SELECT id, email, display_name, is_active FROM staff_users WHERE id = ?');
+    $find = $db->prepare('SELECT id, email, display_name, is_active, permissions FROM staff_users WHERE id = ?');
     $find->execute([$id]);
     $staff = $find->fetch();
     if (!$staff) {
@@ -3937,11 +4309,33 @@ if ($method === 'PATCH' && $resource === 'staff') {
         $auditDetails['passwordReset'] = true;
     }
     if ($updates === []) data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'No account changes were provided.']);
+    $currentPermissions = data_staff_permissions(json_decode((string) $staff['permissions'], true)) ?? [];
+    $targetPermissions = isset($permissions) && is_array($permissions) ? $permissions : $currentPermissions;
+    $shouldRequeueChats = (array_key_exists('isActive', $body) && $body['isActive'] === false)
+        || !in_array('chat', $targetPermissions, true);
     $updates[] = 'session_version = session_version + 1';
     $parameters[] = $id;
     try {
         $db->beginTransaction();
         $db->prepare('UPDATE staff_users SET ' . implode(', ', $updates) . ' WHERE id = ?')->execute($parameters);
+        if ($shouldRequeueChats) {
+            $ownedChats = $db->prepare("SELECT id FROM chat_conversations WHERE owner_type = 'agent' AND owner_staff_id = ? AND status = 'open' FOR UPDATE");
+            $ownedChats->execute([$id]);
+            $chatIds = array_map('intval', $ownedChats->fetchAll(PDO::FETCH_COLUMN));
+            if ($chatIds !== []) {
+                $db->prepare("UPDATE chat_conversations SET owner_type = 'queue', owner_staff_id = NULL WHERE owner_type = 'agent' AND owner_staff_id = ? AND status = 'open'")
+                    ->execute([$id]);
+                $notice = 'This conversation was returned to the shared queue because ' . ($staff['display_name'] ?: 'the assigned agent') . ' is no longer available.';
+                $insertNotice = $db->prepare(
+                    "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+                     VALUES (?, 'system', 'Ambienta support', ?)"
+                );
+                foreach ($chatIds as $chatId) {
+                    $insertNotice->execute([$chatId, $notice]);
+                }
+                data_audit($db, 'chat.agent_unavailable', 'staff', (string) $id, ['returnedChats' => count($chatIds)]);
+            }
+        }
         data_audit($db, 'staff.updated', 'staff', (string) $id, ['email' => $staff['email']] + $auditDetails);
         $db->commit();
         data_respond(200, ['updated' => true, 'temporaryPassword' => $temporaryPassword]);

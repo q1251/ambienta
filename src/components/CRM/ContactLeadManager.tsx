@@ -22,6 +22,7 @@ interface AgentOption {
   email: string;
   display_name: string;
   is_active: boolean;
+  permissions: string[];
 }
 
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
@@ -76,6 +77,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const isSuperadmin = role === 'admin';
+  const canEditSelectedLead = isSuperadmin || profile?.lead.assignedStaffId != null;
   useEffect(() => {
     if (!isSuperadmin) return;
     let active = true;
@@ -87,7 +89,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       if (!response.ok || !Array.isArray(result.staff)) {
         throw new Error(result.message || 'Agent accounts could not be loaded for lead assignment.');
       }
-      if (active) setAgents(result.staff.filter((agent) => agent.is_active));
+      if (active) setAgents(result.staff.filter((agent) => agent.is_active && agent.permissions.includes('leads')));
     }).catch((error: unknown) => {
       if (active) setRequestError(error instanceof Error ? error.message : 'Agent accounts could not be loaded for lead assignment.');
     });
@@ -278,7 +280,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   };
 
   const updateProfile = async (update: ContactLeadUpdate): Promise<boolean> => {
-    if (!profile || !onUpdateLead) return false;
+    if (!profile || !canEditSelectedLead || !onUpdateLead) return false;
     const requestId = profileRequestId.current;
     const leadId = profile.lead.id;
     setProfileSaving(true);
@@ -369,7 +371,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
   const saveActivity = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!profile || !onAddLeadActivity) return;
+    if (!profile || !canEditSelectedLead || !onAddLeadActivity) return;
     const requestId = profileRequestId.current;
     const leadId = profile.lead.id;
     setActivitySaving(true);
@@ -503,7 +505,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       <p className="text-xs font-medium uppercase text-slate-500">Added</p>
                       <p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <button type="button" onClick={() => setEmailComposerOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline">
+                    <button type="button" disabled={!canEditSelectedLead} title={!canEditSelectedLead ? 'Assign this new lead before contacting them from the CRM.' : undefined} onClick={() => setEmailComposerOpen(true)} className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
                       <Mail className="h-4 w-4" /> Compose email
                     </button>
                   </div>
@@ -530,9 +532,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <div>
                   <form onSubmit={(event) => void saveActivity(event)} className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Add an internal comment
-                    <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} placeholder="Add an internal comment. Do not enter health, prescription, payment, or other sensitive information." className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
+                    <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} disabled={!canEditSelectedLead} placeholder={canEditSelectedLead ? 'Add an internal comment. Do not enter health, prescription, payment, or other sensitive information.' : 'Unassigned new leads are view-only until the administrator assigns them.'} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 disabled:bg-slate-50" />
                   </label>
-                  <button type="submit" disabled={activitySaving || !onAddLeadActivity || !activityNote.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  <button type="submit" disabled={!canEditSelectedLead || activitySaving || !onAddLeadActivity || !activityNote.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
                     <MessageSquare className="h-4 w-4" />
                     {activitySaving ? 'Saving…' : 'Add comment'}
                   </button>
@@ -559,7 +561,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-slate-700">Status
                     <select
-                      disabled={profileSaving || !onUpdateLead}
+                      disabled={!canEditSelectedLead || profileSaving || !onUpdateLead}
                       value={profile.lead.status}
                       onChange={(event) => void updateProfile({ status: event.target.value as LeadStatus })}
                       className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2"
@@ -567,7 +569,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       {(['New', 'Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status} value={status}>{status}</option>)}
                     </select>
                   </label>
-                  <p aria-live="polite" className="text-xs text-slate-500">{profileSaving ? 'Saving stage…' : 'Stage changes save immediately and are added to the staff history below.'}</p>
+                  <p aria-live="polite" className="text-xs text-slate-500">{!canEditSelectedLead ? 'Unassigned new leads are view-only until the administrator assigns them.' : profileSaving ? 'Saving stage…' : 'Stage changes save immediately and are added to the staff history below.'}</p>
                   <div className="pt-3">
                     <h4 className="mb-3 text-sm font-bold text-slate-900">Status history</h4>
                     {statusActivities.length ? (
@@ -588,7 +590,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </div>
 
                 <label className="flex items-start gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700 lg:col-span-2">
-                  <input type="checkbox" disabled={profileSaving || !onUpdateLead} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} className="mt-1" />
+                  <input type="checkbox" disabled={!canEditSelectedLead || profileSaving || !onUpdateLead} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} className="mt-1" />
                   <span><span className="font-medium">Explicit marketing opt-in recorded.</span> Only mark this when the contact has actually consented to marketing email.</span>
                 </label>
               </div>

@@ -54,7 +54,7 @@ interface AdminLayoutProps {
     role: 'operator';
     email: string;
     displayName: string;
-    permissions: Array<'leads' | 'orders' | 'products' | 'integrations' | 'chat'>;
+    permissions: Array<'leads' | 'new_leads' | 'orders' | 'products' | 'integrations' | 'chat'>;
     impersonating: true;
     impersonatedBy: string;
   }) => void;
@@ -133,6 +133,44 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   });
   const [logoutError, setLogoutError] = useState('');
   const [impersonationError, setImpersonationError] = useState('');
+  useEffect(() => {
+    let failureReported = false;
+    const presencePermission = activeTab === 'orders' ? 'orders'
+      : activeTab === 'inventory' ? 'products'
+        : activeTab === 'leads' ? 'leads'
+          : activeTab === 'chat' ? 'chat'
+            : activeTab === 'email' || activeTab === 'integrations' ? 'integrations'
+              : null;
+    const presenceSection = props.role !== 'admin' && (
+      activeTab === 'staff'
+      || activeTab === 'audit'
+      || (presencePermission !== null && !props.permissions.includes(presencePermission))
+    ) ? 'overview' : activeTab;
+    const heartbeat = async () => {
+      try {
+        const response = await fetch('/api/data.php?resource=staff-presence', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ section: presenceSection }),
+          keepalive: true,
+        });
+        if (!response.ok) {
+          const result = await response.json() as { message?: string };
+          throw new Error(result.message || `Staff presence update failed (${response.status}).`);
+        }
+        failureReported = false;
+      } catch (error) {
+        if (!failureReported) {
+          console.error('Ambients CRM presence could not be updated.', error);
+          failureReported = true;
+        }
+      }
+    };
+    void heartbeat();
+    const timer = window.setInterval(() => void heartbeat(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [activeTab, props.role, props.permissions]);
   const selectTab = (tab: AdminTab) => {
     const neededPermission = tab === 'leads' ? 'leads'
       : tab === 'orders' ? 'orders'
@@ -280,7 +318,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               <ContactLeadManager role={props.role} leads={props.leads} dataError={props.leadDataError} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
             </Suspense>
           )}
-          {activeTab === 'chat' && <LiveChatInbox />}
+          {activeTab === 'chat' && <LiveChatInbox role={props.role} />}
           {activeTab === 'email' && <HostingerMailIntegration role={props.role} mode="mailbox" />}
           {activeTab === 'integrations' && <IntegrationStatus role={props.role} />}
           {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}

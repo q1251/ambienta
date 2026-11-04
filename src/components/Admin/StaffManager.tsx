@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, CalendarDays, KeyRound, LogIn, UserPlus, Users, UserX } from 'lucide-react';
 
 const availablePermissions = [
-  { id: 'leads', label: 'Leads' },
+  { id: 'leads', label: 'Assigned leads' },
+  { id: 'new_leads', label: 'View unassigned new leads' },
   { id: 'orders', label: 'Orders' },
   { id: 'products', label: 'Products' },
   { id: 'integrations', label: 'Integrations' },
@@ -34,6 +35,22 @@ interface AgentProfile extends StaffAccount {
   }>;
 }
 
+interface StaffPresence {
+  id: number;
+  displayName: string;
+  email: string;
+  active: boolean;
+  online: boolean;
+  durationSeconds: number;
+  currentSection: string | null;
+  lastSeenAt: string | null;
+}
+
+interface PresenceResponse {
+  admin: { online: boolean; durationSeconds: number; currentSection: string | null };
+  staff: StaffPresence[];
+}
+
 interface StaffManagerProps {
   onEnterAccount: (session: {
     role: 'operator';
@@ -45,7 +62,7 @@ interface StaffManagerProps {
   }) => void;
 }
 
-const defaultPermissions: StaffPermission[] = ['leads', 'orders', 'products', 'integrations', 'chat'];
+const defaultPermissions: StaffPermission[] = ['leads'];
 
 export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) => {
   const [accounts, setAccounts] = useState<StaffAccount[]>([]);
@@ -67,6 +84,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [presence, setPresence] = useState<PresenceResponse | null>(null);
+  const [agentsMayClaimWhenAdminOnline, setAgentsMayClaimWhenAdminOnline] = useState(false);
+  const [routingSaving, setRoutingSaving] = useState(false);
 
   const loadAccounts = useCallback(async () => {
     setLoading(true);
@@ -88,7 +108,31 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     }
   }, []);
 
+  const loadPresenceAndRouting = useCallback(async () => {
+    try {
+      const [presenceResponse, routingResponse] = await Promise.all([
+        fetch('/api/data.php?resource=staff-presence', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+        fetch('/api/data.php?resource=crm-routing-settings', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+      ]);
+      const presenceResult = await presenceResponse.json() as PresenceResponse & { message?: string };
+      const routingResult = await routingResponse.json() as { agentsMayClaimWhenAdminOnline?: boolean; message?: string };
+      if (!presenceResponse.ok || !Array.isArray(presenceResult.staff) || !presenceResult.admin
+        || !routingResponse.ok || typeof routingResult.agentsMayClaimWhenAdminOnline !== 'boolean') {
+        throw new Error(presenceResult.message || routingResult.message || 'Staff presence and chat routing could not be loaded.');
+      }
+      setPresence(presenceResult);
+      setAgentsMayClaimWhenAdminOnline(routingResult.agentsMayClaimWhenAdminOnline);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Staff presence and chat routing could not be loaded.');
+    }
+  }, []);
+
   const togglePermission = (current: StaffPermission[], permission: StaffPermission, update: (next: StaffPermission[]) => void) => {
+    if (permission === 'new_leads' && !current.includes('leads')) return;
+    if (permission === 'leads' && current.includes('leads')) {
+      update(current.filter((value) => value !== 'leads' && value !== 'new_leads'));
+      return;
+    }
     update(current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
   };
 
@@ -109,6 +153,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       setDisplayName('');
       setEmail('');
       setTemporaryPassword('');
+      setPermissions(defaultPermissions);
       setCreateModalOpen(false);
       setMessage('Agent account created. The agent must replace this temporary password at first sign-in.');
       await loadAccounts();
@@ -119,34 +164,45 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     }
   };
 
-  const createDemoAgents = useCallback(async () => {
+  useEffect(() => {
+    void loadAccounts();
+    void loadPresenceAndRouting();
+    const timer = window.setInterval(() => void loadPresenceAndRouting(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [loadAccounts, loadPresenceAndRouting]);
+
+  const updateChatRouting = async (enabled: boolean) => {
+    setRoutingSaving(true);
     setError('');
     setMessage('');
-    setSaving(true);
     try {
-      const response = await fetch('/api/data.php?resource=staff', {
+      const response = await fetch('/api/data.php?resource=crm-routing-settings', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ createDemoAgents: true }),
+        body: JSON.stringify({ agentsMayClaimWhenAdminOnline: enabled }),
       });
-      const result = await response.json() as {
-        created?: Array<{ displayName: string; email: string; temporaryPassword: string }>;
-        message?: string;
-      };
-      if (!response.ok || !Array.isArray(result.created)) {
-        throw new Error(result.message || 'Demo agent accounts could not be created.');
+      const result = await response.json() as { agentsMayClaimWhenAdminOnline?: boolean; message?: string };
+      if (!response.ok || typeof result.agentsMayClaimWhenAdminOnline !== 'boolean') {
+        throw new Error(result.message || 'The chat routing setting could not be saved.');
       }
-      setMessage(result.message || 'Demo agent accounts are ready.');
-      await loadAccounts();
-    } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Demo agent accounts could not be created.');
+      setAgentsMayClaimWhenAdminOnline(result.agentsMayClaimWhenAdminOnline);
+      setMessage(enabled
+        ? 'Chat-enabled agents can now claim shared-queue chats while you are online.'
+        : 'Shared-queue chats now go to agents only while you are offline.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'The chat routing setting could not be saved.');
     } finally {
-      setSaving(false);
+      setRoutingSaving(false);
     }
-  }, [loadAccounts]);
+  };
 
-  useEffect(() => { void createDemoAgents(); }, [createDemoAgents]);
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+  };
 
   const updateAccount = async (account: StaffAccount, changes: Record<string, unknown>, successMessage: string) => {
     setError('');
@@ -367,6 +423,65 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         </section>
       ) : (
       <>
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-slate-900">Chat routing</h2>
+              <p className="mt-1 max-w-xl text-sm text-slate-600">New chats wait for you first. When you are offline, active chat-enabled agents can claim from the shared queue.</p>
+            </div>
+            <label className="flex cursor-pointer items-center gap-3 text-sm font-medium text-slate-800">
+              <input
+                type="checkbox"
+                checked={agentsMayClaimWhenAdminOnline}
+                disabled={routingSaving}
+                onChange={(event) => void updateChatRouting(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-teal-800 focus:ring-teal-700"
+              />
+              Allow agents to claim while I’m online
+            </label>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            {agentsMayClaimWhenAdminOnline
+              ? 'Enabled: agents with Live chat permission may claim unowned chats even while you are online.'
+              : 'Disabled: agents can claim unowned chats only when you are offline. Chats already assigned to an agent stay with that agent until you take over or reassign.'}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="font-semibold text-slate-900">Your presence</h2>
+          <p className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+            <span className={`h-2.5 w-2.5 rounded-full ${presence?.admin.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            {presence?.admin.online ? `Online · ${formatDuration(presence.admin.durationSeconds)}` : 'Offline'}
+          </p>
+          {presence?.admin.online && <p className="mt-1 text-xs capitalize text-slate-500">Current section: {presence.admin.currentSection || 'overview'}</p>}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h2 className="font-semibold text-slate-900">Agent presence</h2>
+          <p className="mt-1 text-xs text-slate-500">Live status refreshes every 15 seconds. Agents are considered offline after 90 seconds without an authenticated CRM heartbeat.</p>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {presence?.staff.map((agent) => (
+            <div key={agent.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900">{agent.displayName || agent.email}</p>
+                <p className="truncate text-xs text-slate-500">{agent.email}</p>
+              </div>
+              <div className="text-right">
+                <p className={`text-xs font-semibold ${agent.online ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  {agent.online ? `Online · ${formatDuration(agent.durationSeconds)}` : agent.active ? 'Offline' : 'Inactive'}
+                </p>
+                <p className="mt-0.5 text-xs capitalize text-slate-500">{agent.online ? agent.currentSection || 'overview' : 'No current activity'}</p>
+              </div>
+            </div>
+          ))}
+          {presence?.staff.length === 0 && <p className="px-5 py-6 text-sm text-slate-500">No agent accounts have been created.</p>}
+          {!presence && <p className="px-5 py-6 text-sm text-slate-500">Loading staff presence…</p>}
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -435,7 +550,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={permissions.includes(permission.id)} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-teal-800" />
+                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-teal-800" />
                       {permission.label}
                     </label>
                   ))}
@@ -495,7 +610,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={editPermissions.includes(permission.id)} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-teal-800" />
+                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-teal-800" />
                       {permission.label}
                     </label>
                   ))}

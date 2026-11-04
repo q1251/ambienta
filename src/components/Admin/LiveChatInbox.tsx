@@ -3,6 +3,7 @@ import { Check, Circle, Clock3, Eye, Globe2, LoaderCircle, MapPin, MessageCircle
 
 type ConversationStatus = 'open' | 'closed';
 type ConversationFilter = ConversationStatus | 'all';
+type ConversationOwnerType = 'queue' | 'admin' | 'agent';
 
 interface ChatConversation {
   id: number;
@@ -13,13 +14,17 @@ interface ChatConversation {
   createdAt: string;
   updatedAt: string;
   lastMessage: string | null;
-  lastSender: 'visitor' | 'staff' | null;
+  lastSender: 'visitor' | 'staff' | 'system' | null;
   unreadCount: number;
+  ownerType: ConversationOwnerType;
+  ownerStaffId: number | null;
+  ownerName: string;
+  canClaim: boolean;
 }
 
 interface ChatMessage {
   id: number;
-  sender: 'visitor' | 'staff';
+  sender: 'visitor' | 'staff' | 'system';
   senderName: string;
   body: string;
   createdAt: string;
@@ -33,12 +38,19 @@ interface ChatConversationDetail {
   status: ConversationStatus;
   createdAt: string;
   updatedAt: string;
+  ownerType: ConversationOwnerType;
+  ownerStaffId: number | null;
+  ownerName: string;
+  canClaim: boolean;
 }
 
 interface ChatInboxResponse {
   conversations?: ChatConversation[];
   conversation?: ChatConversationDetail;
   messages?: ChatMessage[];
+  adminOnline?: boolean;
+  agentsMayClaimWhenAdminOnline?: boolean;
+  assignableAgents?: Array<{ id: number; displayName: string }>;
   message?: string;
 }
 
@@ -56,10 +68,21 @@ interface VisitorSession {
   lastSeen: string;
   active: boolean;
   pageCount: number;
+  durationSeconds: number;
+  currentTitle: string;
+  currentProduct: string | null;
+  chatId: number | null;
+  chatStatus: ConversationStatus | null;
+  chatOwner: string | null;
+  chatEngaged: boolean;
 }
 
 interface VisitorPageView {
   path: string;
+  title: string;
+  productId: string | null;
+  productName: string | null;
+  dwellSeconds: number;
   viewedAt: string;
 }
 
@@ -92,7 +115,18 @@ const formatDate = (value: string) => new Date(value.replace(' ', 'T') + (value.
   minute: '2-digit',
 });
 
-export const LiveChatInbox: React.FC = () => {
+interface LiveChatInboxProps {
+  role: 'admin' | 'operator';
+}
+
+const formatDuration = (seconds: number) => {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+};
+
+export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
   const [filter, setFilter] = useState<ConversationFilter>('open');
   const [search, setSearch] = useState('');
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -112,6 +146,9 @@ export const LiveChatInbox: React.FC = () => {
   const [selectedVisitorSession, setSelectedVisitorSession] = useState<VisitorSessionResponse['session']>();
   const [visitorPages, setVisitorPages] = useState<VisitorPageView[]>([]);
   const [visitorLoading, setVisitorLoading] = useState(false);
+  const [adminOnline, setAdminOnline] = useState(false);
+  const [assignableAgents, setAssignableAgents] = useState<ChatInboxResponse['assignableAgents']>([]);
+  const [assignAgentId, setAssignAgentId] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
@@ -127,6 +164,8 @@ export const LiveChatInbox: React.FC = () => {
         throw new Error(result.message || 'The chat inbox could not be loaded.');
       }
       setConversations(result.conversations);
+      setAdminOnline(result.adminOnline === true);
+      setAssignableAgents(result.assignableAgents || []);
       setError('');
       setLoadingList(false);
       setSelectedId((current) => {
@@ -220,6 +259,10 @@ export const LiveChatInbox: React.FC = () => {
   }, [selectedId, loadSelectedConversation]);
 
   useEffect(() => {
+    setAssignAgentId('');
+  }, [selectedId]);
+
+  useEffect(() => {
     if (view !== 'visitors') return;
     setVisitorLoading(true);
     void loadVisitorSessions();
@@ -242,8 +285,12 @@ export const LiveChatInbox: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
 
-  const runAction = async (action: 'reply' | 'close' | 'reopen') => {
+  const runAction = async (action: 'reply' | 'close' | 'reopen' | 'claim' | 'takeover' | 'assign') => {
     if (!selectedId) return;
+    if (action === 'assign' && !assignAgentId) {
+      setError('Choose an active agent with Live chat permission before assigning this conversation.');
+      return;
+    }
     setSaving(true);
     setError('');
     setActionMessage('');
@@ -256,12 +303,20 @@ export const LiveChatInbox: React.FC = () => {
           action,
           conversation: selectedId,
           ...(action === 'reply' ? { message: reply } : {}),
+          ...(action === 'assign' ? { staffId: Number(assignAgentId) } : {}),
         }),
       });
       const result = await response.json() as { message?: string };
       if (!response.ok) throw new Error(result.message || 'The chat update could not be saved.');
       if (action === 'reply') setReply('');
-      setActionMessage(action === 'reply' ? 'Reply sent.' : action === 'close' ? 'Conversation closed.' : 'Conversation reopened.');
+      setActionMessage(
+        action === 'reply' ? 'Reply sent.'
+          : action === 'close' ? 'Conversation closed.'
+            : action === 'reopen' ? 'Conversation reopened.'
+              : action === 'claim' ? 'You now own this conversation.'
+                : action === 'takeover' ? 'You took over the conversation. The handoff is visible in the chat.'
+                  : 'Conversation assigned. The handoff is visible in the chat.'
+      );
       await Promise.all([loadConversations(), loadSelectedConversation(selectedId)]);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : 'The chat update could not be saved.');
@@ -279,12 +334,13 @@ export const LiveChatInbox: React.FC = () => {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Customer support</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Live chat</h1>
-          <p className="mt-2 text-sm text-slate-600">Reply to conversations started from the storefront chat widget.</p>
+          <p className="mt-2 text-sm text-slate-600">{role === 'admin' ? 'Monitor incoming chats, assign an agent, or take ownership with a visible handoff.' : 'Claim available chats or continue conversations assigned to you.'}</p>
         </div>
         {view === 'inbox' ? (
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
             <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>
             {filter === 'open' ? `${openCount} open` : `${conversations.length} shown`} <span className="text-slate-300">·</span> {unreadCount} unread
+            {role === 'admin' && <><span className="text-slate-300">·</span><span>{adminOnline ? 'You are online' : 'You are offline'}</span></>}
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
@@ -298,7 +354,7 @@ export const LiveChatInbox: React.FC = () => {
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-950">
         {view === 'inbox'
           ? 'Chat is for general support only. Do not request or share health information, prescription details, or payment card data here.'
-          : 'Visitor sessions use a first-party random identifier and record page paths, referral domains, and browser language. IP addresses are not saved in visitor-session records. Country is shown only when the hosting edge provides it.'}
+          : 'Visitor sessions use a first-party random identifier and record page paths, page titles, visible product cards, referral domains, and browser language. IP addresses are not saved in visitor-session records. Country is shown only when the hosting edge provides it.'}
       </div>
 
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
@@ -349,6 +405,9 @@ export const LiveChatInbox: React.FC = () => {
                     </span>
                     {conversation.visitorEmail && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{conversation.visitorEmail}</span>}
                     {conversation.visitorPhone && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{conversation.visitorPhone}</span>}
+                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${conversation.ownerType === 'queue' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+                      {conversation.ownerType === 'queue' ? 'Shared queue' : `Handled by ${conversation.ownerName}`}
+                    </span>
                     <span className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-slate-500">{conversation.lastSender === 'staff' ? 'You: ' : ''}{conversation.lastMessage || 'New conversation'}</span>
                       {conversation.unreadCount > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-teal-700 px-1.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>}
@@ -381,31 +440,52 @@ export const LiveChatInbox: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <span className="max-w-40 truncate text-[11px] font-medium text-slate-500">{selectedConversation.ownerType === 'queue' ? 'Unassigned · shared queue' : `Handled by ${selectedConversation.ownerName}`}</span>
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedConversation.status === 'open' ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
                     {selectedConversation.status === 'open' ? <Circle className="h-2 w-2 fill-current" /> : <Check className="h-3 w-3" />}
                     {selectedConversation.status}
                   </span>
-                  {selectedConversation.status === 'open' ? (
+                  {role === 'operator' && selectedConversation.canClaim && (
+                    <button type="button" disabled={saving} onClick={() => void runAction('claim')} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:opacity-50">Claim chat</button>
+                  )}
+                  {role === 'admin' && selectedConversation.ownerType !== 'admin' && (
+                    <button type="button" disabled={saving} onClick={() => void runAction('takeover')} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50">Take over</button>
+                  )}
+                  {role === 'admin' && assignableAgents && assignableAgents.length > 0 && (
+                    <div className="flex items-center gap-1">
+                      <label className="sr-only" htmlFor="chat-assign-agent">Assign chat to agent</label>
+                      <select id="chat-assign-agent" value={assignAgentId} onChange={(event) => setAssignAgentId(event.target.value)} className="max-w-36 rounded-lg border border-slate-200 px-2 py-2 text-xs">
+                        <option value="">Assign to…</option>
+                        {assignableAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.displayName}</option>)}
+                      </select>
+                      <button type="button" disabled={saving || !assignAgentId} onClick={() => void runAction('assign')} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Assign</button>
+                    </div>
+                  )}
+                  {(role === 'admin' || selectedConversation.ownerType === 'agent') && (selectedConversation.status === 'open' ? (
                     <button type="button" disabled={saving} onClick={() => void runAction('close')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><X className="h-3.5 w-3.5" />Close</button>
                   ) : (
                     <button type="button" disabled={saving} onClick={() => void runAction('reopen')} className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" />Reopen</button>
-                  )}
+                  ))}
                 </div>
               </header>
               <div className="flex-1 space-y-4 overflow-y-auto bg-[#f7f9fb] p-4 sm:p-6">
                 {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.sender === 'staff' ? 'justify-end' : 'justify-start'}`}>
-                    <article className={`max-w-[min(76%,620px)] rounded-2xl px-4 py-3 ${message.sender === 'staff' ? 'rounded-br-md bg-[#123b68] text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm'}`}>
-                      <p className={`mb-1.5 text-[10px] font-semibold ${message.sender === 'staff' ? 'text-blue-100' : 'text-teal-800'}`}>{message.sender === 'staff' ? message.senderName : selectedConversation.visitorName}</p>
-                      <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p>
-                      <time className={`mt-2 block text-right text-[10px] ${message.sender === 'staff' ? 'text-blue-100' : 'text-slate-400'}`}>{formatDate(message.createdAt)}</time>
-                    </article>
-                  </div>
+                  message.sender === 'system' ? (
+                    <p key={message.id} className="mx-auto w-fit max-w-full rounded-full bg-slate-200/70 px-4 py-1.5 text-center text-xs text-slate-600">{message.body} · {formatDate(message.createdAt)}</p>
+                  ) : (
+                    <div key={message.id} className={`flex ${message.sender === 'staff' ? 'justify-end' : 'justify-start'}`}>
+                      <article className={`max-w-[min(76%,620px)] rounded-2xl px-4 py-3 ${message.sender === 'staff' ? 'rounded-br-md bg-[#123b68] text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm'}`}>
+                        <p className={`mb-1.5 text-[10px] font-semibold ${message.sender === 'staff' ? 'text-blue-100' : 'text-teal-800'}`}>{message.sender === 'staff' ? message.senderName : selectedConversation.visitorName}</p>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p>
+                        <time className={`mt-2 block text-right text-[10px] ${message.sender === 'staff' ? 'text-blue-100' : 'text-slate-400'}`}>{formatDate(message.createdAt)}</time>
+                      </article>
+                    </div>
+                  )
                 ))}
                 <div ref={messagesEndRef} />
               </div>
               <footer className="border-t border-slate-200 bg-white p-4 sm:px-6">
-                {selectedConversation.status === 'open' ? (
+                {selectedConversation.status === 'open' && (role === 'admin' || selectedConversation.ownerType === 'agent') ? (
                   <form onSubmit={(event) => { event.preventDefault(); if (reply.trim()) void runAction('reply'); }} className="flex items-end gap-3">
                     <label className="sr-only" htmlFor="crm-chat-reply">Reply to customer</label>
                     <textarea id="crm-chat-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder={`Reply to ${selectedConversation.visitorName}…`} className="max-h-36 min-h-12 flex-1 resize-y rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/10" />
@@ -413,6 +493,8 @@ export const LiveChatInbox: React.FC = () => {
                       {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}<span className="hidden sm:inline">Send</span>
                     </button>
                   </form>
+                ) : selectedConversation.status === 'open' ? (
+                  <p className="rounded-xl bg-amber-50 px-4 py-3 text-center text-xs text-amber-900">This conversation is in the shared queue. Claim it before replying.</p>
                 ) : (
                   <p className="rounded-xl bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">This chat is closed. Reopen it to send another reply.</p>
                 )}
@@ -451,7 +533,12 @@ export const LiveChatInbox: React.FC = () => {
                     </span>
                     <time className="shrink-0 text-[10px] text-slate-400">{formatDate(session.lastSeen)}</time>
                   </span>
-                  <span className="mt-2 flex items-center gap-1.5 truncate pl-4 text-xs text-slate-700"><Eye className="h-3.5 w-3.5 shrink-0 text-slate-400" />{session.currentPath}</span>
+                  <span className="mt-2 flex items-center gap-1.5 truncate pl-4 text-xs text-slate-700"><Eye className="h-3.5 w-3.5 shrink-0 text-slate-400" />{session.currentTitle}</span>
+                  {session.currentProduct && <span className="mt-1 block truncate pl-9 text-[11px] text-teal-800">Viewing {session.currentProduct}</span>}
+                  <span className="mt-1 flex items-center justify-between pl-4 text-[11px] text-slate-500">
+                    <span>{formatDuration(session.durationSeconds)} on site · {session.pageCount} pages</span>
+                    {session.chatId && <span className={session.chatEngaged ? 'text-emerald-700' : 'text-amber-700'}>{session.chatEngaged ? `Chat · ${session.chatOwner}` : 'Waiting for staff'}</span>}
+                  </span>
                   <span className="mt-1 flex items-center gap-1.5 truncate pl-4 text-[11px] text-slate-500"><Globe2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />{countryName(session.countryCode)}{session.referrerDomain ? ` · from ${session.referrerDomain}` : ''}</span>
                 </button>
               ))}
@@ -478,6 +565,19 @@ export const LiveChatInbox: React.FC = () => {
                       <p className="mt-0.5 text-xs text-slate-500">Session started {formatDate(selectedVisitorSession.firstSeen)}</p>
                     </div>
                   </div>
+                  {role === 'admin' && selectedVisitorSession.chatId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilter('all');
+                        setSelectedId(selectedVisitorSession.chatId);
+                        setView('inbox');
+                      }}
+                      className="rounded-lg bg-[#123b68] px-3 py-2 text-xs font-semibold text-white hover:bg-[#0b2f52]"
+                    >
+                      Open customer chat
+                    </button>
+                  )}
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedVisitorSession.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
                     <Circle className="h-2 w-2 fill-current" />{selectedVisitorSession.active ? 'Active now' : 'Inactive'}
                   </span>
@@ -493,16 +593,24 @@ export const LiveChatInbox: React.FC = () => {
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3.5">
                     <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Eye className="h-3.5 w-3.5" />Current page</p>
-                    <p className="mt-1.5 break-all text-sm font-semibold text-slate-900">{selectedVisitorSession.currentPath}</p>
+                    <p className="mt-1.5 break-words text-sm font-semibold text-slate-900">{selectedVisitorSession.currentTitle}</p>
+                    <p className="mt-1 break-all text-xs text-slate-500">{selectedVisitorSession.currentPath}</p>
+                    {selectedVisitorSession.currentProduct && <p className="mt-1 text-xs font-medium text-teal-800">Product: {selectedVisitorSession.currentProduct}</p>}
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3.5">
-                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Clock3 className="h-3.5 w-3.5" />Last seen · language</p>
-                    <p className="mt-1.5 text-sm font-semibold text-slate-900">{formatDate(selectedVisitorSession.lastSeen)} · {selectedVisitorSession.language || 'Unknown'}</p>
+                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Clock3 className="h-3.5 w-3.5" />Session duration · language</p>
+                    <p className="mt-1.5 text-sm font-semibold text-slate-900">{formatDuration(selectedVisitorSession.durationSeconds)} · {selectedVisitorSession.language || 'Unknown'}</p>
+                    <p className="mt-1 text-xs text-slate-500">Last seen {formatDate(selectedVisitorSession.lastSeen)}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><MessageCircle className="h-3.5 w-3.5" />Chat engagement</p>
+                    <p className="mt-1.5 text-sm font-semibold text-slate-900">{selectedVisitorSession.chatId ? (selectedVisitorSession.chatEngaged ? `Engaged · ${selectedVisitorSession.chatOwner}` : 'Chat waiting for staff') : 'No chat started'}</p>
+                    {selectedVisitorSession.chatStatus && <p className="mt-1 text-xs capitalize text-slate-500">{selectedVisitorSession.chatStatus} conversation</p>}
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-900">Pages visited</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">Pages & products viewed</h3>
                     <span className="text-xs text-slate-500">{visitorPages.length} recent page views</span>
                   </div>
                   {visitorPages.length ? (
@@ -512,8 +620,10 @@ export const LiveChatInbox: React.FC = () => {
                           {index < visitorPages.length - 1 && <span className="absolute bottom-0 left-[7px] top-4 w-px bg-slate-200" />}
                           <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-teal-600 bg-white" />
                           <span className="min-w-0 flex-1">
-                            <span className="block break-all text-sm font-medium text-slate-800">{page.path}</span>
-                            <time className="mt-1 block text-[11px] text-slate-400">{formatDate(page.viewedAt)}</time>
+                            <span className="block text-sm font-medium text-slate-800">{page.title || page.path}</span>
+                            <span className="mt-0.5 block break-all text-xs text-slate-500">{page.path}</span>
+                            {page.productName && <span className="mt-1 block text-xs font-medium text-teal-800">Product: {page.productName}</span>}
+                            <time className="mt-1 block text-[11px] text-slate-400">{formatDate(page.viewedAt)} · {formatDuration(page.dwellSeconds)}</time>
                           </span>
                         </li>
                       ))}

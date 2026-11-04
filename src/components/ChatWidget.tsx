@@ -8,7 +8,7 @@ interface ChatSession {
 
 interface ChatMessage {
   id: number;
-  sender: 'visitor' | 'staff';
+  sender: 'visitor' | 'staff' | 'system';
   senderName: string;
   body: string;
   createdAt: string;
@@ -22,6 +22,16 @@ interface ChatResponse {
 }
 
 const storageKey = 'ambienta-live-chat-session';
+const visitorStorageKey = 'ambienta-visitor-id';
+
+const getVisitorId = (): string => {
+  try {
+    const visitorId = window.localStorage.getItem(visitorStorageKey) || '';
+    return /^[a-f0-9]{64}$/.test(visitorId) ? visitorId : '';
+  } catch {
+    return '';
+  }
+};
 
 const readStoredSession = (): ChatSession | null => {
   try {
@@ -128,6 +138,7 @@ export const ChatWidget: React.FC = () => {
           email: visitorEmail,
           phone: visitorPhone,
           message: firstMessage,
+          visitorId: getVisitorId(),
           website: '',
         }),
       });
@@ -233,13 +244,17 @@ export const ChatWidget: React.FC = () => {
               <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/80 p-4">
                 <div className="mx-auto max-w-[280px] rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[11px] leading-4 text-amber-900">Please don’t send medical details, prescription information, or payment details here.</div>
                 {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.sender === 'visitor' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[84%] rounded-2xl px-3.5 py-2.5 ${message.sender === 'visitor' ? 'rounded-br-md bg-[#123b68] text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm'}`}>
-                      <p className={`mb-1 text-[10px] font-semibold ${message.sender === 'visitor' ? 'text-blue-100' : 'text-teal-800'}`}>{message.sender === 'visitor' ? 'You' : message.senderName}</p>
-                      <p className="whitespace-pre-wrap break-words text-sm leading-5">{message.body}</p>
-                      <time className={`mt-1 block text-right text-[10px] ${message.sender === 'visitor' ? 'text-blue-100' : 'text-slate-400'}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
+                  message.sender === 'system' ? (
+                    <p key={message.id} className="mx-auto w-fit max-w-full rounded-full bg-slate-100 px-3 py-1.5 text-center text-[11px] text-slate-500">{message.body}</p>
+                  ) : (
+                    <div key={message.id} className={`flex ${message.sender === 'visitor' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[84%] rounded-2xl px-3.5 py-2.5 ${message.sender === 'visitor' ? 'rounded-br-md bg-[#123b68] text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm'}`}>
+                        <p className={`mb-1 text-[10px] font-semibold ${message.sender === 'visitor' ? 'text-blue-100' : 'text-teal-800'}`}>{message.sender === 'visitor' ? 'You' : message.senderName}</p>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-5">{message.body}</p>
+                        <time className={`mt-1 block text-right text-[10px] ${message.sender === 'visitor' ? 'text-blue-100' : 'text-slate-400'}`}>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
+                      </div>
                     </div>
-                  </div>
+                  )
                 ))}
                 {messages.length === 0 && <p className="py-8 text-center text-xs text-slate-500">Your conversation is ready. Send us a message.</p>}
                 <div ref={messageEndRef} />

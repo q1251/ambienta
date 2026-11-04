@@ -126,6 +126,8 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
             return (
               <div
                 key={item.id}
+                data-product-id={item.id}
+                data-product-name={item.name}
                 className="group flex flex-col justify-between overflow-hidden rounded-[24px] border border-blue-100 bg-white shadow-[0_8px_24px_-18px_rgba(23,76,128,0.2)] transition duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-[0_24px_50px_-25px_rgba(23,76,128,0.25)]"
               >
                 <div>

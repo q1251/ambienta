@@ -63,7 +63,7 @@ export default function App() {
   const [adminRole, setAdminRole] = useState<'admin' | 'operator'>('admin');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminDisplayName, setAdminDisplayName] = useState('');
-  const [adminPermissions, setAdminPermissions] = useState<string[]>(['leads', 'orders', 'products', 'integrations', 'chat']);
+  const [adminPermissions, setAdminPermissions] = useState<string[]>(['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat']);
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedBy, setImpersonatedBy] = useState('');
   const [mustChangePassword, setMustChangePassword] = useState(false);
@@ -365,7 +365,7 @@ export default function App() {
     setAdminRole('admin');
     setAdminEmail(result.email);
     setAdminDisplayName(result.displayName || result.email);
-    setAdminPermissions(result.permissions || ['leads', 'orders', 'products', 'integrations', 'chat']);
+    setAdminPermissions(result.permissions || ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat']);
     setIsImpersonating(false);
     setImpersonatedBy('');
     setMustChangePassword(false);

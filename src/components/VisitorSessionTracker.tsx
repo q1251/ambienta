@@ -55,6 +55,27 @@ export const VisitorSessionTracker: React.FC = () => {
   useEffect(() => {
     let failureReported = false;
     let lastPath = '';
+    let currentProductId = '';
+    const visibleProducts = new Map<Element, { id: string; ratio: number }>();
+    const observedProducts = new Set<Element>();
+    const refreshCurrentProduct = () => {
+      const mostVisible = [...visibleProducts.values()].sort((a, b) => b.ratio - a.ratio)[0]?.id || '';
+      if (mostVisible !== currentProductId) {
+        currentProductId = mostVisible;
+        void heartbeat();
+      }
+    };
+    const productObserver = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.productId || '';
+        if (entry.isIntersecting && id) {
+          visibleProducts.set(entry.target, { id, ratio: entry.intersectionRatio });
+        } else {
+          visibleProducts.delete(entry.target);
+        }
+      }
+      refreshCurrentProduct();
+    }, { threshold: [0.3, 0.6, 0.9] });
 
     const heartbeat = async () => {
       try {
@@ -66,6 +87,8 @@ export const VisitorSessionTracker: React.FC = () => {
             sessionToken: getSessionToken(),
             visitorToken: getVisitorToken(),
             path,
+            title: document.title.slice(0, 180),
+            productId: currentProductId,
             referrerDomain: getReferrerDomain(),
             language: navigator.language.slice(0, 35),
           }),
@@ -88,10 +111,28 @@ export const VisitorSessionTracker: React.FC = () => {
     const handlePageChange = () => {
       if (window.location.pathname !== lastPath) void heartbeat();
     };
+    const observeProducts = () => {
+      const currentElements = new Set(document.querySelectorAll('[data-product-id]'));
+      for (const element of observedProducts) {
+        if (currentElements.has(element)) continue;
+        productObserver?.unobserve(element);
+        observedProducts.delete(element);
+        visibleProducts.delete(element);
+      }
+      currentElements.forEach((element) => {
+        if (observedProducts.has(element)) return;
+        observedProducts.add(element);
+        productObserver?.observe(element);
+      });
+      refreshCurrentProduct();
+    };
     const handleVisibility = () => {
       if (!document.hidden) void heartbeat();
     };
 
+    observeProducts();
+    const mutationObserver = new MutationObserver(observeProducts);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
     void heartbeat();
     const timer = window.setInterval(() => void heartbeat(), 30_000);
     window.addEventListener('popstate', handlePageChange);
@@ -100,6 +141,8 @@ export const VisitorSessionTracker: React.FC = () => {
 
     return () => {
       window.clearInterval(timer);
+      mutationObserver.disconnect();
+      productObserver?.disconnect();
       window.removeEventListener('popstate', handlePageChange);
       window.removeEventListener('hashchange', handlePageChange);
       document.removeEventListener('visibilitychange', handleVisibility);
