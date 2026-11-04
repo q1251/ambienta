@@ -1114,7 +1114,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   }}
                   onPageChange={setMailboxPage}
                 />
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
                   {!settings.configured ? (
                     <p className="p-6 text-center text-sm text-slate-500">Configure the Hostinger mailbox under Integrations to load the inbox.</p>
                   ) : !inboxFolderAvailable ? (
@@ -1165,7 +1165,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         <button type="button" onClick={() => void moveMailToTrash(selectedMailboxMessage)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
                       </div>
                     </header>
-                    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5">
                       {selectedMailboxMessage.body ? (
                         <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{selectedMailboxMessage.body}</div>
                       ) : (
