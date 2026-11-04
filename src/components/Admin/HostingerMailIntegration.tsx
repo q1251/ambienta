@@ -1024,7 +1024,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </span>
         </div>
 
-        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
