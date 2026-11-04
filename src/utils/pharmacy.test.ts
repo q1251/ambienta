@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateDaysRemaining,
+  getLocalDateString,
   determineRefillStatus,
   interpolateEmailTemplate,
   filterPatientsByHealthCategory,
@@ -20,6 +21,11 @@ test('calculateDaysRemaining computes correct difference', () => {
   assert.equal(calculateDaysRemaining('2026-11-05T12:00:00Z', ref), 3);
   assert.equal(calculateDaysRemaining('2026-11-02T12:00:00Z', ref), 0);
   assert.equal(calculateDaysRemaining('2026-10-31T12:00:00Z', ref), -2);
+});
+
+test('calculateDaysRemaining uses the current local calendar day when no reference date is provided', () => {
+  assert.match(getLocalDateString(), /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(calculateDaysRemaining(getLocalDateString()), 0);
 });
 
 test('determineRefillStatus correctly flags overdue, due soon, and renewal required', () => {

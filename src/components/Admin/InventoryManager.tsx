@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { CatalogItem } from '../../types/pharmacy';
 import { generateProductTemplateCsv, parseProductsCsv } from '../../utils/productCsv';
-import type { ProductCsvItem } from '../../utils/productCsv';
+import type { ProductCsvItem, ProductCsvParseResult } from '../../utils/productCsv';
 
 interface InventoryManagerProps {
   catalogItems: CatalogItem[];
@@ -99,11 +99,18 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   useEffect(() => () => {
     previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
-  const productCsvPreview = parseProductsCsv(
-    productCsv,
-    catalogItems.map((item) => item.sku),
-    categories,
-  );
+  const productCsvPreview: ProductCsvParseResult = productCsv.trim()
+    ? parseProductsCsv(productCsv, catalogItems.map((item) => item.sku), categories)
+    : { products: [], errors: [] };
+
+  useEffect(() => {
+    if (!isProductCsvOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsProductCsvOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isProductCsvOpen]);
 
   const handleProductImageSelection = (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -894,11 +901,11 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       )}
 
       {isProductCsvOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="product-csv-title">
           <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Bulk product CSV upload</h3>
+                <h3 id="product-csv-title" className="text-base font-bold text-slate-900">Bulk product CSV upload</h3>
                 <p className="mt-1 text-xs text-slate-500">Validate every row before importing; the server saves the batch atomically.</p>
               </div>
               <button type="button" onClick={() => setIsProductCsvOpen(false)} aria-label="Close CSV import" className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -930,6 +937,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   <p className="pt-1 font-semibold">Fix all errors before importing. No rows will be imported while errors remain.</p>
                 </div>
               )}
+              {!productCsv.trim() && <p className="text-sm text-slate-500">Choose a CSV file or paste CSV rows to preview products before importing.</p>}
               {productCsvPreview.products.length > 0 && (
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="w-full text-left text-xs">

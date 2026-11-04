@@ -33,7 +33,7 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
   const [isScanning, setIsScanning] = useState(false);
 
   // Compute upcoming renewals across patients
-  const dueItems = evaluateDueReminders(patients, reminderRules, '2026-11-02');
+  const dueItems = evaluateDueReminders(patients, reminderRules);
 
   const handleRunScanAndDispatch = () => {
     setIsScanning(true);
@@ -178,7 +178,7 @@ export const AutomatedRemindersView: React.FC<AutomatedRemindersViewProps> = ({
                 Active Renewal Candidates ({dueItems.length})
               </h4>
               <span className="text-xs text-slate-500">
-                Calculated for today (Nov 2, 2026)
+                Calculated for today ({new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })})
               </span>
             </div>
 

@@ -6,12 +6,27 @@ export { getLeadCountry } from './countryOptions';
 /**
  * Calculates remaining days from a reference date (or today) to a target date string.
  */
+export function getLocalDateString(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+const parseCalendarDate = (value: string): Date => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T12:00:00`)
+    : new Date(value);
+  date.setHours(12, 0, 0, 0);
+  return date;
+};
+
 export function calculateDaysRemaining(targetDateStr: string, referenceDateStr?: string): number {
   if (!targetDateStr) return 0;
-  const refDate = referenceDateStr ? new Date(referenceDateStr) : new Date('2026-11-02T12:00:00Z');
-  const targetDate = new Date(targetDateStr);
+  const refDate = parseCalendarDate(referenceDateStr || getLocalDateString());
+  const targetDate = parseCalendarDate(targetDateStr);
   const diffTime = targetDate.getTime() - refDate.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -150,7 +165,7 @@ export function generateSampleCsv(): string {
 export function evaluateDueReminders(
   patients: Patient[],
   rules: ReminderRule[],
-  currentDateStr = '2026-11-02'
+  currentDateStr = getLocalDateString()
 ): { patient: Patient; record: RefillRecord; rule: ReminderRule; daysLeft: number }[] {
   const matches: { patient: Patient; record: RefillRecord; rule: ReminderRule; daysLeft: number }[] = [];
   const activeRules = rules.filter((r) => r.isActive);

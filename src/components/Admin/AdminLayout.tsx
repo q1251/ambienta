@@ -148,6 +148,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
       || (presencePermission !== null && !props.permissions.includes(presencePermission))
     ) ? 'overview' : activeTab;
     const heartbeat = async () => {
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
       try {
         const response = await fetch('/api/data.php?resource=staff-presence', {
           method: 'POST',
@@ -168,9 +169,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         }
       }
     };
+    const refreshPresence = () => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) void heartbeat();
+    };
     void heartbeat();
     const timer = window.setInterval(() => void heartbeat(), 30_000);
-    return () => window.clearInterval(timer);
+    document.addEventListener('visibilitychange', refreshPresence);
+    window.addEventListener('focus', refreshPresence);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshPresence);
+      window.removeEventListener('focus', refreshPresence);
+    };
   }, [activeTab, props.role, props.permissions]);
   const selectTab = (tab: AdminTab) => {
     setEmailInitialFolder('inbox');

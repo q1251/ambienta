@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { Patient, ReminderRule, EmailLog, RefillRecord, HealthCategory, OnlineOrder } from '../../types/pharmacy';
-import { calculateDaysRemaining, determineRefillStatus, evaluateDueReminders, interpolateEmailTemplate } from '../../utils/pharmacyLogic';
+import { calculateDaysRemaining, determineRefillStatus, evaluateDueReminders, getLocalDateString, interpolateEmailTemplate } from '../../utils/pharmacyLogic';
 
 interface PrescriptionRenewalsManagerProps {
   role?: 'admin' | 'operator';
@@ -65,10 +65,11 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
   const [draftSubject, setDraftSubject] = useState('');
   const [draftBody, setDraftBody] = useState('');
 
-  // Evaluate due items across patients for today (Nov 2, 2026)
+  const currentDate = getLocalDateString();
+
   const dueItems = useMemo(
-    () => evaluateDueReminders(patients, reminderRules, '2026-11-02'),
-    [patients, reminderRules]
+    () => evaluateDueReminders(patients, reminderRules, currentDate),
+    [patients, reminderRules, currentDate]
   );
 
   // Metrics
@@ -81,12 +82,12 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
       return (
         acc +
         p.refillHistory.filter((r) => {
-          const days = calculateDaysRemaining(r.nextRefillDue, '2026-11-02');
+          const days = calculateDaysRemaining(r.nextRefillDue, currentDate);
           return days <= 7 && days >= 0;
         }).length
       );
     }, 0);
-  }, [patients]);
+  }, [patients, currentDate]);
 
   const activeRulesCount = useMemo(() => {
     return reminderRules.filter((r) => r.isActive).length;
@@ -100,7 +101,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
       if (categoryFilter !== 'All' && patient.healthCategory !== categoryFilter) return;
 
       patient.refillHistory.forEach((record) => {
-        const daysLeft = calculateDaysRemaining(record.nextRefillDue, '2026-11-02');
+        const daysLeft = calculateDaysRemaining(record.nextRefillDue, currentDate);
         const computedStatus = determineRefillStatus(record.remainingRefills, daysLeft);
 
         if (statusFilter !== 'All' && computedStatus !== statusFilter && record.status !== statusFilter) {
@@ -123,7 +124,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
 
     // Sort by daysLeft ascending (most urgent first)
     return list.sort((a, b) => a.daysLeft - b.daysLeft);
-  }, [patients, categoryFilter, statusFilter, searchQuery]);
+  }, [patients, categoryFilter, statusFilter, searchQuery, currentDate]);
 
   // Automated scan and dispatch
   const handleRunScanAndDispatch = () => {
