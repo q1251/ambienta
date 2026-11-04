@@ -862,8 +862,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
 
   return (
-    <div className={mode === 'mailbox' ? 'mx-auto flex min-h-[calc(100vh-104px)] max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
-      <header className={mode === 'mailbox' ? 'flex flex-wrap items-end justify-between gap-x-4 gap-y-2' : undefined}>
+    <div className={mode === 'mailbox' ? 'mx-auto flex h-full min-h-0 max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
+      <header className={mode === 'mailbox' ? 'shrink-0 flex flex-wrap items-end justify-between gap-x-4 gap-y-2' : undefined}>
         <div className="min-w-0">
           <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${mode === 'settings' ? 'text-violet-700' : 'text-[#315649]'}`}>
             {mode === 'settings' ? 'Connections' : 'Communications'}
@@ -949,7 +949,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="flex min-h-[min(560px,calc(100vh-240px))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {mode === 'mailbox' && <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex min-w-0 flex-nowrap items-center gap-1 border-b border-slate-200 bg-white p-2">
           <button
             type="button"
@@ -1024,7 +1024,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </span>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fb] p-2.5 sm:p-3">
+        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
@@ -1089,7 +1089,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
 
           {activeFolder === 'inbox' && (
-            <section className="grid min-h-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.4fr)]">
+            <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.4fr)]">
               <div className={`min-h-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r ${selectedMailboxMessageId ? 'hidden' : 'flex'}`}>
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5">
                   <div className="min-w-0">
@@ -1141,7 +1141,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   )}
                 </div>
               </div>
-              <div className={`min-h-[300px] min-w-0 bg-white ${selectedMailboxMessageId ? 'block' : 'hidden lg:block'}`}>
+              <div className={`min-h-0 min-w-0 overflow-hidden bg-white ${selectedMailboxMessageId ? 'block' : 'hidden lg:block'}`}>
                 {selectedMailboxMessage ? (
                   <article className="flex h-full flex-col">
                     <header className="border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -1175,7 +1175,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     </div>
                   </article>
                 ) : (
-                  <div className="flex h-full min-h-[300px] flex-col items-center justify-center px-6 text-center">
+                  <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">
                     <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#edf3ee] text-[#315649]"><Inbox className="h-5 w-5" /></span>
                     <p className="mt-3 text-sm font-semibold text-slate-800">Select a message</p>
                     <p className="mt-1 text-xs text-slate-500">Choose an email from the list to read it here.</p>

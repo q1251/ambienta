@@ -62,6 +62,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers'>('all');
+  const [leadPage, setLeadPage] = useState(1);
   const [profile, setProfile] = useState<LeadProfile | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(() => {
     const value = Number(new URLSearchParams(window.location.search).get('leadId'));
@@ -138,6 +139,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     const matchesTab = leadTab === 'all' || isUncalledRepeatBuyer(lead);
     return matchesStage && matchesSearch && matchesTab;
   });
+  const pageSize = 50;
+  const pageCount = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
+  const currentPage = Math.min(leadPage, pageCount);
+  const visibleLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const parse = (value: string) => {
     setCsv(value);
@@ -808,7 +813,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <button
             type="button"
             aria-pressed={leadTab === 'all'}
-            onClick={() => setLeadTab('all')}
+            onClick={() => { setLeadPage(1); setLeadTab('all'); }}
             className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'all' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
           >
             All leads ({leads.length})
@@ -816,7 +821,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <button
             type="button"
             aria-pressed={leadTab === 'uncalled_repeat_buyers'}
-            onClick={() => setLeadTab('uncalled_repeat_buyers')}
+            onClick={() => { setLeadPage(1); setLeadTab('uncalled_repeat_buyers'); }}
             className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'uncalled_repeat_buyers' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
             title="Leads with no recorded call and at least two non-cancelled orders"
           >
@@ -846,9 +851,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             <label className="relative">
               <span className="sr-only">Search leads</span>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search contacts" className="rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm" />
+              <input value={search} onChange={(event) => { setLeadPage(1); setSearch(event.target.value); }} placeholder="Search contacts" className="rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm" />
             </label>
-            <select aria-label="Filter by lead stage" value={stageFilter} onChange={(event) => setStageFilter(event.target.value as 'All' | LeadStatus)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <select aria-label="Filter by lead stage" value={stageFilter} onChange={(event) => { setLeadPage(1); setStageFilter(event.target.value as 'All' | LeadStatus); }} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
               <option value="All">All stages</option>
               {(['New', 'Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status} value={status}>{status}</option>)}
             </select>
@@ -858,7 +863,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Status</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th>{isSuperadmin && <th className="py-3">Assigned agent</th>}<th className="py-3 pr-5 text-right">Actions</th></tr></thead>
             <tbody>
-              {filteredLeads.map((lead) => (
+              {visibleLeads.map((lead) => (
                 <tr
                   key={lead.id}
                   className={`border-t border-slate-100 hover:bg-slate-50 ${onLoadLeadProfile ? 'cursor-pointer focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-teal-700' : ''}`}
@@ -938,56 +943,48 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             </tbody>
           </table>
         </div>
-        <div className="grid gap-3 p-3 min-[1800px]:hidden sm:grid-cols-2 sm:p-4">
-          {filteredLeads.map((lead) => (
-            <article key={lead.id} className="min-w-0 rounded-xl border border-[#e5e8e1] bg-white p-4 transition hover:border-[#c8d4c8] sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <button type="button" disabled={!onLoadLeadProfile} onClick={() => void openProfile(lead)} className="block max-w-full truncate text-left text-sm font-bold text-[#315649] hover:underline disabled:cursor-default disabled:no-underline">
+        <div className="grid gap-0 px-2 min-[1800px]:hidden">
+          {visibleLeads.map((lead) => (
+            <article key={lead.id} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-2 py-2.5 transition hover:bg-slate-50">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                <button type="button" disabled={!onLoadLeadProfile} onClick={() => void openProfile(lead)} className="max-w-full truncate text-left text-sm font-semibold text-[#315649] hover:underline disabled:cursor-default disabled:no-underline">
                     {lead.firstName} {lead.lastName}
-                  </button>
-                  <div className="mt-1 flex min-w-0 items-center">
-                    <a href={`mailto:${lead.email}`} onClick={(event) => event.stopPropagation()} className="truncate text-xs text-slate-600 hover:text-[#315649] hover:underline">{lead.email}</a>
-                    {copyButton(lead, 'email', lead.email)}
-                  </div>
-                </div>
-                <span className="shrink-0 rounded-full bg-[#edf2ed] px-2.5 py-1 text-[11px] font-semibold text-[#456953]">{lead.status}</span>
+                </button>
+                <span className="flex min-w-0 items-center">
+                  <a href={`mailto:${lead.email}`} onClick={(event) => event.stopPropagation()} className="max-w-56 truncate text-xs text-slate-600 hover:text-[#315649] hover:underline">{lead.email}</a>
+                  {copyButton(lead, 'email', lead.email)}
+                </span>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-slate-100 pt-4 text-xs">
-                <div className="min-w-0">
-                  <p className="font-semibold uppercase tracking-wide text-slate-400">Phone</p>
-                  {lead.phone
-                    ? <div className="mt-1 flex min-w-0 items-center"><a href={`tel:${phoneLink(lead.phone)}`} className="truncate font-medium text-slate-700 hover:text-[#315649]">{lead.phone}</a>{copyButton(lead, 'phone', lead.phone)}</div>
-                    : <p className="mt-1 text-slate-500">Not provided</p>}
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold uppercase tracking-wide text-slate-400">Country</p>
-                  <p className="mt-1 truncate text-slate-700">{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</p>
-                </div>
-                <div>
-                  <p className="font-semibold uppercase tracking-wide text-slate-400">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</p>
-                  <p className="mt-1 font-semibold text-slate-800">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</p>
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold uppercase tracking-wide text-slate-400">Source</p>
-                  <p className="mt-1 truncate text-slate-700">{lead.leadSource}</p>
-                </div>
+              <span className="shrink-0 rounded-full bg-[#edf2ed] px-2.5 py-1 text-[11px] font-semibold text-[#456953]">{lead.status}</span>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                {lead.phone ? (
+                  <span className="flex min-w-0 items-center">
+                    <a href={`tel:${phoneLink(lead.phone)}`} onClick={(event) => event.stopPropagation()} className="max-w-40 truncate hover:text-[#315649]">{lead.phone}</a>
+                    {copyButton(lead, 'phone', lead.phone)}
+                  </span>
+                ) : <span className="text-slate-400">No phone</span>}
+                <span className="inline-flex items-center gap-1.5">
+                  <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
+                  <span className="max-w-28 truncate">{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</span>
+                </span>
+                <span>{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0} orders</span>
+                <span className="max-w-32 truncate" title={`Source: ${lead.leadSource}`}>{lead.leadSource}</span>
               </div>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+              <div className="flex shrink-0 items-center gap-2">
                 {isSuperadmin ? (
-                  <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500">
-                    <span className="shrink-0">Assigned to</span>
+                  <>
+                    <label className="sr-only" htmlFor={`lead-assignment-${lead.id}`}>Assign {lead.firstName} {lead.lastName}</label>
                     <select
-                      aria-label={`Assign ${lead.firstName} ${lead.lastName}`}
+                      id={`lead-assignment-${lead.id}`}
                       value={lead.assignedStaffId ?? ''}
                       onChange={(event) => void assignLead(lead, event.target.value)}
-                      className="min-w-0 max-w-44 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
+                      className="min-w-0 max-w-40 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
                     >
                       <option value="">Unassigned</option>
                       {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || agent.email}</option>)}
                     </select>
-                  </label>
-                ) : <span className="text-xs text-slate-500">{lead.assignedStaffName || 'Assigned to you'}</span>}
+                  </>
+                ) : <span className="max-w-28 truncate text-xs text-slate-500">{lead.assignedStaffName || 'Assigned to you'}</span>}
                 <button
                   type="button"
                   disabled={!isSuperadmin}
@@ -1001,11 +998,23 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             </article>
           ))}
           {!filteredLeads.length && (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500 sm:col-span-2">
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
               {!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}
             </p>
           )}
         </div>
+        <nav aria-label="Saved contacts pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
+          <span>
+            {filteredLeads.length
+              ? `Showing ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLeads.length)} of ${filteredLeads.length}`
+              : 'No matching contacts'}
+          </span>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={currentPage <= 1} onClick={() => setLeadPage(currentPage - 1)} className="rounded-md border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+            <span aria-live="polite">Page {currentPage} of {pageCount}</span>
+            <button type="button" disabled={currentPage >= pageCount} onClick={() => setLeadPage(currentPage + 1)} className="rounded-md border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+          </div>
+        </nav>
       </div>
 
     </section>

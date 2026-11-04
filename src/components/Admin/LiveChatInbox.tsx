@@ -329,7 +329,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
   const unreadCount = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-132px)] max-w-[1500px] flex-col gap-5">
+    <div className="mx-auto flex h-full min-h-0 max-w-[1500px] flex-col gap-3">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Customer support</p>
@@ -370,8 +370,8 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
       </nav>
 
       {view === 'inbox' ? (
-      <section className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className={`flex min-h-[500px] flex-col border-b border-slate-200 lg:border-b-0 lg:border-r ${selectedId !== null ? 'hidden lg:flex' : 'flex'}`}>
+      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className={`min-h-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r ${selectedId !== null ? 'hidden' : 'flex'}`}>
           <div className="space-y-3 border-b border-slate-100 p-4">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -419,7 +419,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
           </div>
         </aside>
 
-        <div className={`min-w-0 flex-col ${selectedId !== null ? 'flex' : 'hidden lg:flex'}`}>
+        <div className={`min-h-0 min-w-0 flex-col ${selectedId !== null ? 'flex' : 'hidden lg:flex'}`}>
           {selectedId === null || !selectedConversation ? (
             <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><MessageCircle className="h-7 w-7" /></span>
@@ -468,7 +468,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                   ))}
                 </div>
               </header>
-              <div className="flex-1 space-y-4 overflow-y-auto bg-[#f7f9fb] p-4 sm:p-6">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-[#f7f9fb] p-4 sm:p-6">
                 {messages.map((message) => (
                   message.sender === 'system' ? (
                     <p key={message.id} className="mx-auto w-fit max-w-full rounded-full bg-slate-200/70 px-4 py-1.5 text-center text-xs text-slate-600">{message.body} · {formatDate(message.createdAt)}</p>
@@ -505,8 +505,8 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
         </div>
       </section>
       ) : (
-        <section className="grid min-h-[560px] flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className={`flex min-h-[500px] flex-col border-b border-slate-200 lg:border-b-0 lg:border-r ${selectedVisitorSessionId ? 'hidden lg:flex' : 'flex'}`}>
+        <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className={`min-h-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r ${selectedVisitorSessionId ? 'hidden' : 'flex'}`}>
             <div className="flex items-center gap-1 border-b border-slate-100 p-4">
               {(['active', 'recent'] as const).map((value) => (
                 <button key={value} type="button" onClick={() => setVisitorFilter(value)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${visitorFilter === value ? 'bg-teal-50 text-teal-900' : 'text-slate-500 hover:bg-slate-50'}`}>
@@ -545,7 +545,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
             </div>
           </aside>
 
-          <div className={`min-w-0 flex-col ${selectedVisitorSessionId ? 'flex' : 'hidden lg:flex'}`}>
+          <div className={`min-h-0 min-w-0 flex-col ${selectedVisitorSessionId ? 'flex' : 'hidden lg:flex'}`}>
             {!selectedVisitorSessionId ? (
               <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Users className="h-7 w-7" /></span>
