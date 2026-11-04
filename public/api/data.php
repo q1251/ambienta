@@ -119,6 +119,8 @@ function data_ensure_schema(PDO $db): void
             bcc MEDIUMTEXT NULL,
             thread_headers MEDIUMTEXT NULL,
             attachments MEDIUMTEXT NULL,
+            message_id VARCHAR(998) NULL,
+            thread_root_message_id VARCHAR(998) NULL,
             KEY email_activity_sent_at (sent_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -275,6 +277,8 @@ function data_ensure_schema(PDO $db): void
         ['email_activity', 'bcc', 'MEDIUMTEXT NULL'],
         ['email_activity', 'thread_headers', 'MEDIUMTEXT NULL'],
         ['email_activity', 'attachments', 'MEDIUMTEXT NULL'],
+        ['email_activity', 'message_id', 'VARCHAR(998) NULL'],
+        ['email_activity', 'thread_root_message_id', 'VARCHAR(998) NULL'],
         ['email_drafts', 'cc', 'MEDIUMTEXT NULL'],
         ['email_drafts', 'bcc', 'MEDIUMTEXT NULL'],
         ['email_drafts', 'thread_headers', 'MEDIUMTEXT NULL'],
@@ -301,6 +305,7 @@ function data_ensure_schema(PDO $db): void
     foreach ([
         ['chat_conversations', 'chat_conversations_owner', 'owner_type, owner_staff_id, status, updated_at'],
         ['chat_conversations', 'chat_conversations_visitor', 'visitor_id_hash, updated_at'],
+        ['email_activity', 'email_activity_thread_root', 'thread_root_message_id(190), id'],
     ] as [$table, $index, $columns]) {
         $indexExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
         $indexExists->execute([$databaseName, $table, $index]);
@@ -1156,7 +1161,7 @@ function data_mail_send(
     array $threadHeaders = [],
     array $attachments = [],
     ?string $htmlBody = null
-): void
+): string
 {
     $recipients = array_values(array_unique(array_merge([$recipient], $ccRecipients, $bccRecipients)));
     $socket = data_smtp_connect($settings);
@@ -1168,12 +1173,13 @@ function data_mail_send(
         data_smtp_command($socket, 'DATA', ['354']);
         $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
         $encodedName = '=?UTF-8?B?' . base64_encode($settings['displayName']) . '?=';
+        $messageId = '<' . bin2hex(random_bytes(16)) . '@ambienta.io>';
         $headers = [
             'From: ' . $encodedName . ' <' . $settings['emailAccount'] . '>',
             'To: ' . implode(', ', array_map(static fn (string $address): string => '<' . $address . '>', [$recipient])),
             'Subject: ' . $encodedSubject,
             'Date: ' . date(DATE_RFC2822),
-            'Message-ID: <' . bin2hex(random_bytes(16)) . '@ambienta.io>',
+            'Message-ID: ' . $messageId,
             'MIME-Version: 1.0',
         ];
         if ($ccRecipients !== []) {
@@ -1254,6 +1260,7 @@ function data_mail_send(
         } catch (Throwable $error) {
             error_log('Ambients SMTP session could not be closed cleanly after server acceptance.');
         }
+        return $messageId;
     } finally {
         if (is_resource($socket)) fclose($socket);
     }
@@ -1386,7 +1393,7 @@ function data_campaign_html(string $message): string
     return '<!doctype html><html><body>' . nl2br($html) . '</body></html>';
 }
 
-function data_campaign_process_batch(array $settings, int $limit = 5): array
+function data_campaign_process_batch(array $settings, int $limit = 10): array
 {
     $db = data_db();
     $db->exec(
@@ -1603,19 +1610,34 @@ function data_imap_decode_body(string $contentType, string $transferEncoding, st
 {
     if (preg_match('/^multipart\/[^;]+;\s*boundary="?([^";]+)"?/i', $contentType, $boundaryMatches) === 1) {
         $boundary = $boundaryMatches[1];
+        $htmlFallback = null;
         foreach (explode('--' . $boundary, $rawBody) as $part) {
-            if (preg_match('/\r?\n\r?\n/', $part, $separator, PREG_OFFSET_CAPTURE) !== 1) continue;
+            $part = ltrim($part, "\r\n");
+            if ($part === '' || str_starts_with($part, '--')
+                || preg_match('/\r?\n\r?\n/', $part, $separator, PREG_OFFSET_CAPTURE) !== 1) continue;
             $separatorOffset = $separator[0][1] + strlen($separator[0][0]);
             $partHeaders = substr($part, 0, $separator[0][1]);
-            if (preg_match('/^Content-Type:\s*text\/plain\b[^\r\n]*/im', $partHeaders, $typeMatch) !== 1) continue;
-            preg_match('/^Content-Transfer-Encoding:\s*([^\r\n]+)/im', $partHeaders, $encodingMatch);
-            return data_imap_decode_body(
-                trim($typeMatch[0]),
-                trim($encodingMatch[1] ?? ''),
+            $partFields = [];
+            $currentField = '';
+            foreach (preg_split('/\r?\n/', $partHeaders) ?: [] as $headerLine) {
+                if (preg_match('/^[ \t]/', $headerLine) === 1 && $currentField !== '') {
+                    $partFields[$currentField] .= ' ' . trim($headerLine);
+                } elseif (preg_match('/^([A-Za-z0-9-]+):\s*(.*)$/', $headerLine, $headerMatch) === 1) {
+                    $currentField = strtolower($headerMatch[1]);
+                    $partFields[$currentField] = trim($headerMatch[2]);
+                }
+            }
+            if (str_starts_with(strtolower($partFields['content-disposition'] ?? ''), 'attachment')) continue;
+            $partType = $partFields['content-type'] ?? 'text/plain';
+            $decodedPart = data_imap_decode_body(
+                $partType,
+                $partFields['content-transfer-encoding'] ?? '',
                 substr($part, $separatorOffset)
             );
+            if (str_starts_with(strtolower($partType), 'text/plain') && $decodedPart !== '') return $decodedPart;
+            if ($decodedPart !== '' && $htmlFallback === null) $htmlFallback = $decodedPart;
         }
-        return '';
+        return $htmlFallback ?? '';
     }
 
     $body = match (strtolower(trim($transferEncoding))) {
@@ -1624,6 +1646,8 @@ function data_imap_decode_body(string $contentType, string $transferEncoding, st
         default => $rawBody,
     };
     if (str_starts_with(strtolower($contentType), 'text/html')) {
+        $body = preg_replace('/<(script|style)\b[^>]*>.*?<\/\1>/is', '', $body) ?? $body;
+        $body = preg_replace('/<(br|\/p|\/div|\/li|\/tr|\/h[1-6])\b[^>]*>/i', "\n", $body) ?? $body;
         $body = html_entity_decode(strip_tags($body), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
     return trim(substr($body, 0, 8000));
@@ -2582,7 +2606,7 @@ if ($resource === 'email-campaign-process') {
 }
 
 if (in_array($resource, [
-    'email-settings', 'email-test', 'email-send', 'email-activity', 'email-inbox',
+    'email-settings', 'email-test', 'email-send', 'email-activity', 'email-activity-details', 'email-thread', 'email-inbox',
     'email-message-trash', 'email-message-restore', 'email-message-purge', 'email-message-seen', 'email-message-details',
     'email-drafts', 'email-draft', 'email-draft-trash', 'email-draft-restore',
     'email-draft-purge', 'email-draft-remove', 'email-campaigns',
@@ -2918,7 +2942,18 @@ if (in_array($resource, [
         ]);
         $activityId = $db->lastInsertId();
         try {
-            data_mail_send($settings, $recipient, $subject, $message, null, $cc, $bcc, $threadHeaders, $attachments);
+            $messageId = data_mail_send(
+                $settings,
+                $recipient,
+                $subject,
+                data_campaign_plain_text($message),
+                null,
+                $cc,
+                $bcc,
+                $threadHeaders,
+                $attachments,
+                data_campaign_html($message)
+            );
         } catch (Throwable $error) {
             $settings['verified'] = false;
             try {
@@ -2936,7 +2971,13 @@ if (in_array($resource, [
         }
 
         try {
-            $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Sent', $activityId]);
+            $references = preg_split('/\s+/', trim($threadHeaders['References'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $threadRootMessageId = $references[0] ?? ($threadHeaders['In-Reply-To'] ?? null);
+            if (is_string($threadRootMessageId) && strlen($threadRootMessageId) > 998) {
+                $threadRootMessageId = null;
+            }
+            $db->prepare('UPDATE email_activity SET status = ?, message_id = ?, thread_root_message_id = ? WHERE id = ?')
+                ->execute(['Sent', $messageId, $threadRootMessageId, $activityId]);
             data_respond(201, ['sent' => true, 'logged' => true, 'message' => 'Hostinger accepted the email for sending.']);
         } catch (Throwable $error) {
             error_log('Ambients email activity could not be saved after SMTP acceptance: ' . $error->getMessage());
@@ -2948,9 +2989,37 @@ if (in_array($resource, [
         }
     }
 
-    if ($method === 'GET' && $resource === 'email-activity') {
+    if ($method === 'GET' && $resource === 'email-activity-details') {
         data_require_permission('integrations');
-        $rows = data_db()->query('SELECT id, recipient_email, subject, body, status, sent_at, cc, bcc, thread_headers FROM email_activity ORDER BY id DESC LIMIT 100')->fetchAll();
+        $id = $_GET['id'] ?? '';
+        if (!is_string($id) || !ctype_digit($id)) {
+            data_respond(400, ['error' => 'invalid_activity_id', 'message' => 'The selected email activity is invalid.']);
+        }
+        $statement = data_db()->prepare('SELECT attachments, message_id FROM email_activity WHERE id = ? LIMIT 1');
+        $statement->execute([$id]);
+        $row = $statement->fetch();
+        if (!is_array($row)) {
+            data_respond(404, ['error' => 'activity_not_found', 'message' => 'The selected email activity was not found.']);
+        }
+        data_respond(200, [
+            'attachments' => json_decode(data_mail_decrypt_content($row['attachments']), true) ?: [],
+            'messageId' => $row['message_id'],
+        ]);
+    }
+
+    if ($method === 'GET' && $resource === 'email-thread') {
+        data_require_permission('integrations');
+        $messageId = $_GET['messageId'] ?? '';
+        if (!is_string($messageId) || strlen($messageId) > 998
+            || preg_match('/^<[^<>\r\n]{1,990}>$/', $messageId) !== 1) {
+            data_respond(400, ['error' => 'invalid_thread_id', 'message' => 'The email conversation reference is invalid.']);
+        }
+        $statement = data_db()->prepare(
+            'SELECT id, recipient_email, subject, body, status, sent_at, cc, bcc, thread_headers, message_id
+             FROM email_activity WHERE thread_root_message_id = ? ORDER BY sent_at ASC, id ASC LIMIT 100'
+        );
+        $statement->execute([$messageId]);
+        $rows = $statement->fetchAll();
         data_respond(200, ['messages' => array_map(static fn (array $row): array => [
             'id' => (string) $row['id'],
             'recipientEmail' => $row['recipient_email'],
@@ -2959,9 +3028,62 @@ if (in_array($resource, [
             'cc' => json_decode(data_mail_decrypt_content($row['cc']), true) ?: [],
             'bcc' => json_decode(data_mail_decrypt_content($row['bcc']), true) ?: [],
             'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
+            'messageId' => $row['message_id'],
             'status' => $row['status'],
             'sentAt' => $row['sent_at'],
         ], $rows)]);
+    }
+
+    if ($method === 'GET' && $resource === 'email-activity') {
+        data_require_permission('integrations');
+        $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
+        $search = $_GET['search'] ?? '';
+        if ($page === false || $page < 1 || $page > 100000 || !is_string($search)
+            || strlen($search) > 128 || preg_match('/[\r\n\x00]/', $search) === 1) {
+            data_respond(400, ['error' => 'invalid_activity_query', 'message' => 'The sent email search or page number is invalid.']);
+        }
+        $db = data_db();
+        $where = '';
+        $parameters = [];
+        if (trim($search) !== '') {
+            $where = ' WHERE recipient_email LIKE ? OR subject LIKE ?';
+            $term = '%' . trim($search) . '%';
+            $parameters = [$term, $term];
+        }
+        $count = $db->prepare('SELECT COUNT(*) FROM email_activity' . $where);
+        $count->execute($parameters);
+        $total = (int) $count->fetchColumn();
+        $statusCounts = $db->query(
+            "SELECT
+                COALESCE(SUM(status = 'Sent'), 0) AS sent_count,
+                COALESCE(SUM(status = 'Failed'), 0) AS failed_count,
+                COALESCE(SUM(status = 'Queued'), 0) AS queued_count
+             FROM email_activity"
+        );
+        $counts = $statusCounts->fetch() ?: [];
+        $pageCount = max(1, (int) ceil($total / 20));
+        $page = min($page, $pageCount);
+        $query = $db->prepare(
+            'SELECT id, recipient_email, subject, body, status, sent_at, cc, bcc, thread_headers, message_id
+             FROM email_activity' . $where . ' ORDER BY id DESC LIMIT 20 OFFSET ' . (($page - 1) * 20)
+        );
+        $query->execute($parameters);
+        $rows = $query->fetchAll();
+        data_respond(200, ['messages' => array_map(static fn (array $row): array => [
+            'id' => (string) $row['id'],
+            'recipientEmail' => $row['recipient_email'],
+            'subject' => $row['subject'],
+            'body' => data_mail_decrypt_content($row['body']),
+            'cc' => json_decode(data_mail_decrypt_content($row['cc']), true) ?: [],
+            'bcc' => json_decode(data_mail_decrypt_content($row['bcc']), true) ?: [],
+            'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
+            'messageId' => $row['message_id'],
+            'status' => $row['status'],
+            'sentAt' => $row['sent_at'],
+        ], $rows), 'total' => $total, 'page' => $page, 'pageSize' => 20,
+            'sentCount' => (int) ($counts['sent_count'] ?? 0),
+            'failedCount' => (int) ($counts['failed_count'] ?? 0),
+            'queuedCount' => (int) ($counts['queued_count'] ?? 0)]);
     }
 
     if ($resource === 'email-campaign-worker-token' && $method === 'POST') {

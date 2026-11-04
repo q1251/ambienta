@@ -39,6 +39,10 @@ interface MailActivity {
   cc: string[];
   bcc: string[];
   threadHeaders: { 'In-Reply-To'?: string; References?: string };
+  messageId?: string;
+  attachments?: MailAttachment[];
+  detailsLoaded?: boolean;
+  detailsLoading?: boolean;
 }
 
 interface MailDraft {
@@ -141,6 +145,9 @@ interface ApiResponse {
   total?: number;
   page?: number;
   pageSize?: number;
+  sentCount?: number;
+  failedCount?: number;
+  queuedCount?: number;
   countries?: string[];
   statuses?: string[];
   sources?: string[];
@@ -172,6 +179,12 @@ const previewMergeTags = (value: string): string => value
   .replaceAll('{{country}}', 'South Africa')
   .replace(/\*\*(.*?)\*\*/gs, '$1')
   .replace(/\*(.*?)\*/gs, '$1');
+
+const formatMailText = (value: string): string => value
+  .replace(/\*\*(.*?)\*\*/gs, '$1')
+  .replace(/\*(.*?)\*/gs, '$1');
+
+const extractMessageIds = (value?: string): string[] => value?.match(/<[^<>\r\n]{1,990}>/g) || [];
 
 const getDefaultScheduleValue = (): string => {
   const date = new Date(Date.now() + 10 * 60 * 1000 - new Date().getTimezoneOffset() * 60 * 1000);
@@ -205,6 +218,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     smtpPort: 465,
   });
   const [messages, setMessages] = useState<MailActivity[]>([]);
+  const [activityTotal, setActivityTotal] = useState(0);
+  const [activitySentCount, setActivitySentCount] = useState(0);
   const [campaigns, setCampaigns] = useState<MailCampaign[]>([]);
   const [campaignAudienceCount, setCampaignAudienceCount] = useState(0);
   const [campaignName, setCampaignName] = useState('');
@@ -220,6 +235,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [campaignWorkerCommand, setCampaignWorkerCommand] = useState('');
   const campaignBodyRef = useRef<HTMLTextAreaElement>(null);
+  const mailBodyRef = useRef<HTMLTextAreaElement>(null);
   const [isCampaignSaving, setIsCampaignSaving] = useState(false);
   const [isCampaignAction, setIsCampaignAction] = useState(false);
   const [drafts, setDrafts] = useState<MailDraft[]>([]);
@@ -239,6 +255,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [sentSource, setSentSource] = useState<'crm' | 'hostinger'>('crm');
   const [selectedSentActivityId, setSelectedSentActivityId] = useState<string | null>(null);
   const [selectedHostSentMessageId, setSelectedHostSentMessageId] = useState<string | null>(null);
+  const [mailThreadMessages, setMailThreadMessages] = useState<MailActivity[]>([]);
+  const [isLoadingMailThread, setIsLoadingMailThread] = useState(false);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -259,13 +277,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
   useEffect(() => {
     if (mode === 'mailbox' && settings.verified) {
-      if (activeFolder === 'inbox' || activeFolder === 'sent' || activeFolder === 'trash') {
-        void refreshMailboxFolder(activeFolder);
-        const interval = window.setInterval(() => void refreshMailboxFolder(activeFolder), 60_000);
+      const mailboxFolder = activeFolder === 'sent' && sentSource === 'crm' ? null : activeFolder;
+      if (mailboxFolder === 'inbox' || mailboxFolder === 'sent' || mailboxFolder === 'trash') {
+        void refreshMailboxFolder(mailboxFolder);
+        const interval = window.setInterval(() => void refreshMailboxFolder(mailboxFolder), 60_000);
         return () => window.clearInterval(interval);
       }
     }
-  }, [mode, activeFolder, settings.verified, mailboxPage, mailboxSearch]);
+  }, [mode, activeFolder, sentSource, settings.verified, mailboxPage, mailboxSearch]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -285,7 +304,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       });
       if (mode === 'mailbox') {
         const [activityResult, draftResult, trashResult] = await Promise.all([
-          requestMailApi('email-activity', 'GET'),
+          requestMailApi(`email-activity&page=${activeFolder === 'sent' && sentSource === 'crm' ? mailboxPage : 1}&search=${encodeURIComponent(activeFolder === 'sent' && sentSource === 'crm' ? mailboxSearch : '')}`, 'GET'),
           requestMailApi('email-drafts', 'GET'),
           requestMailApi('email-draft-trash', 'GET'),
         ]);
@@ -293,6 +312,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           throw new Error('The email folders returned an invalid response.');
         }
         setMessages(activityResult.messages);
+        setActivityTotal(activityResult.total ?? activityResult.messages.length);
+        setActivitySentCount(activityResult.sentCount ?? activityResult.messages.filter((item) => item.status === 'Sent').length);
         setDrafts(draftResult.drafts);
         setTrash(trashResult.drafts);
         if (role === 'admin') {
@@ -321,6 +342,26 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   useEffect(() => {
     void loadData();
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'mailbox' || activeFolder !== 'sent' || sentSource !== 'crm') return;
+    let active = true;
+    void requestMailApi(`email-activity&page=${mailboxPage}&search=${encodeURIComponent(mailboxSearch)}`, 'GET')
+      .then((result) => {
+        if (!Array.isArray(result.messages)) throw new Error('The sent activity response was invalid.');
+        if (!active) return;
+        setMessages(result.messages);
+        setActivityTotal(result.total ?? result.messages.length);
+        setActivitySentCount(result.sentCount ?? result.messages.filter((item) => item.status === 'Sent').length);
+        if (typeof result.page === 'number' && result.page !== mailboxPage) setMailboxPage(result.page);
+      })
+      .catch((error: unknown) => {
+        if (active) setErrorMessage(error instanceof Error ? error.message : 'CRM sent activity could not be loaded.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [mode, activeFolder, sentSource, mailboxPage, mailboxSearch]);
 
   useEffect(() => {
     if (mode !== 'mailbox' || role !== 'admin' || activeFolder !== 'campaigns') return;
@@ -463,21 +504,28 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     }
   };
 
-  const replyToInbox = (message: InboxMessage) => {
+  const replyToInbox = async (message: InboxMessage) => {
     const address = message.from.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
     if (!address) {
       setErrorMessage('This message does not contain a reply address.');
       return;
     }
+    const details = message.detailsLoaded
+      ? { body: message.body }
+      : await loadMessageDetails(message, 'inbox');
+    if (details === null) return;
     setRecipientEmail(address);
     setSubject(message.subject.toLowerCase().startsWith('re:') ? message.subject : `Re: ${message.subject}`);
-    setMessageBody('');
+    const quotedBody = details.body.split(/\r?\n/).map((line) => `> ${line}`).join('\n');
+    setMessageBody(`\n\nOn ${formatMailboxDate(message.date, true)}, ${message.from} wrote:\n${quotedBody}`);
     setCc('');
     setBcc('');
     setAttachments([]);
+    const messageIds = [...extractMessageIds(message.references), ...extractMessageIds(message.messageId)];
+    const inReplyTo = extractMessageIds(message.messageId)[0];
     setThreadHeaders({
-      'In-Reply-To': message.messageId || undefined,
-      References: [message.references, message.messageId].filter(Boolean).join(' ') || undefined,
+      'In-Reply-To': inReplyTo,
+      References: [...new Set(messageIds)].join(' ') || undefined,
     });
     setEditingDraftId(null);
     setActiveFolder('compose');
@@ -781,6 +829,22 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     });
   };
 
+  const wrapMessageSelection = (marker: '**' | '*') => {
+    const textarea = mailBodyRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = messageBody.slice(start, end);
+    const replacement = `${marker}${selected || 'text'}${marker}`;
+    setMessageBody(`${messageBody.slice(0, start)}${replacement}${messageBody.slice(end)}`);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const selectionStart = start + marker.length;
+      const selectionEnd = selectionStart + (selected || 'text').length;
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+    });
+  };
+
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMessage('');
@@ -863,18 +927,52 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     }
   };
 
+  const loadSentActivityDetails = async (activity: MailActivity) => {
+    setErrorMessage('');
+    setMessages((current) => current.map((item) => item.id === activity.id ? { ...item, detailsLoading: true } : item));
+    try {
+      const result = await requestMailApi(`email-activity-details&id=${encodeURIComponent(activity.id)}`, 'GET');
+      if (!Array.isArray(result.attachments)) throw new Error('The sent message details response was invalid.');
+      setMessages((current) => current.map((item) => item.id === activity.id
+        ? { ...item, attachments: result.attachments, detailsLoaded: true, detailsLoading: false }
+        : item));
+    } catch (error) {
+      setMessages((current) => current.map((item) => item.id === activity.id ? { ...item, detailsLoading: false } : item));
+      setErrorMessage(error instanceof Error ? error.message : 'The sent message details could not be loaded.');
+    }
+  };
+
   const totalCampaignOpens = campaigns.reduce((total, campaign) => total + campaign.openCount, 0);
   const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
-  const filteredSentActivities = messages.filter((message) => {
-    const query = mailboxSearch.trim().toLocaleLowerCase();
-    return !query || [message.recipientEmail, message.subject, message.body].some((value) => value.toLocaleLowerCase().includes(query));
-  });
-  const sentActivityPageCount = Math.max(1, Math.ceil(filteredSentActivities.length / 20));
-  const sentActivityPage = Math.min(mailboxPage, sentActivityPageCount);
-  const visibleSentActivities = filteredSentActivities.slice((sentActivityPage - 1) * 20, sentActivityPage * 20);
-  const selectedSentActivity = visibleSentActivities.find((message) => message.id === selectedSentActivityId) || visibleSentActivities[0] || null;
+  const selectedSentActivity = messages.find((message) => message.id === selectedSentActivityId) || messages[0] || null;
   const selectedHostSentMessage = hostSentMessages.find((message) => message.id === selectedHostSentMessageId) || hostSentMessages[0] || null;
+  const mailboxThreadRoot = extractMessageIds(selectedMailboxMessage?.references)[0]
+    || extractMessageIds(selectedMailboxMessage?.messageId)[0]
+    || '';
+
+  useEffect(() => {
+    if (mode !== 'mailbox' || activeFolder !== 'inbox' || !mailboxThreadRoot) {
+      setMailThreadMessages([]);
+      return;
+    }
+    let active = true;
+    setIsLoadingMailThread(true);
+    void requestMailApi(`email-thread&messageId=${encodeURIComponent(mailboxThreadRoot)}`, 'GET')
+      .then((result) => {
+        if (!Array.isArray(result.messages)) throw new Error('The email conversation response was invalid.');
+        if (active) setMailThreadMessages(result.messages);
+      })
+      .catch((error: unknown) => {
+        if (active) setErrorMessage(error instanceof Error ? error.message : 'The email conversation could not be loaded.');
+      })
+      .finally(() => {
+        if (active) setIsLoadingMailThread(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [mode, activeFolder, mailboxThreadRoot]);
 
   return (
     <div className={mode === 'mailbox' ? 'mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
@@ -894,8 +992,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         </div>
         {mode === 'mailbox' && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600" aria-label="Email activity summary">
-            <span><strong className="text-slate-900">{messages.filter((item) => item.status === 'Sent').length}</strong> sent</span>
-            <span>Delivery <strong className="text-slate-900">not tracked</strong></span>
+            <span><strong className="text-slate-900">{activitySentCount}</strong> SMTP accepted</span>
+            <span>Final delivery <strong className="text-slate-900">not confirmed</strong></span>
             <span>Opens <strong className="text-slate-900">{hasOpenTrackedCampaign ? totalCampaignOpens : 'off'}</strong></span>
           </div>
         )}
@@ -1072,7 +1170,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               </div>
               <div>
                 <label htmlFor="mail-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
-                <textarea id="mail-body" maxLength={6000} rows={9} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <div className="mb-2 flex gap-2">
+                  <button type="button" onClick={() => wrapMessageSelection('**')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Bold</button>
+                  <button type="button" onClick={() => wrapMessageSelection('*')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs italic text-slate-700">Italic</button>
+                  <span className="self-center text-xs text-slate-500">Formatting is sent as HTML with a plain-text alternative.</span>
+                </div>
+                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={9} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <details className="mt-2 rounded-lg border border-slate-200 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">Preview formatted message</summary>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(messageBody) || '(message preview)'}</p>
+                </details>
                 <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
               </div>
               <div>
@@ -1174,7 +1281,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         </span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => replyToInbox(selectedMailboxMessage)} className="rounded-lg bg-[#315649] px-3 py-2 text-xs font-semibold text-white hover:bg-[#26483b]">Reply</button>
+                        <button type="button" onClick={() => void replyToInbox(selectedMailboxMessage)} className="rounded-lg bg-[#315649] px-3 py-2 text-xs font-semibold text-white hover:bg-[#26483b]">Reply</button>
                         <button type="button" onClick={() => void forwardInboxMessage(selectedMailboxMessage)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Forward</button>
                         <button type="button" onClick={() => void setMessageReadState(selectedMailboxMessage, 'inbox', selectedMailboxMessage.unread)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{selectedMailboxMessage.unread ? 'Mark read' : 'Mark unread'}</button>
                         <button type="button" onClick={() => void moveMailToTrash(selectedMailboxMessage)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
@@ -1187,6 +1294,28 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         <p className="text-sm text-slate-500">Load the full message to view its content.</p>
                       )}
                       <MessageAttachmentActions message={selectedMailboxMessage} onLoad={() => void loadMessageDetails(selectedMailboxMessage, 'inbox')} />
+                      <section className="mt-6 border-t border-slate-100 pt-4">
+                        <h4 className="text-sm font-semibold text-slate-900">CRM replies in this conversation</h4>
+                        {isLoadingMailThread ? (
+                          <p role="status" className="mt-2 text-xs text-slate-500">Checking for replies sent from the CRM…</p>
+                        ) : mailThreadMessages.length === 0 ? (
+                          <p className="mt-2 text-xs text-slate-500">No CRM replies are recorded for this conversation.</p>
+                        ) : (
+                          <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                            {mailThreadMessages.map((reply) => (
+                              <li key={reply.id} className="p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-xs font-medium text-slate-700">To: {reply.recipientEmail}</span>
+                                  <time className="text-xs text-slate-500">{formatMailboxDate(reply.sentAt, true)}</time>
+                                </div>
+                                <p className="mt-1 text-sm font-semibold text-slate-900">{reply.subject || '(no subject)'}</p>
+                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(reply.body)}</p>
+                                <p className="mt-2 text-xs text-slate-500">{reply.status === 'Sent' ? 'Accepted by SMTP; final delivery is not confirmed.' : reply.status}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </section>
                     </div>
                   </article>
                 ) : (
@@ -1211,7 +1340,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   <button type="button" onClick={() => { void loadData(); if (sentSource === 'hostinger') void refreshMailboxFolder('sent'); }} disabled={isLoading || (sentSource === 'hostinger' && (!settings.verified || isSyncingSent))} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
                 </div>
                 <div role="tablist" aria-label="Sent mail source" className="grid grid-cols-2 gap-1 border-b border-slate-100 p-2">
-                  <button type="button" role="tab" aria-selected={sentSource === 'crm'} onClick={() => { setSentSource('crm'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'crm' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>CRM sent ({messages.length})</button>
+                  <button type="button" role="tab" aria-selected={sentSource === 'crm'} onClick={() => { setSentSource('crm'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'crm' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>CRM sent ({activityTotal})</button>
                   <button type="button" role="tab" aria-selected={sentSource === 'hostinger'} onClick={() => { setSentSource('hostinger'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'hostinger' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>Hostinger ({mailboxTotal})</button>
                 </div>
                 {sentSource === 'hostinger' && !settings.configured ? (
@@ -1225,9 +1354,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <MailboxSearchControls
                       className="mb-0 space-y-2 border-b border-slate-100 p-2.5"
                       searchInput={mailboxSearchInput}
-                      page={sentSource === 'crm' ? sentActivityPage : mailboxPage}
-                      total={sentSource === 'crm' ? filteredSentActivities.length : mailboxTotal}
+                      page={mailboxPage}
+                      total={sentSource === 'crm' ? activityTotal : mailboxTotal}
                       disabled={sentSource === 'hostinger' && !settings.verified}
+                      searchLabel={sentSource === 'crm' ? 'Search CRM sent email activity' : undefined}
+                      searchPlaceholder={sentSource === 'crm' ? 'Search recipient or subject' : undefined}
                       onSearchChange={setMailboxSearchInput}
                       onSearch={(event) => {
                         event.preventDefault();
@@ -1244,16 +1375,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     />
                     <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
                       {sentSource === 'crm' ? (
-                        visibleSentActivities.length === 0 ? (
+                        messages.length === 0 ? (
                           <p className="p-6 text-center text-sm text-slate-500">No CRM-sent messages match this search.</p>
                         ) : (
                           <ul className="divide-y divide-slate-100">
-                            {visibleSentActivities.map((item) => (
+                            {messages.map((item) => (
                               <li key={item.id}>
                                 <button type="button" onClick={() => setSelectedSentActivityId(item.id)} aria-current={selectedSentActivity?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedSentActivity?.id === item.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
                                   <span className="flex items-center justify-between gap-2">
                                     <span className="truncate text-sm font-semibold text-slate-900">{item.recipientEmail}</span>
-                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status}</span>
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status === 'Sent' ? 'SMTP accepted' : item.status}</span>
                                   </span>
                                   <span className="mt-1 block truncate text-sm text-slate-800">{item.subject || '(no subject)'}</span>
                                   <time className="mt-1 block truncate text-xs text-slate-500" title={item.sentAt}>{formatMailboxDate(item.sentAt, true)}</time>
@@ -1294,13 +1425,27 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       {selectedSentActivity.cc.length > 0 && <p className="mt-1 break-all text-xs text-slate-500">CC: {selectedSentActivity.cc.join(', ')}</p>}
                       {selectedSentActivity.bcc.length > 0 && <p className="mt-1 break-all text-xs text-slate-500">BCC: {selectedSentActivity.bcc.join(', ')}</p>}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedSentActivity.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : selectedSentActivity.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{selectedSentActivity.status}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedSentActivity.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : selectedSentActivity.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{selectedSentActivity.status === 'Sent' ? 'SMTP accepted' : selectedSentActivity.status}</span>
                         <time className="text-xs text-slate-500">{formatMailboxDate(selectedSentActivity.sentAt, true)}</time>
                       </div>
+                      <p className="text-xs text-slate-500">{selectedSentActivity.status === 'Sent' ? 'Accepted by SMTP; final delivery is not confirmed.' : selectedSentActivity.status === 'Failed' ? 'Sending failed.' : 'Sending outcome is unknown; check Hostinger before retrying.'}</p>
+                      {selectedSentActivity.messageId && <p className="mt-2 break-all text-xs text-slate-500">Message ID: {selectedSentActivity.messageId}</p>}
                     </header>
                     <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5">
-                      <p className="text-xs text-slate-500">{selectedSentActivity.status === 'Sent' ? 'Accepted by SMTP; final delivery is not confirmed.' : selectedSentActivity.status === 'Failed' ? 'Sending failed.' : 'Sending outcome is unknown; check Hostinger before retrying.'}</p>
-                      <div className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{selectedSentActivity.body || 'No message content was recorded.'}</div>
+                      <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{formatMailText(selectedSentActivity.body) || 'No message content was recorded.'}</div>
+                      {!selectedSentActivity.detailsLoaded ? (
+                        <button type="button" onClick={() => void loadSentActivityDetails(selectedSentActivity)} disabled={selectedSentActivity.detailsLoading} className="mt-4 text-xs font-semibold text-violet-800 disabled:opacity-50">
+                          {selectedSentActivity.detailsLoading ? 'Loading attachments…' : 'Load attachments'}
+                        </button>
+                      ) : selectedSentActivity.attachments?.length ? (
+                        <ul className="mt-4 space-y-1">
+                          {selectedSentActivity.attachments.map((attachment, index) => (
+                            <li key={`${attachment.name}-${index}`}>
+                              <a href={`data:${attachment.contentType};base64,${attachment.content}`} download={attachment.name} className="text-xs font-semibold text-violet-800 underline">Download {attachment.name}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className="mt-4 text-xs text-slate-500">No attachments.</p>}
                     </div>
                   </article>
                 ) : sentSource === 'hostinger' && selectedHostSentMessage ? (
@@ -1494,7 +1639,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="font-semibold text-amber-950">Scheduled campaign worker</h2>
-                    <p className="mt-1 max-w-2xl text-sm text-amber-900">Hostinger must call the protected worker every minute to send scheduled campaigns and continue large sends (up to five recipients per run). Generate a command and add it as a Hostinger cron job.</p>
+                    <p className="mt-1 max-w-2xl text-sm text-amber-900">Hostinger must call the protected worker every minute to send scheduled campaigns and continue large sends (up to ten recipients per run). Generate a command and add it as a Hostinger cron job.</p>
                   </div>
                   <button type="button" onClick={() => void generateCampaignWorkerCommand()} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100">Generate cron command</button>
                 </div>
@@ -1579,6 +1724,8 @@ interface DraftFolderProps {
 
 interface MailboxSearchControlsProps {
   className?: string;
+  searchLabel?: string;
+  searchPlaceholder?: string;
   searchInput: string;
   page: number;
   total: number;
@@ -1590,6 +1737,8 @@ interface MailboxSearchControlsProps {
 
 const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
   className,
+  searchLabel = 'Search Hostinger mailbox messages',
+  searchPlaceholder = 'Search this Hostinger folder',
   searchInput,
   page,
   total,
@@ -1602,14 +1751,14 @@ const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
   return (
     <div className={className || 'mb-4 space-y-3'}>
       <form onSubmit={onSearch} className="flex flex-wrap gap-2">
-        <label htmlFor="mailbox-search" className="sr-only">Search Hostinger mailbox messages</label>
+        <label htmlFor="mailbox-search" className="sr-only">{searchLabel}</label>
         <input
           id="mailbox-search"
           value={searchInput}
           maxLength={128}
           disabled={disabled}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search this Hostinger folder"
+          placeholder={searchPlaceholder}
           className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
         />
         <button type="submit" disabled={disabled} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Search</button>
