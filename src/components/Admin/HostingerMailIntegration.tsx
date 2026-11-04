@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   AlertCircle,
   CheckCircle2,
   FileText,
@@ -861,8 +862,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
 
   return (
-    <div className={mode === 'mailbox' ? 'mx-auto flex min-h-[calc(100vh-132px)] max-w-[1500px] flex-col gap-5' : 'space-y-5'}>
-      <header className={mode === 'mailbox' ? 'flex flex-wrap items-end justify-between gap-4' : undefined}>
+    <div className={mode === 'mailbox' ? 'mx-auto flex min-h-[calc(100vh-104px)] max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
+      <header className={mode === 'mailbox' ? 'flex flex-wrap items-end justify-between gap-x-4 gap-y-2' : undefined}>
         <div className="min-w-0">
           <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${mode === 'settings' ? 'text-violet-700' : 'text-[#315649]'}`}>
             {mode === 'settings' ? 'Connections' : 'Communications'}
@@ -877,16 +878,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </p>
         </div>
         {mode === 'mailbox' && (
-          <div className="flex flex-wrap items-center gap-2" aria-label="Email activity summary">
-            <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-              <strong className="text-slate-900">{messages.filter((item) => item.status === 'Sent').length}</strong> sent from CRM
-            </span>
-            <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-              Delivered <strong className="text-slate-900">not tracked</strong>
-            </span>
-            <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-              Opened <strong className="text-slate-900">{hasOpenTrackedCampaign ? `${totalCampaignOpens} campaign opens` : 'tracking off'}</strong>
-            </span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600" aria-label="Email activity summary">
+            <span><strong className="text-slate-900">{messages.filter((item) => item.status === 'Sent').length}</strong> sent</span>
+            <span>Delivery <strong className="text-slate-900">not tracked</strong></span>
+            <span>Opens <strong className="text-slate-900">{hasOpenTrackedCampaign ? totalCampaignOpens : 'off'}</strong></span>
           </div>
         )}
       </header>
@@ -954,8 +949,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="flex min-h-[min(560px,calc(100vh-300px))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white p-2">
+      {mode === 'mailbox' && <section className="flex min-h-[min(560px,calc(100vh-240px))] flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex min-w-0 flex-nowrap items-center gap-1 border-b border-slate-200 bg-white p-2">
           <button
             type="button"
             onClick={() => setActiveFolder('compose')}
@@ -967,7 +962,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           >
             <Mail className="h-4 w-4" /> Compose
           </button>
-          <nav aria-label="Email folders" className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          <nav aria-label="Email folders" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap">
             {([
               ['inbox', 'Inbox', Inbox, ''],
               ['sent', 'Sent', Send, ''],
@@ -982,7 +977,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   setMailboxPage(1);
                   setActiveFolder(folder);
                 }}
-                className={`flex min-w-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === folder
                     ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
@@ -993,14 +988,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 {count && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{count}</span>}
               </button>
             ))}
-          </nav>
-          {role === 'admin' && (
-            <div className="flex items-center gap-1">
+            {role === 'admin' && (
+              <>
               <button
                 type="button"
                 aria-current={activeFolder === 'campaigns' || activeFolder === 'campaign-history' ? 'page' : undefined}
                 onClick={() => setActiveFolder('campaigns')}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === 'campaigns' || activeFolder === 'campaign-history'
                     ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
@@ -1013,7 +1007,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 type="button"
                 aria-current={activeFolder === 'campaign-history' ? 'page' : undefined}
                 onClick={() => setActiveFolder('campaign-history')}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === 'campaign-history'
                     ? 'bg-[#eaf0eb] text-[#315649]'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
@@ -1021,20 +1015,21 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               >
                 <span className="min-w-0 flex-1 truncate">Campaign history</span>
               </button>
-            </div>
-          )}
-          <span className={`ml-auto hidden shrink-0 items-center gap-1.5 px-2 text-xs lg:inline-flex ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
+              </>
+            )}
+          </nav>
+          <span className={`ml-auto hidden shrink-0 items-center gap-1.5 px-2 text-xs 2xl:inline-flex ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${settings.verified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
             {settings.verified ? 'Connected' : 'Not verified'}
           </span>
         </div>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fb] p-3 sm:p-4">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-[#f7f9fb] p-2.5 sm:p-3">
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div>
                 <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
                 <p className="mt-1 text-sm text-slate-600">Send through {settings.emailAccount}. Drafts are saved in the CRM.</p>
@@ -1095,17 +1090,18 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
           {activeFolder === 'inbox' && (
             <section className="grid min-h-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.4fr)]">
-              <div className="flex min-h-0 flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 p-4">
+              <div className={`min-h-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r ${selectedMailboxMessageId ? 'hidden' : 'flex'}`}>
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5">
                   <div className="min-w-0">
                     <h2 className="font-semibold text-slate-950">Inbox</h2>
-                    <p className="mt-1 text-xs text-slate-500">{mailboxTotal} messages · syncs automatically</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{mailboxTotal} messages</p>
                   </div>
                   <button type="button" onClick={() => void refreshInbox()} disabled={!settings.verified || isSyncingInbox} aria-label="Sync inbox" className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                     <RefreshCw className={`h-4 w-4 ${isSyncingInbox ? 'animate-spin' : ''}`} /> {isSyncingInbox ? 'Syncing' : 'Sync'}
                   </button>
                 </div>
                 <MailboxSearchControls
+                  className="mb-0 space-y-2 border-b border-slate-100 p-2.5"
                   searchInput={mailboxSearchInput}
                   page={mailboxPage}
                   total={mailboxTotal}
@@ -1131,7 +1127,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <ul className="divide-y divide-slate-100">
                       {inboxMessages.map((message) => (
                         <li key={message.id}>
-                          <button type="button" onClick={() => setSelectedMailboxMessageId(message.id)} aria-current={selectedMailboxMessage?.id === message.id ? 'true' : undefined} className={`w-full border-l-2 px-4 py-3 text-left transition-colors ${selectedMailboxMessage?.id === message.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                          <button type="button" onClick={() => setSelectedMailboxMessageId(message.id)} aria-current={selectedMailboxMessage?.id === message.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedMailboxMessage?.id === message.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
                             <span className="flex items-center justify-between gap-2">
                               <span className={`truncate text-sm ${message.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{message.from.split('<')[0].trim() || message.from}</span>
                               <time className="shrink-0 text-[10px] text-slate-500" title={message.date}>{formatMailboxDate(message.date)}</time>
@@ -1145,10 +1141,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   )}
                 </div>
               </div>
-              <div className="min-h-[300px] min-w-0 bg-white">
+              <div className={`min-h-[300px] min-w-0 bg-white ${selectedMailboxMessageId ? 'block' : 'hidden lg:block'}`}>
                 {selectedMailboxMessage ? (
                   <article className="flex h-full flex-col">
-                    <header className="border-b border-slate-100 px-5 py-4 sm:px-6">
+                    <header className="border-b border-slate-100 px-4 py-3 sm:px-5">
+                      <button type="button" onClick={() => setSelectedMailboxMessageId(null)} className="mb-3 inline-flex items-center gap-1 rounded-md py-1 text-xs font-semibold text-slate-600 hover:text-slate-950 lg:hidden">
+                        <ArrowLeft className="h-4 w-4" /> Back to messages
+                      </button>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <h3 className="break-words text-lg font-semibold tracking-tight text-slate-950">{selectedMailboxMessage.subject || '(no subject)'}</h3>
@@ -1159,14 +1158,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                           {selectedMailboxMessage.unread ? 'Unread' : 'Read'}
                         </span>
                       </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" onClick={() => replyToInbox(selectedMailboxMessage)} className="rounded-lg bg-[#315649] px-3 py-2 text-xs font-semibold text-white hover:bg-[#26483b]">Reply</button>
                         <button type="button" onClick={() => void forwardInboxMessage(selectedMailboxMessage)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Forward</button>
                         <button type="button" onClick={() => void setMessageReadState(selectedMailboxMessage, 'inbox', selectedMailboxMessage.unread)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{selectedMailboxMessage.unread ? 'Mark read' : 'Mark unread'}</button>
                         <button type="button" onClick={() => void moveMailToTrash(selectedMailboxMessage)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
                       </div>
                     </header>
-                    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
                       {selectedMailboxMessage.body ? (
                         <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{selectedMailboxMessage.body}</div>
                       ) : (
@@ -1187,7 +1186,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
 
           {activeFolder === 'sent' && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="font-semibold text-slate-950">Sent from CRM</h2>
@@ -1284,7 +1283,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
           {activeFolder === 'campaigns' && role === 'admin' && (
             <div className="space-y-5">
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
@@ -1419,7 +1418,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             </div>
           )}
           {activeFolder === 'campaign-history' && role === 'admin' && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-slate-950">Campaign history</h2>
@@ -1491,6 +1490,7 @@ interface DraftFolderProps {
 }
 
 interface MailboxSearchControlsProps {
+  className?: string;
   searchInput: string;
   page: number;
   total: number;
@@ -1501,6 +1501,7 @@ interface MailboxSearchControlsProps {
 }
 
 const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
+  className,
   searchInput,
   page,
   total,
@@ -1511,7 +1512,7 @@ const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
 }) => {
   const pageCount = Math.max(1, Math.ceil(total / 20));
   return (
-    <div className="mb-4 space-y-3">
+    <div className={className || 'mb-4 space-y-3'}>
       <form onSubmit={onSearch} className="flex flex-wrap gap-2">
         <label htmlFor="mailbox-search" className="sr-only">Search Hostinger mailbox messages</label>
         <input
@@ -1537,7 +1538,7 @@ const MailboxSearchControls: React.FC<MailboxSearchControlsProps> = ({
 };
 
 const DraftFolder: React.FC<DraftFolderProps> = ({ drafts, onOpen, onTrash }) => (
-  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+  <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
     <h2 className="font-semibold text-slate-950">Drafts</h2>
     <p className="mt-1 text-sm text-slate-600">Saved in the CRM and available across signed-in sessions.</p>
     {drafts.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No drafts saved.</p> : (
@@ -1569,7 +1570,7 @@ interface MailTrashFolderProps {
 }
 
 const MailTrashFolder: React.FC<MailTrashFolderProps> = ({ messages, folderAvailable, onRestore, onDelete, onSetSeen, onLoadDetails }) => (
-  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+  <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
     <h2 className="font-semibold text-slate-950">Hostinger mailbox Trash</h2>
     {!folderAvailable ? (
       <p className="py-6 text-sm text-slate-500">A Hostinger Trash folder was not found for this mailbox.</p>
@@ -1634,7 +1635,7 @@ interface TrashFolderProps {
 }
 
 const TrashFolder: React.FC<TrashFolderProps> = ({ drafts, onRestore, onDelete }) => (
-  <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+  <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
     <h2 className="font-semibold text-slate-950">Trash</h2>
     <p className="mt-1 text-sm text-slate-600">Deleted CRM drafts can be restored or permanently removed.</p>
     {drafts.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">Trash is empty.</p> : (

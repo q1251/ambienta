@@ -320,7 +320,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-7 sm:py-8 lg:px-10 lg:py-10">
+        <main className={`min-w-0 flex-1 ${
+          activeTab === 'email'
+            ? 'px-3 py-3 sm:px-5 sm:py-5 lg:px-6 lg:py-5'
+            : 'px-4 py-5 sm:px-7 sm:py-8 lg:px-10 lg:py-10'
+        }`}>
           <div className="mx-auto w-full max-w-[1480px]">
             <div className="mb-6 lg:hidden">
               <label htmlFor="admin-section" className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Workspace section</label>
