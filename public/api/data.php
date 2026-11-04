@@ -1678,8 +1678,11 @@ function data_imap_folders(array $settings): array
         $result = data_imap_command($socket, $commandNumber, 'LIST "" "*"');
         $folders = [];
         foreach ($result['lines'] as $line) {
-            if (preg_match('/^\* LIST \([^)]*\) (?:NIL|"(?:\\\\.|[^"])*") ("(?:\\\\.|[^"])*")\r?\n$/', $line, $matches) === 1) {
-                $folder = stripcslashes(substr($matches[1], 1, -1));
+            if (preg_match('/^\* LIST \([^)]*\) (?:NIL|"(?:\\\\.|[^"])*") ("(?:\\\\.|[^"])*"|[^\s]+)\r?\n$/', $line, $matches) === 1) {
+                $folderToken = $matches[1];
+                $folder = str_starts_with($folderToken, '"')
+                    ? stripcslashes(substr($folderToken, 1, -1))
+                    : $folderToken;
                 if ($folder !== '') $folders[] = $folder;
             }
         }
