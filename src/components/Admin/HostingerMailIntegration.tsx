@@ -236,6 +236,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
   const [activeFolder, setActiveFolder] = useState<MailboxFolder>(initialFolder);
   const [selectedMailboxMessageId, setSelectedMailboxMessageId] = useState<string | null>(null);
+  const [sentSource, setSentSource] = useState<'crm' | 'hostinger'>('crm');
+  const [selectedSentActivityId, setSelectedSentActivityId] = useState<string | null>(null);
+  const [selectedHostSentMessageId, setSelectedHostSentMessageId] = useState<string | null>(null);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -247,6 +250,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [attachments, setAttachments] = useState<MailAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncingInbox, setIsSyncingInbox] = useState(false);
+  const [isSyncingSent, setIsSyncingSent] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -388,6 +392,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const refreshMailboxFolder = async (folder: 'inbox' | 'sent' | 'trash') => {
     setErrorMessage('');
     if (folder === 'inbox') setIsSyncingInbox(true);
+    if (folder === 'sent') setIsSyncingSent(true);
     try {
       const result = await requestMailApi(
         `email-inbox&folder=${folder}&page=${mailboxPage}&search=${encodeURIComponent(mailboxSearch)}`,
@@ -411,6 +416,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setErrorMessage(error instanceof Error ? error.message : 'The Hostinger mailbox folder could not be synchronized.');
     } finally {
       if (folder === 'inbox') setIsSyncingInbox(false);
+      if (folder === 'sent') setIsSyncingSent(false);
     }
   };
 
@@ -860,6 +866,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const totalCampaignOpens = campaigns.reduce((total, campaign) => total + campaign.openCount, 0);
   const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
+  const filteredSentActivities = messages.filter((message) => {
+    const query = mailboxSearch.trim().toLocaleLowerCase();
+    return !query || [message.recipientEmail, message.subject, message.body].some((value) => value.toLocaleLowerCase().includes(query));
+  });
+  const sentActivityPageCount = Math.max(1, Math.ceil(filteredSentActivities.length / 20));
+  const sentActivityPage = Math.min(mailboxPage, sentActivityPageCount);
+  const visibleSentActivities = filteredSentActivities.slice((sentActivityPage - 1) * 20, sentActivityPage * 20);
+  const selectedSentActivity = visibleSentActivities.find((message) => message.id === selectedSentActivityId) || visibleSentActivities[0] || null;
+  const selectedHostSentMessage = hostSentMessages.find((message) => message.id === selectedHostSentMessageId) || hostSentMessages[0] || null;
 
   return (
     <div className={mode === 'mailbox' ? 'mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
@@ -1024,7 +1039,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </span>
         </div>
 
-        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
+        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
 
@@ -1186,69 +1201,137 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
 
           {activeFolder === 'sent' && (
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold text-slate-950">Sent from CRM</h2>
-                  <p className="mt-1 text-sm text-slate-600">Messages submitted from this CRM. Hostinger’s Sent folder auto-refreshes every minute.</p>
+            <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.4fr)]">
+              <div className={`min-h-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r ${selectedSentActivityId || selectedHostSentMessageId ? 'hidden' : 'flex'}`}>
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-slate-950">Sent mail</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">CRM activity and Hostinger mailbox</p>
+                  </div>
+                  <button type="button" onClick={() => { void loadData(); if (sentSource === 'hostinger') void refreshMailboxFolder('sent'); }} disabled={isLoading || (sentSource === 'hostinger' && (!settings.verified || isSyncingSent))} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
                 </div>
-                <button type="button" onClick={() => { void loadData(); void refreshMailboxFolder('sent'); }} disabled={isLoading || !settings.verified} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
-              </div>
-              <MailboxSearchControls
-                searchInput={mailboxSearchInput}
-                page={mailboxPage}
-                total={mailboxTotal}
-                disabled={!settings.verified}
-                onSearchChange={setMailboxSearchInput}
-                onSearch={(event) => {
-                  event.preventDefault();
-                  setMailboxPage(1);
-                  setMailboxSearch(mailboxSearchInput.trim());
-                }}
-                onPageChange={setMailboxPage}
-              />
-              {messages.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">No email has been sent from the CRM yet.</p> : (
-                <ul className="divide-y divide-slate-100">
-                  {messages.map((item) => (
-                    <li key={item.id} className="py-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-slate-900">{item.subject || '(no subject)'}</p>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status}</span>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-slate-600">{item.recipientEmail} · {item.sentAt}</p>
-                      {(item.cc.length > 0 || item.bcc.length > 0) && (
-                        <p className="mt-1 text-xs text-slate-500">
-                          {item.cc.length > 0 ? `CC: ${item.cc.join(', ')}` : ''}
-                          {item.cc.length > 0 && item.bcc.length > 0 ? ' · ' : ''}
-                          {item.bcc.length > 0 ? `BCC: ${item.bcc.join(', ')}` : ''}
-                        </p>
+                <div role="tablist" aria-label="Sent mail source" className="grid grid-cols-2 gap-1 border-b border-slate-100 p-2">
+                  <button type="button" role="tab" aria-selected={sentSource === 'crm'} onClick={() => { setSentSource('crm'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'crm' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>CRM sent ({messages.length})</button>
+                  <button type="button" role="tab" aria-selected={sentSource === 'hostinger'} onClick={() => { setSentSource('hostinger'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'hostinger' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>Hostinger ({mailboxTotal})</button>
+                </div>
+                {sentSource === 'hostinger' && !settings.configured ? (
+                  <p className="p-6 text-center text-sm text-slate-500">Configure the Hostinger mailbox to load sent messages.</p>
+                ) : sentSource === 'hostinger' && isSyncingSent && hostSentMessages.length === 0 ? (
+                  <p role="status" className="p-6 text-center text-sm text-slate-500">Synchronizing Hostinger Sent…</p>
+                ) : sentSource === 'hostinger' && !sentFolderAvailable ? (
+                  <p className="p-6 text-center text-sm text-amber-800">The Hostinger Sent folder was not found.</p>
+                ) : (
+                  <>
+                    <MailboxSearchControls
+                      className="mb-0 space-y-2 border-b border-slate-100 p-2.5"
+                      searchInput={mailboxSearchInput}
+                      page={sentSource === 'crm' ? sentActivityPage : mailboxPage}
+                      total={sentSource === 'crm' ? filteredSentActivities.length : mailboxTotal}
+                      disabled={sentSource === 'hostinger' && !settings.verified}
+                      onSearchChange={setMailboxSearchInput}
+                      onSearch={(event) => {
+                        event.preventDefault();
+                        setMailboxPage(1);
+                        setMailboxSearch(mailboxSearchInput.trim());
+                        setSelectedSentActivityId(null);
+                        setSelectedHostSentMessageId(null);
+                      }}
+                      onPageChange={(page) => {
+                        setMailboxPage(page);
+                        setSelectedSentActivityId(null);
+                        setSelectedHostSentMessageId(null);
+                      }}
+                    />
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+                      {sentSource === 'crm' ? (
+                        visibleSentActivities.length === 0 ? (
+                          <p className="p-6 text-center text-sm text-slate-500">No CRM-sent messages match this search.</p>
+                        ) : (
+                          <ul className="divide-y divide-slate-100">
+                            {visibleSentActivities.map((item) => (
+                              <li key={item.id}>
+                                <button type="button" onClick={() => setSelectedSentActivityId(item.id)} aria-current={selectedSentActivity?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedSentActivity?.id === item.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                                  <span className="flex items-center justify-between gap-2">
+                                    <span className="truncate text-sm font-semibold text-slate-900">{item.recipientEmail}</span>
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status}</span>
+                                  </span>
+                                  <span className="mt-1 block truncate text-sm text-slate-800">{item.subject || '(no subject)'}</span>
+                                  <time className="mt-1 block truncate text-xs text-slate-500" title={item.sentAt}>{formatMailboxDate(item.sentAt, true)}</time>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )
+                      ) : hostSentMessages.length === 0 ? (
+                        <p className="p-6 text-center text-sm text-slate-500">{settings.configured ? 'No messages found in Hostinger Sent.' : 'Configure the Hostinger mailbox to load sent messages.'}</p>
+                      ) : (
+                        <ul className="divide-y divide-slate-100">
+                          {hostSentMessages.map((item) => (
+                            <li key={item.id}>
+                              <button type="button" onClick={() => setSelectedHostSentMessageId(item.id)} aria-current={selectedHostSentMessage?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedHostSentMessage?.id === item.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                                <span className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-sm font-semibold text-slate-900">{item.from.split('<')[0].trim() || item.from}</span>
+                                  <time className="shrink-0 text-[10px] text-slate-500" title={item.date}>{formatMailboxDate(item.date)}</time>
+                                </span>
+                                <span className="mt-1 block truncate text-sm text-slate-800">{item.subject || '(no subject)'}</span>
+                                <span className="mt-1 block truncate text-xs text-slate-500">{item.body || 'Open message to view details'}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       )}
-                      {item.body && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-medium">View message</summary><p className="mt-2 whitespace-pre-wrap">{item.body}</p></details>}
-                      <p className="mt-1 text-xs text-slate-500">{item.status === 'Sent' ? 'Accepted by SMTP; delivery is not confirmed.' : item.status === 'Failed' ? 'Sending failed.' : 'Sending outcome unknown; check Hostinger before retrying.'}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {settings.configured && !sentFolderAvailable && <p className="mt-4 text-xs text-amber-700">The Hostinger Sent folder was not found. CRM-sent activity is shown separately above.</p>}
-              {hostSentMessages.length > 0 && (
-                <div className="mt-6 border-t border-slate-200 pt-4">
-                  <h3 className="font-semibold text-slate-900">Hostinger Sent folder</h3>
-                  <ul className="mt-2 divide-y divide-slate-100">
-                    {hostSentMessages.map((item) => (
-                      <li key={item.id} className="py-3">
-                        <p className="truncate text-sm font-medium text-slate-900">{item.subject}</p>
-                        <p className="mt-1 truncate text-xs text-slate-600">{item.from}</p>
-                        <div className="mt-1 flex items-center justify-between gap-2">
-                          <p className="text-xs text-slate-500">{item.date} {item.unread ? '· Unread' : ''}</p>
-                          <button type="button" onClick={() => void setMessageReadState(item, 'sent', item.unread)} className="text-xs font-semibold text-violet-800">{item.unread ? 'Mark read' : 'Mark unread'}</button>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className={`min-h-0 min-w-0 overflow-hidden bg-white ${(selectedSentActivityId || selectedHostSentMessageId) ? 'block' : 'hidden lg:block'}`}>
+                {sentSource === 'crm' && selectedSentActivity ? (
+                  <article className="flex h-full flex-col">
+                    <header className="border-b border-slate-100 px-4 py-3 sm:px-5">
+                      <button type="button" onClick={() => setSelectedSentActivityId(null)} className="mb-3 inline-flex items-center gap-1 rounded-md py-1 text-xs font-semibold text-slate-600 hover:text-slate-950 lg:hidden"><ArrowLeft className="h-4 w-4" /> Back to messages</button>
+                      <h3 className="break-words text-lg font-semibold tracking-tight text-slate-950">{selectedSentActivity.subject || '(no subject)'}</h3>
+                      <p className="mt-2 break-all text-sm text-slate-700">To: {selectedSentActivity.recipientEmail}</p>
+                      {selectedSentActivity.cc.length > 0 && <p className="mt-1 break-all text-xs text-slate-500">CC: {selectedSentActivity.cc.join(', ')}</p>}
+                      {selectedSentActivity.bcc.length > 0 && <p className="mt-1 break-all text-xs text-slate-500">BCC: {selectedSentActivity.bcc.join(', ')}</p>}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedSentActivity.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : selectedSentActivity.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{selectedSentActivity.status}</span>
+                        <time className="text-xs text-slate-500">{formatMailboxDate(selectedSentActivity.sentAt, true)}</time>
+                      </div>
+                    </header>
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5">
+                      <p className="text-xs text-slate-500">{selectedSentActivity.status === 'Sent' ? 'Accepted by SMTP; final delivery is not confirmed.' : selectedSentActivity.status === 'Failed' ? 'Sending failed.' : 'Sending outcome is unknown; check Hostinger before retrying.'}</p>
+                      <div className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{selectedSentActivity.body || 'No message content was recorded.'}</div>
+                    </div>
+                  </article>
+                ) : sentSource === 'hostinger' && selectedHostSentMessage ? (
+                  <article className="flex h-full flex-col">
+                    <header className="border-b border-slate-100 px-4 py-3 sm:px-5">
+                      <button type="button" onClick={() => setSelectedHostSentMessageId(null)} className="mb-3 inline-flex items-center gap-1 rounded-md py-1 text-xs font-semibold text-slate-600 hover:text-slate-950 lg:hidden"><ArrowLeft className="h-4 w-4" /> Back to messages</button>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="break-words text-lg font-semibold tracking-tight text-slate-950">{selectedHostSentMessage.subject || '(no subject)'}</h3>
+                          <p className="mt-2 break-all text-sm font-medium text-slate-700">{selectedHostSentMessage.from}</p>
+                          <time className="mt-1 block text-xs text-slate-500">{formatMailboxDate(selectedHostSentMessage.date, true)}</time>
                         </div>
-                        {item.body && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer font-medium">View message</summary><p className="mt-2 whitespace-pre-wrap">{item.body}</p></details>}
-                        <MessageAttachmentActions message={item} onLoad={() => void loadMessageDetails(item, 'sent')} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{selectedHostSentMessage.unread ? 'Unread' : 'Read'}</span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => void setMessageReadState(selectedHostSentMessage, 'sent', selectedHostSentMessage.unread)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{selectedHostSentMessage.unread ? 'Mark read' : 'Mark unread'}</button>
+                      </div>
+                    </header>
+                    <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5">
+                      {selectedHostSentMessage.body ? <div className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700">{selectedHostSentMessage.body}</div> : <p className="text-sm text-slate-500">Load the full message to view its content.</p>}
+                      <MessageAttachmentActions message={selectedHostSentMessage} onLoad={() => void loadMessageDetails(selectedHostSentMessage, 'sent')} />
+                    </div>
+                  </article>
+                ) : (
+                  <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#edf3ee] text-[#315649]"><Send className="h-5 w-5" /></span>
+                    <p className="mt-3 text-sm font-semibold text-slate-800">Select a sent message</p>
+                    <p className="mt-1 text-xs text-slate-500">Choose a message from the list to read it here.</p>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
@@ -1298,6 +1381,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 {!settings.verified && (
                   <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                     Verify the Hostinger connection in Integrations before scheduling or sending campaigns.
+                  </p>
+                )}
+                {campaignAudienceCount === 0 && (
+                  <p role="status" className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    No eligible recipients match these filters. Campaigns only include leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.
                   </p>
                 )}
                 {campaignAudienceCount > 5000 && (
