@@ -47,11 +47,11 @@ export const OperationsOverview: React.FC<OperationsOverviewProps> = ({ onNaviga
     + (data?.orders.byStatus['Pharmacist Review'] || 0);
 
   return (
-    <div className="space-y-7">
-      <header className="flex flex-col justify-between gap-6 rounded-2xl bg-[#193c34] px-6 py-7 text-white sm:flex-row sm:items-end sm:px-8 sm:py-8">
+    <div className="space-y-5">
+      <header className="flex flex-col justify-between gap-4 rounded-2xl bg-[#193c34] px-5 py-5 text-white sm:flex-row sm:items-end sm:px-6 sm:py-6">
         <div className="max-w-2xl">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#c7d7c8]">Operations · Daily brief</p>
-          <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.045em] sm:text-[2.4rem]">A clear view of today.</h1>
+          <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-[-0.045em] sm:text-[2.4rem]">A clear view of today.</h1>
           <p className="mt-2 max-w-xl text-sm leading-6 text-[#e2ebe2]">Live orders, customer inquiries, and inventory in one place. No patient or clinical data is shown here.</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -73,14 +73,14 @@ export const OperationsOverview: React.FC<OperationsOverviewProps> = ({ onNaviga
           { label: 'Active products', value: data?.products ?? '—', detail: 'Published in the storefront', icon: ShoppingBag, action: 'inventory' as const, tone: 'bg-[#edf0f5] text-[#526783]' },
           { label: 'Low stock', value: data?.lowStockCount ?? '—', detail: 'At or below restock threshold', icon: AlertTriangle, action: 'inventory' as const, tone: 'bg-[#f7eee7] text-[#a3693e]' },
         ].map((card) => (
-          <button key={card.label} type="button" onClick={() => onNavigate(card.action)} className="group rounded-xl border border-[#e5e8e1] bg-white p-5 text-left transition hover:border-[#c8d4c8] hover:shadow-[0_8px_24px_-18px_rgba(27,57,47,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#52735f] focus-visible:ring-offset-2">
+          <button key={card.label} type="button" onClick={() => onNavigate(card.action)} className="group rounded-xl border border-[#e5e8e1] bg-white p-4 text-left transition hover:border-[#c8d4c8] hover:shadow-[0_8px_24px_-18px_rgba(27,57,47,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#52735f] focus-visible:ring-offset-2">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[13px] font-semibold text-slate-600">{card.label}</span>
               <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${card.tone}`}>
                 <card.icon className="h-[18px] w-[18px]" />
               </span>
             </div>
-            <p className="mt-4 text-[2rem] font-semibold leading-none tracking-[-0.045em] text-[#1d302d]">{card.value}</p>
+            <p className="mt-3 text-[2rem] font-semibold leading-none tracking-[-0.045em] text-[#1d302d]">{card.value}</p>
             <p className="mt-2 text-xs text-slate-500 group-hover:text-slate-700">{card.detail}</p>
           </button>
         ))}

@@ -828,7 +828,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             Active ({uncalledRepeatBuyers.length})
           </button>
         </div>
-        <div className="flex flex-wrap items-end justify-between gap-4 px-5 pt-4">
+        <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-3">
           <div>
             <h3 className="text-base font-bold text-slate-900">Saved contacts ({leads.length})</h3>
             <p className="mt-1 text-xs text-slate-500">{eligibleCount} explicitly opted-in contact{eligibleCount === 1 ? '' : 's'} eligible for bulk email</p>

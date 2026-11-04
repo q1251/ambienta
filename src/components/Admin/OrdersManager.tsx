@@ -332,12 +332,12 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className={orderPageId ? 'hidden' : ''}>
       {/* Main Order Workspace */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         {/* Workspace Toolbar */}
-        <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold text-slate-900">

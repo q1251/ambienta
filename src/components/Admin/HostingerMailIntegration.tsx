@@ -1538,14 +1538,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     Campaigns are limited to 5,000 recipients. Narrow the opted-in audience before sending.
                   </p>
                 )}
-                <form onSubmit={(event) => void saveCampaign(event)} className="mt-5 space-y-4">
-                  <div>
-                    <label htmlFor="campaign-name" className="mb-1 block text-sm font-medium text-slate-700">Campaign name</label>
-                    <input id="campaign-name" value={campaignName} maxLength={160} required onChange={(event) => setCampaignName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                  </div>
-                  <div>
-                    <label htmlFor="campaign-subject" className="mb-1 block text-sm font-medium text-slate-700">Email subject</label>
-                    <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <form onSubmit={(event) => void saveCampaign(event)} className="mt-4 space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="min-w-0">
+                      <label htmlFor="campaign-name" className="mb-1 block text-sm font-medium text-slate-700">Campaign name</label>
+                      <input id="campaign-name" value={campaignName} maxLength={160} required onChange={(event) => setCampaignName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    </div>
+                    <div className="min-w-0">
+                      <label htmlFor="campaign-subject" className="mb-1 block text-sm font-medium text-slate-700">Email subject</label>
+                      <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    </div>
                   </div>
                   <div>
                     <label htmlFor="campaign-template" className="mb-1 block text-sm font-medium text-slate-700">Start from a template</label>

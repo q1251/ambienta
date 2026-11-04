@@ -388,10 +388,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const activePreviewImage = previewImages[Math.min(previewImageIndex, Math.max(0, previewImages.length - 1))];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {catalogError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{catalogError}</p>}
       {/* Top Controls Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-teal-800 uppercase tracking-wider mb-1">
             <Package className="w-3.5 h-3.5 text-teal-700" />
