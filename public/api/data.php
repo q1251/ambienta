@@ -257,6 +257,7 @@ function data_ensure_schema(PDO $db): void
         ['email_campaign_recipients', 'open_token_hash', 'CHAR(64) NULL'],
         ['email_campaign_recipients', 'open_token', 'MEDIUMTEXT NULL'],
         ['email_campaign_recipients', 'opened_at', 'DATETIME NULL'],
+        ['chat_conversations', 'visitor_phone', "VARCHAR(40) NOT NULL DEFAULT ''"],
     ] as [$table, $column, $definition]) {
         $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
         $columnExists->execute([$databaseName, $table, $column]);
@@ -2167,6 +2168,7 @@ if ($resource === 'chat') {
         if ($action === 'start') {
             $visitorName = data_string($body, 'name', 100);
             $visitorEmail = strtolower(data_string($body, 'email', 254, false));
+            $visitorPhone = data_string($body, 'phone', 40, false);
             if ($visitorEmail !== '' && filter_var($visitorEmail, FILTER_VALIDATE_EMAIL) === false) {
                 data_respond(400, ['error' => 'invalid_chat_email', 'message' => 'Enter a valid email address or leave it blank.']);
             }
@@ -2177,10 +2179,10 @@ if ($resource === 'chat') {
             $db->beginTransaction();
             try {
                 $create = $db->prepare(
-                    "INSERT INTO chat_conversations (visitor_name, visitor_email, visitor_token_hash, last_visitor_message_at)
-                     VALUES (?, ?, ?, UTC_TIMESTAMP())"
+                    "INSERT INTO chat_conversations (visitor_name, visitor_email, visitor_phone, visitor_token_hash, last_visitor_message_at)
+                     VALUES (?, ?, ?, ?, UTC_TIMESTAMP())"
                 );
-                $create->execute([$visitorName, $visitorEmail, hash('sha256', $token)]);
+                $create->execute([$visitorName, $visitorEmail, $visitorPhone, hash('sha256', $token)]);
                 $conversationId = (int) $db->lastInsertId();
                 $db->prepare(
                     "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
@@ -2190,10 +2192,10 @@ if ($resource === 'chat') {
                     $nameParts = preg_split('/\s+/u', trim($visitorName), 2) ?: [$visitorName];
                     $createLead = $db->prepare(
                         "INSERT INTO leads (first_name, last_name, email, phone, lead_source, status, marketing_consent)
-                         VALUES (?, ?, ?, '', 'Live chat', 'New', 0)
-                         ON DUPLICATE KEY UPDATE id = id"
+                         VALUES (?, ?, ?, ?, 'Live chat', 'New', 0)
+                         ON DUPLICATE KEY UPDATE phone = IF(phone = '', VALUES(phone), phone)"
                     );
-                    $createLead->execute([$nameParts[0], $nameParts[1] ?? '', $visitorEmail]);
+                    $createLead->execute([$nameParts[0], $nameParts[1] ?? '', $visitorEmail, $visitorPhone]);
                 }
                 $db->commit();
             } catch (Throwable $error) {
@@ -3274,7 +3276,7 @@ if ($method === 'GET') {
                 data_respond(400, ['error' => 'invalid_chat_id', 'message' => 'The conversation identifier is invalid.']);
             }
             $find = $db->prepare(
-                'SELECT id, visitor_name, visitor_email, status, created_at, updated_at
+                'SELECT id, visitor_name, visitor_email, visitor_phone, status, created_at, updated_at
                  FROM chat_conversations WHERE id = ? LIMIT 1'
             );
             $find->execute([(int) $conversationId]);
@@ -3290,6 +3292,7 @@ if ($method === 'GET') {
                     'id' => (int) $conversation['id'],
                     'visitorName' => $conversation['visitor_name'],
                     'visitorEmail' => $conversation['visitor_email'],
+                    'visitorPhone' => $conversation['visitor_phone'],
                     'status' => $conversation['status'],
                     'createdAt' => $conversation['created_at'],
                     'updatedAt' => $conversation['updated_at'],
@@ -3311,13 +3314,14 @@ if ($method === 'GET') {
             $parameters[] = $status;
         }
         if ($search !== '') {
-            $where[] = '(c.visitor_name LIKE ? OR c.visitor_email LIKE ?)';
+            $where[] = '(c.visitor_name LIKE ? OR c.visitor_email LIKE ? OR c.visitor_phone LIKE ?)';
+            $parameters[] = '%' . $search . '%';
             $parameters[] = '%' . $search . '%';
             $parameters[] = '%' . $search . '%';
         }
         $whereSql = $where === [] ? '' : ' WHERE ' . implode(' AND ', $where);
         $query = $db->prepare(
-            'SELECT c.id, c.visitor_name, c.visitor_email, c.status, c.created_at, c.updated_at,
+            'SELECT c.id, c.visitor_name, c.visitor_email, c.visitor_phone, c.status, c.created_at, c.updated_at,
                     (SELECT body FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
                     (SELECT sender_type FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_sender,
                     (SELECT COUNT(*) FROM chat_messages WHERE conversation_id = c.id AND sender_type = \'visitor\' AND read_at IS NULL) AS unread_count
@@ -3328,6 +3332,7 @@ if ($method === 'GET') {
             'id' => (int) $row['id'],
             'visitorName' => $row['visitor_name'],
             'visitorEmail' => $row['visitor_email'],
+            'visitorPhone' => $row['visitor_phone'],
             'status' => $row['status'],
             'createdAt' => $row['created_at'],
             'updatedAt' => $row['updated_at'],

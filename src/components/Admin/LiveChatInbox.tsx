@@ -8,6 +8,7 @@ interface ChatConversation {
   id: number;
   visitorName: string;
   visitorEmail: string;
+  visitorPhone: string;
   status: ConversationStatus;
   createdAt: string;
   updatedAt: string;
@@ -28,6 +29,7 @@ interface ChatConversationDetail {
   id: number;
   visitorName: string;
   visitorEmail: string;
+  visitorPhone: string;
   status: ConversationStatus;
   createdAt: string;
   updatedAt: string;
@@ -346,6 +348,7 @@ export const LiveChatInbox: React.FC = () => {
                       <time className="shrink-0 text-[10px] text-slate-400">{formatDate(conversation.updatedAt)}</time>
                     </span>
                     {conversation.visitorEmail && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{conversation.visitorEmail}</span>}
+                    {conversation.visitorPhone && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{conversation.visitorPhone}</span>}
                     <span className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-slate-500">{conversation.lastSender === 'staff' ? 'You: ' : ''}{conversation.lastMessage || 'New conversation'}</span>
                       {conversation.unreadCount > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-teal-700 px-1.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>}
@@ -372,7 +375,9 @@ export const LiveChatInbox: React.FC = () => {
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-800"><UserRound className="h-5 w-5" /></span>
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold text-slate-950">{selectedConversation.visitorName}</h2>
-                    <p className="truncate text-xs text-slate-500">{selectedConversation.visitorEmail || 'No email provided'} · Started {formatDate(selectedConversation.createdAt)}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {[selectedConversation.visitorEmail || 'No email provided', selectedConversation.visitorPhone || 'No phone provided'].join(' · ')} · Started {formatDate(selectedConversation.createdAt)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

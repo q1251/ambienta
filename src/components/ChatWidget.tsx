@@ -44,6 +44,7 @@ export const ChatWidget: React.FC = () => {
   const [conversationStatus, setConversationStatus] = useState<'open' | 'closed'>('open');
   const [visitorName, setVisitorName] = useState('');
   const [visitorEmail, setVisitorEmail] = useState('');
+  const [visitorPhone, setVisitorPhone] = useState('');
   const [firstMessage, setFirstMessage] = useState('');
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
@@ -119,6 +120,7 @@ export const ChatWidget: React.FC = () => {
           action: 'start',
           name: visitorName,
           email: visitorEmail,
+          phone: visitorPhone,
           message: firstMessage,
           website: '',
         }),
@@ -195,7 +197,7 @@ export const ChatWidget: React.FC = () => {
             <form onSubmit={(event) => void startConversation(event)} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">Start a conversation</p>
-                <p className="mt-1 text-xs leading-5 text-slate-600">Leave a message and our team will reply here. An email address is optional.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">Leave a message and our team will reply here. Email and phone are optional.</p>
               </div>
               <label className="grid gap-1.5 text-xs font-medium text-slate-700">
                 Your name
@@ -204,6 +206,10 @@ export const ChatWidget: React.FC = () => {
               <label className="grid gap-1.5 text-xs font-medium text-slate-700">
                 Email <span className="font-normal text-slate-400">(optional)</span>
                 <input type="email" maxLength={254} value={visitorEmail} onChange={(event) => setVisitorEmail(event.target.value)} autoComplete="email" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/10" />
+              </label>
+              <label className="grid gap-1.5 text-xs font-medium text-slate-700">
+                Phone <span className="font-normal text-slate-400">(optional)</span>
+                <input type="tel" maxLength={40} value={visitorPhone} onChange={(event) => setVisitorPhone(event.target.value)} autoComplete="tel" className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/10" />
               </label>
               <label className="grid gap-1.5 text-xs font-medium text-slate-700">
                 Message
