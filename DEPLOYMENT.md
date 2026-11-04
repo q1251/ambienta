@@ -156,23 +156,17 @@ verified. SMTP acceptance does not prove final delivery; open tracking is
 approximate and only available when enabled for a campaign. Use promotional
 campaigns only for contacts with recorded marketing consent.
 
-Storefront checkout accepts pay-on-delivery/pickup and Stripe card payments
-when Stripe is configured. Add `STRIPE_SECRET_KEY` and
-`STRIPE_WEBHOOK_SECRET` as GitHub Actions secrets, then deploy. Configure the
-Stripe webhook endpoint at
-`https://ambienta.io/api/data.php?resource=stripe-webhook` for
-`checkout.session.completed`, `checkout.session.expired`, and
-`payment_intent.succeeded`. Until both secrets and the webhook are configured,
-card checkout stays disabled.
-
-Stripe Checkout collects card details directly; Ambienta stores only Stripe
-payment identifiers and status. Card checkout authorizes the amount but does
-not immediately capture it. An administrator can capture an authorized
-payment from the order details after review. Capture before the authorization
-expires (often within seven days; the exact window depends on the card/network).
-PayPal and cryptocurrency processing are not enabled. Never put card details
-in CRM order notes. The audit log is available only through the authenticated
-admin API.
+Storefront checkout lets customers choose card, PayPal, cryptocurrency, or
+pay-on-delivery/pickup. Card, PayPal, and cryptocurrency orders are saved for
+review with payment pending; checkout does not collect card details or start a
+provider session. After reviewing an order, an administrator pastes the
+provider-generated HTTPS payment link into the order and sends it through the
+verified Hostinger mailbox. Payment links can be resent from order details.
+Verify the provider, amount, and destination before sending. Hostinger SMTP
+acceptance does not confirm final delivery. After confirming a payment in the
+provider account, an administrator can mark the order paid from its details.
+Never put card details in CRM order notes. The audit log is available only
+through the authenticated admin API.
 
 For local development, start the PHP API from a second terminal with
 `php -S 127.0.0.1:8001 -t public`; Vite proxies `/api` requests to it. Create

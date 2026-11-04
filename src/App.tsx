@@ -28,7 +28,6 @@ import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react'
 import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChange';
 import { ChatWidget } from './components/ChatWidget';
 import { VisitorSessionTracker } from './components/VisitorSessionTracker';
-import { StripeCheckoutResult } from './components/StripeCheckoutResult';
 import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
 import type { ProductCsvItem } from './utils/productCsv';
 
@@ -983,7 +982,7 @@ export default function App() {
         }}
       />
 
-      {/* Checkout order capture */}
+      {/* Checkout order placement */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
@@ -991,7 +990,6 @@ export default function App() {
         onOrderSuccess={handleOrderCreated}
         onClearCart={handleClearCart}
       />
-      <StripeCheckoutResult />
       <VisitorSessionTracker />
       <ChatWidget />
     </div>

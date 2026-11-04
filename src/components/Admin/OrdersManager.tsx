@@ -10,6 +10,7 @@ import {
   Download,
   Eye,
   FileText,
+  Mail,
   Package,
   Plus,
   Printer,
@@ -39,7 +40,7 @@ interface OrdersManagerProps {
     quantity: number;
   }) => Promise<OnlineOrder>;
   catalogItems?: CatalogItem[];
-  canCapturePayments?: boolean;
+  canManagePaymentLinks?: boolean;
 }
 
 const orderStatuses: OnlineOrder['status'][] = [
@@ -100,7 +101,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   onAddOrderInternalNote,
   onCreateManualOrder,
   catalogItems = [],
-  canCapturePayments = false,
+  canManagePaymentLinks = false,
 }) => {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,7 +120,10 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [orderSaveError, setOrderSaveError] = useState('');
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
-  const [isCapturingPayment, setIsCapturingPayment] = useState(false);
+  const [paymentLinkInput, setPaymentLinkInput] = useState('');
+  const [isSendingPaymentLink, setIsSendingPaymentLink] = useState(false);
+  const [isMarkingPaymentPaid, setIsMarkingPaymentPaid] = useState(false);
+  const [paymentLinkSuccess, setPaymentLinkSuccess] = useState('');
 
   // Manual Order Modal
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -186,6 +190,10 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   }, [orderPageId]);
 
   useEffect(() => {
+    setPaymentLinkInput(selectedOrder?.paymentLinkUrl || '');
+  }, [selectedOrder?.id, selectedOrder?.paymentLinkUrl]);
+
+  useEffect(() => {
     const syncOrderPage = () => {
       const requestedOrderId = new URLSearchParams(window.location.search).get('orderId') || '';
       setOrderPageId(requestedOrderId);
@@ -248,6 +256,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const handleOpenDetail = (order: OnlineOrder) => {
     setOrderPageId('');
     setSelectedOrder(order);
+    setPaymentLinkSuccess('');
     setCarrierInput(order.carrier || '');
     setTrackingInput(order.trackingNumber || '');
     setNewInternalNote('');
@@ -255,6 +264,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   const handleOpenOrderPage = (order: OnlineOrder) => {
     setSelectedOrder(order);
+    setPaymentLinkSuccess('');
     setCarrierInput(order.carrier || '');
     setTrackingInput(order.trackingNumber || '');
     setNewInternalNote('');
@@ -308,12 +318,39 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     }
   };
 
-  const handleCapturePayment = async () => {
+  const handleSendPaymentLink = async () => {
     if (!selectedOrder) return;
     setOrderSaveError('');
-    setIsCapturingPayment(true);
+    setPaymentLinkSuccess('');
+    setIsSendingPaymentLink(true);
     try {
-      const response = await fetch('/api/data.php?resource=order-capture', {
+      const response = await fetch('/api/data.php?resource=order-payment-link', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ orderId: selectedOrder.id, paymentLinkUrl: paymentLinkInput.trim() }),
+      });
+      const result = await response.json() as { order?: OnlineOrder; message?: string; sent?: boolean };
+      if (!response.ok || !result.order || result.sent !== true) {
+        throw new Error(result.message || 'The payment-link email could not be sent.');
+      }
+      setSelectedOrder(result.order);
+      setPaymentLinkSuccess(result.message || 'Hostinger accepted the payment-link email.');
+      setReloadCounter((counter) => counter + 1);
+    } catch (error) {
+      setOrderSaveError(error instanceof Error ? error.message : 'The payment-link email could not be sent.');
+    } finally {
+      setIsSendingPaymentLink(false);
+    }
+  };
+
+  const handleMarkPaymentPaid = async () => {
+    if (!selectedOrder || !window.confirm(`Confirm that the provider shows payment received for ${selectedOrder.orderNumber}?`)) return;
+    setOrderSaveError('');
+    setPaymentLinkSuccess('');
+    setIsMarkingPaymentPaid(true);
+    try {
+      const response = await fetch('/api/data.php?resource=order-mark-paid', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -321,14 +358,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       });
       const result = await response.json() as { order?: OnlineOrder; message?: string };
       if (!response.ok || !result.order) {
-        throw new Error(result.message || 'The authorized card payment could not be captured.');
+        throw new Error(result.message || 'The payment status could not be updated.');
       }
       setSelectedOrder(result.order);
+      setPaymentLinkSuccess('Payment marked paid. Provider receipt was confirmed by an administrator.');
       setReloadCounter((counter) => counter + 1);
     } catch (error) {
-      setOrderSaveError(error instanceof Error ? error.message : 'The authorized card payment could not be captured.');
+      setOrderSaveError(error instanceof Error ? error.message : 'The payment status could not be updated.');
     } finally {
-      setIsCapturingPayment(false);
+      setIsMarkingPaymentPaid(false);
     }
   };
 
@@ -458,7 +496,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </h3>
             </div>
             <p className="text-xs text-slate-500">
-              Search and filter saved orders across all pages. Payment remains unverified until a real provider is connected.
+              Search and filter saved orders across all pages. Administrators can email provider payment links from order details.
             </p>
           </div>
 
@@ -939,18 +977,58 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     <span className="text-slate-500">Transaction ID:</span>
                     <span className="font-mono text-slate-700">{selectedOrder.transactionId || 'Not available'}</span>
                   </div>
-                  {canCapturePayments && selectedOrder.paymentMethod === 'Credit / Debit Card' && selectedOrder.paymentStatus === 'Authorized' && (
-                    <button
-                      type="button"
-                      onClick={() => void handleCapturePayment()}
-                      disabled={isCapturingPayment}
-                      className="mt-2 w-full rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {isCapturingPayment ? 'Capturing payment…' : `Capture $${selectedOrder.totalAmount.toFixed(2)} in Stripe`}
-                    </button>
+                  {canManagePaymentLinks && [
+                    'Credit / Debit Card',
+                    'PayPal',
+                    'Cryptocurrency (USDC / BTC / ETH / SOL)',
+                  ].includes(selectedOrder.paymentMethod || '') && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
+                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                      <label htmlFor="order-payment-link" className="block font-semibold text-slate-800">
+                        Payment link · email via Hostinger
+                      </label>
+                      <input
+                        id="order-payment-link"
+                        type="url"
+                        value={paymentLinkInput}
+                        onChange={(event) => setPaymentLinkInput(event.target.value)}
+                        placeholder="https://…"
+                        autoComplete="url"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                      />
+                      {selectedOrder.paymentLinkSentAt && (
+                        <p className="text-[11px] text-slate-500">
+                          Last sent {new Date(`${selectedOrder.paymentLinkSentAt.replace(' ', 'T')}Z`).toLocaleString()}
+                        </p>
+                      )}
+                      <p className="text-[11px] leading-5 text-slate-500">
+                        Paste the payment link generated by your chosen provider. Verify the amount and destination before sending. Hostinger acceptance does not confirm delivery.
+                      </p>
+                      {paymentLinkSuccess && <p role="status" className="text-[11px] font-medium text-emerald-700">{paymentLinkSuccess}</p>}
+                      <button
+                        type="button"
+                        onClick={() => void handleSendPaymentLink()}
+                        disabled={isSendingPaymentLink || !paymentLinkInput.trim()}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        {isSendingPaymentLink ? 'Sending payment link…' : selectedOrder.paymentLinkSentAt ? 'Resend payment link' : 'Send payment link'}
+                      </button>
+                    </div>
                   )}
-                  {selectedOrder.paymentMethod === 'Credit / Debit Card' && selectedOrder.paymentStatus === 'Authorized' && (
-                    <p className="text-[11px] leading-5 text-slate-500">The card is authorized, not yet charged. Capture it before the authorization expires.</p>
+                  {canManagePaymentLinks && selectedOrder.paymentLinkSentAt && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
+                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                      <p className="text-[11px] leading-5 text-slate-500">
+                        Confirm payment in the provider account before changing this status.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleMarkPaymentPaid()}
+                        disabled={isMarkingPaymentPaid}
+                        className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isMarkingPaymentPaid ? 'Updating payment…' : 'Mark as paid'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

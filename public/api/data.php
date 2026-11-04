@@ -422,6 +422,8 @@ function data_ensure_schema(PDO $db): void
             total_amount DECIMAL(10,2) NOT NULL,
             payment_method VARCHAR(48) NOT NULL,
             payment_status VARCHAR(32) NOT NULL,
+            payment_link_url VARCHAR(2048) NULL,
+            payment_link_sent_at DATETIME NULL,
             stripe_checkout_session_id VARCHAR(255) NULL,
             stripe_payment_intent_id VARCHAR(255) NULL,
             status VARCHAR(32) NOT NULL,
@@ -435,6 +437,16 @@ function data_ensure_schema(PDO $db): void
             KEY orders_email (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    foreach ([
+        ['payment_link_url', 'VARCHAR(2048) NULL'],
+        ['payment_link_sent_at', 'DATETIME NULL'],
+    ] as [$column, $definition]) {
+        $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $columnExists->execute([$databaseName, 'orders', $column]);
+        if ((int) $columnExists->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE orders ADD COLUMN {$column} {$definition}");
+        }
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS stripe_webhook_events (
             event_id VARCHAR(255) NOT NULL PRIMARY KEY,
@@ -2284,6 +2296,8 @@ function data_order_row(PDO $db, array $row): array
         'deliveryAddress' => $row['delivery_address'],
         'paymentMethod' => $row['payment_method'],
         'paymentStatus' => $row['payment_status'],
+        'paymentLinkUrl' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_url'] ?? null) : null,
+        'paymentLinkSentAt' => $row['payment_link_sent_at'] ?? null,
         'transactionId' => $row['stripe_payment_intent_id'] ?? null,
         'status' => $row['status'],
         'placedAt' => $row['placed_at'],
@@ -5126,6 +5140,168 @@ if ($method === 'POST' && $resource === 'checkout-session') {
     }
 }
 
+if ($method === 'POST' && $resource === 'order-mark-paid') {
+    data_require_admin('admin');
+    $body = data_read_json();
+    $orderId = data_string($body, 'orderId', 64);
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE');
+        $find->execute([$orderId]);
+        $order = $find->fetch();
+        if (!is_array($order)) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
+        }
+        if (!in_array($order['payment_method'], [
+            'Credit / Debit Card',
+            'PayPal',
+            'Cryptocurrency (USDC / BTC / ETH / SOL)',
+        ], true) || !$order['payment_link_sent_at']) {
+            $db->rollBack();
+            data_respond(409, ['error' => 'payment_link_not_sent', 'message' => 'Send a payment link before marking this order as paid.']);
+        }
+        if ($order['status'] === 'Cancelled') {
+            $db->rollBack();
+            data_respond(409, ['error' => 'order_cancelled', 'message' => 'A cancelled order cannot be marked as paid.']);
+        }
+        if ($order['payment_status'] !== 'Paid') {
+            $db->prepare('UPDATE orders SET payment_status = ? WHERE id = ?')->execute(['Paid', $orderId]);
+            data_audit($db, 'order.payment_marked_paid', 'order', $orderId, [
+                'orderNumber' => $order['order_number'],
+                'paymentMethod' => $order['payment_method'],
+            ]);
+        }
+        $db->commit();
+        $savedOrder = $db->prepare('SELECT * FROM orders WHERE id = ?');
+        $savedOrder->execute([$orderId]);
+        data_respond(200, ['order' => data_order_row($db, $savedOrder->fetch())]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log('Ambients payment status update failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'payment_status_failed', 'message' => 'The payment status could not be updated.']);
+    }
+}
+
+if ($method === 'POST' && $resource === 'order-payment-link') {
+    data_require_admin('admin');
+    $body = data_read_json();
+    $orderId = data_string($body, 'orderId', 64);
+    $paymentLink = data_string($body, 'paymentLinkUrl', 2048);
+    $linkParts = filter_var($paymentLink, FILTER_VALIDATE_URL) ? parse_url($paymentLink) : false;
+    if (
+        !is_array($linkParts)
+        || strtolower((string) ($linkParts['scheme'] ?? '')) !== 'https'
+        || !isset($linkParts['host'])
+        || isset($linkParts['user'])
+        || isset($linkParts['pass'])
+        || preg_match('/[\r\n\x00]/', $paymentLink) === 1
+    ) {
+        data_respond(400, ['error' => 'invalid_payment_link', 'message' => 'Enter a valid external HTTPS payment link.']);
+    }
+
+    $settings = data_mail_settings();
+    if ($settings === [] || empty($settings['verified'])) {
+        data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending payment links.']);
+    }
+
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $find = $db->prepare('SELECT * FROM orders WHERE id = ? FOR UPDATE');
+        $find->execute([$orderId]);
+        $order = $find->fetch();
+        if (!is_array($order)) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
+        }
+        if (!in_array($order['payment_method'], [
+            'Credit / Debit Card',
+            'PayPal',
+            'Cryptocurrency (USDC / BTC / ETH / SOL)',
+        ], true)) {
+            $db->rollBack();
+            data_respond(409, ['error' => 'payment_link_not_supported', 'message' => 'Payment links are only available for card, PayPal, and cryptocurrency orders.']);
+        }
+        if ($order['payment_status'] === 'Paid' || $order['status'] === 'Cancelled') {
+            $db->rollBack();
+            data_respond(409, ['error' => 'order_not_payable', 'message' => 'A payment link cannot be sent for a paid or cancelled order.']);
+        }
+
+        $subject = 'Payment link for Ambienta order ' . $order['order_number'];
+        $plainBody = "Hello {$order['customer_name']},\n\n"
+            . "Your order {$order['order_number']} has been reviewed. Use the secure payment link below to pay by {$order['payment_method']}:\n\n"
+            . "{$paymentLink}\n\n"
+            . 'Order total: $' . number_format((float) $order['total_amount'], 2) . "\n\n"
+            . "If you have questions, reply to this email.\n\nAmbienta";
+        $safeName = htmlspecialchars((string) $order['customer_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeOrderNumber = htmlspecialchars((string) $order['order_number'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeMethod = htmlspecialchars((string) $order['payment_method'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeLink = htmlspecialchars($paymentLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $htmlBody = '<p>Hello ' . $safeName . ',</p><p>Your order <strong>' . $safeOrderNumber
+            . '</strong> has been reviewed. Use the secure payment link below to pay by ' . $safeMethod . ':</p>'
+            . '<p><a href="' . $safeLink . '">Pay for order ' . $safeOrderNumber . '</a></p>'
+            . '<p>Order total: $' . number_format((float) $order['total_amount'], 2)
+            . '</p><p>If you have questions, reply to this email.</p><p>Ambienta</p>';
+
+        $db->prepare(
+            'INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $order['email'],
+            $subject,
+            data_mail_encrypt_content($plainBody),
+            'Queued',
+            data_mail_encrypt_content('[]'),
+            data_mail_encrypt_content('[]'),
+            data_mail_encrypt_content('{}'),
+            data_mail_encrypt_content('[]'),
+        ]);
+        $activityId = $db->lastInsertId();
+        try {
+            $messageId = data_mail_send($settings, $order['email'], $subject, $plainBody, null, [], [], [], [], $htmlBody);
+        } catch (Throwable $error) {
+            $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Failed', $activityId]);
+            $db->commit();
+            $settings['verified'] = false;
+            try {
+                data_mail_write_settings($settings);
+            } catch (Throwable $settingsError) {
+                error_log('Ambients Hostinger connection state could not be updated after a payment-link send failure.');
+            }
+            error_log('Ambients Hostinger payment-link email send failed: ' . $error->getMessage());
+            data_respond(502, ['error' => 'mail_send_failed', 'message' => 'Hostinger did not accept the payment-link email. Verify the connection and try again.']);
+        }
+
+        $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
+            ->execute([$paymentLink, $orderId]);
+        $db->prepare('UPDATE email_activity SET status = ?, message_id = ? WHERE id = ?')
+            ->execute(['Sent', $messageId, $activityId]);
+        data_audit($db, 'order.payment_link_sent', 'order', $orderId, [
+            'orderNumber' => $order['order_number'],
+            'paymentMethod' => $order['payment_method'],
+        ]);
+        $db->commit();
+
+        $savedOrder = $db->prepare('SELECT * FROM orders WHERE id = ?');
+        $savedOrder->execute([$orderId]);
+        data_respond(201, [
+            'sent' => true,
+            'logged' => true,
+            'message' => 'Hostinger accepted the payment-link email.',
+            'order' => data_order_row($db, $savedOrder->fetch()),
+        ]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log('Ambients payment-link order update failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'payment_link_failed', 'message' => 'The order could not be updated after sending. Check Hostinger sent mail before retrying.']);
+    }
+}
+
 if ($method === 'POST' && $resource === 'orders') {
     $body = data_read_json();
     $db = data_db();
@@ -5144,8 +5320,14 @@ if ($method === 'POST' && $resource === 'orders') {
     if (!is_array($body['items'] ?? null) || count($body['items']) < 1 || count($body['items']) > 30) {
         data_respond(400, ['error' => 'invalid_items', 'message' => 'The order items are invalid.']);
     }
-    if (isset($body['paymentMethod']) && $body['paymentMethod'] !== 'Cash on Delivery / Pickup') {
-        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Use secure card checkout or select pay on delivery/pickup.']);
+    $paymentMethod = $body['paymentMethod'] ?? 'Cash on Delivery / Pickup';
+    if (!is_string($paymentMethod) || !in_array($paymentMethod, [
+        'Credit / Debit Card',
+        'PayPal',
+        'Cryptocurrency (USDC / BTC / ETH / SOL)',
+        'Cash on Delivery / Pickup',
+    ], true)) {
+        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Select card, PayPal, cryptocurrency, or pay on delivery/pickup.']);
     }
 
     $requestedItems = [];
@@ -5212,7 +5394,11 @@ if ($method === 'POST' && $resource === 'orders') {
         )->execute([
             $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod, $deliveryAddress,
             $subtotal, $shippingFee, $discountAmount, $couponCode === '' ? null : $couponCode,
-            $totalAmount, 'Cash on Delivery / Pickup', 'Pending Verification', 'Pending', $placedAt,
+            $totalAmount,
+            $paymentMethod,
+            $paymentMethod === 'Cash on Delivery / Pickup' ? 'Pending Verification' : 'Awaiting Payment',
+            'Pending',
+            $placedAt,
         ]);
 
         $insertItem = $db->prepare(
@@ -5687,7 +5873,7 @@ if ($method === 'PATCH' && $resource === 'orders') {
         if ($current['status'] !== 'Cancelled' && $status === 'Cancelled') {
             if ($current['payment_status'] === 'Paid') {
                 $db->rollBack();
-                data_respond(409, ['error' => 'refund_required', 'message' => 'Refund this captured payment in Stripe before cancelling the order.']);
+                data_respond(409, ['error' => 'refund_required', 'message' => 'Record a refund with the payment provider before cancelling the paid order.']);
             }
             if ($current['payment_status'] === 'Awaiting Payment' && is_string($current['stripe_checkout_session_id'])) {
                 data_stripe_request(

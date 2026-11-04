@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { CreditCard } from 'lucide-react';
+import React from 'react';
+import { Link2 } from 'lucide-react';
 import { HostingerMailIntegration } from './HostingerMailIntegration';
 
 interface IntegrationStatusProps {
@@ -7,23 +7,6 @@ interface IntegrationStatusProps {
 }
 
 export const IntegrationStatus: React.FC<IntegrationStatusProps> = ({ role }) => {
-  const [stripeConfigured, setStripeConfigured] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void fetch('/api/data.php?resource=payment-config', {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' },
-    }).then(async (response) => {
-      const result = await response.json() as { stripeConfigured?: boolean };
-      if (!response.ok) throw new Error('Stripe payment configuration could not be checked.');
-      if (active) setStripeConfigured(result.stripeConfigured === true);
-    }).catch(() => {
-      if (active) setStripeConfigured(false);
-    });
-    return () => { active = false; };
-  }, []);
-
   return (
     <div className="space-y-6">
       <header>
@@ -35,16 +18,18 @@ export const IntegrationStatus: React.FC<IntegrationStatusProps> = ({ role }) =>
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
           <div className="flex items-start gap-4">
-            <div className="rounded-xl bg-slate-100 p-3 text-slate-600"><CreditCard className="h-5 w-5" /></div>
+            <div className="rounded-xl bg-slate-100 p-3 text-slate-600"><Link2 className="h-5 w-5" /></div>
             <div className="min-w-0">
-              <h2 className="font-semibold text-slate-900">Stripe card payments</h2>
-              <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${stripeConfigured ? 'bg-teal-50 text-teal-800' : 'bg-amber-50 text-amber-800'}`}>
-                {stripeConfigured === null ? 'Checking configuration' : stripeConfigured ? 'Ready · manual capture' : 'Setup required'}
+              <h2 className="font-semibold text-slate-900">Payment links by email</h2>
+              <span className="mt-2 inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
+                {role === 'admin' ? 'Administrator-managed' : 'Managed by administrators'}
               </span>
-              <p className="mt-3 text-sm leading-6 text-slate-600">Customers enter their card details on Stripe Checkout. Stripe authorizes the amount; an administrator can capture it from the order after review. The site never receives or stores card numbers or security codes.</p>
-              {!stripeConfigured && (
-                <p className="mt-2 text-xs leading-5 text-slate-500">Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET as repository deployment secrets, then deploy. Configure Stripe to send checkout.session.completed and checkout.session.expired events to /api/data.php?resource=stripe-webhook.</p>
-              )}
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Customers can select card, PayPal, or cryptocurrency at checkout. An administrator adds the corresponding provider-generated payment link to the order and sends it through the verified Hostinger mailbox. Payments are processed and confirmed separately by the provider.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Configure and verify the Hostinger mailbox above. Only administrators can send or resend payment links.
+              </p>
             </div>
           </div>
         </section>

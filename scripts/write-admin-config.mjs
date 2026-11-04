@@ -4,8 +4,6 @@ import path from 'node:path';
 const email = process.env.ADMIN_EMAIL;
 const passwordHash = process.env.ADMIN_PASSWORD_HASH;
 const databaseConfigEncoded = process.env.APP_CONFIG_JSON_B64;
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
   throw new Error('ADMIN_EMAIL must be a valid email address.');
@@ -13,13 +11,6 @@ if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 if (!passwordHash || passwordHash.length < 50 || !passwordHash.startsWith('$')) {
   throw new Error('ADMIN_PASSWORD_HASH is missing or invalid.');
 }
-if (stripeSecretKey && !/^sk_(test|live)_[A-Za-z0-9]+$/.test(stripeSecretKey)) {
-  throw new Error('STRIPE_SECRET_KEY must be a Stripe test or live secret key.');
-}
-if (stripeWebhookSecret && !/^whsec_[A-Za-z0-9]+$/.test(stripeWebhookSecret)) {
-  throw new Error('STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret.');
-}
-
 const phpString = (value) => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
 const directory = path.resolve('private-deploy');
 await mkdir(directory, { recursive: true });
@@ -51,8 +42,6 @@ if (databaseConfigEncoded) {
     db_name: databaseConfig.db_name,
     db_user: databaseConfig.db_user,
     db_password: databaseConfig.db_password,
-    ...(stripeSecretKey ? { stripe_secret_key: stripeSecretKey } : {}),
-    ...(stripeWebhookSecret ? { stripe_webhook_secret: stripeWebhookSecret } : {}),
   };
   const databaseConfigPath = path.join(directory, 'app-config.php');
   const phpDatabaseEntries = Object.entries(privateConfig)

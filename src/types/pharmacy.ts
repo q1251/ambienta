@@ -180,6 +180,8 @@ export interface OnlineOrder {
   deliveryAddress?: string;
   paymentMethod?: PaymentMethod;
   paymentStatus?: PaymentStatus;
+  paymentLinkUrl?: string | null;
+  paymentLinkSentAt?: string | null;
   transactionId?: string;
   cryptoDetails?: CryptoPaymentDetails;
   cardLast4?: string;
