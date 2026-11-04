@@ -21,11 +21,11 @@ interface ChatResponse {
   message?: string;
 }
 
-const storageKey = 'ambienta-live-chat';
+const storageKey = 'ambienta-live-chat-session';
 
 const readStoredSession = (): ChatSession | null => {
   try {
-    const raw = window.localStorage.getItem(storageKey);
+    const raw = window.sessionStorage.getItem(storageKey);
     if (!raw) return null;
     const session = JSON.parse(raw) as Partial<ChatSession>;
     if (Number.isInteger(session.conversationId) && typeof session.token === 'string' && /^[a-f0-9]{64}$/.test(session.token)) {
@@ -55,10 +55,16 @@ export const ChatWidget: React.FC = () => {
     setSession(null);
     setMessages([]);
     setConversationStatus('open');
+    setVisitorName('');
+    setVisitorEmail('');
+    setVisitorPhone('');
+    setFirstMessage('');
+    setReply('');
+    setError('');
     try {
-      window.localStorage.removeItem(storageKey);
+      window.sessionStorage.removeItem(storageKey);
     } catch {
-      setError('This browser could not save the chat session. Keep this page open to continue chatting.');
+      setError('This browser could not reset the chat session. Please reload the page before starting a new chat.');
     }
   };
 
@@ -80,7 +86,7 @@ export const ChatWidget: React.FC = () => {
         setMessages([]);
         setConversationStatus('open');
         try {
-          window.localStorage.removeItem(storageKey);
+          window.sessionStorage.removeItem(storageKey);
         } catch {
           setError('The previous chat could not be restored. Start a new conversation.');
         }
@@ -135,7 +141,7 @@ export const ChatWidget: React.FC = () => {
       setConversationStatus(result.conversation.status);
       setFirstMessage('');
       try {
-        window.localStorage.setItem(storageKey, JSON.stringify(savedSession));
+        window.sessionStorage.setItem(storageKey, JSON.stringify(savedSession));
       } catch {
         setError('Your chat is open, but this browser cannot save it for later. Keep this page open.');
       }
@@ -245,13 +251,18 @@ export const ChatWidget: React.FC = () => {
                   <button type="button" onClick={forgetSession} className="mt-2 text-xs font-semibold text-teal-800 hover:underline">Start a new chat</button>
                 </div>
               ) : (
-                <form onSubmit={(event) => void sendReply(event)} className="flex items-end gap-2 border-t border-slate-200 bg-white p-3">
-                  <label className="sr-only" htmlFor="public-chat-reply">Your message</label>
-                  <textarea id="public-chat-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a message…" className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-700" />
-                  <button type="submit" aria-label="Send message" disabled={busy || !reply.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#123b68] text-white hover:bg-[#0b2f52] disabled:opacity-50">
-                    {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </button>
-                </form>
+                <div className="border-t border-slate-200 bg-white p-3">
+                  <form onSubmit={(event) => void sendReply(event)} className="flex items-end gap-2">
+                    <label className="sr-only" htmlFor="public-chat-reply">Your message</label>
+                    <textarea id="public-chat-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder="Write a message…" className="max-h-28 min-h-11 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-700" />
+                    <button type="submit" aria-label="Send message" disabled={busy || !reply.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#123b68] text-white hover:bg-[#0b2f52] disabled:opacity-50">
+                      {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </button>
+                  </form>
+                  <div className="mt-2 text-right">
+                    <button type="button" onClick={forgetSession} className="text-[11px] font-semibold text-teal-800 hover:underline">Not you? Start a new chat</button>
+                  </div>
+                </div>
               )}
             </>
           )}
