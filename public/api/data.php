@@ -4657,8 +4657,9 @@ if ($method === 'POST' && $resource === 'orders') {
     if (!is_array($body['items'] ?? null) || count($body['items']) < 1 || count($body['items']) > 30) {
         data_respond(400, ['error' => 'invalid_items', 'message' => 'The order items are invalid.']);
     }
-    if (isset($body['paymentMethod']) && $body['paymentMethod'] !== 'Cash on Delivery / Pickup') {
-        data_respond(400, ['error' => 'payment_unavailable', 'message' => 'This payment method is not configured.']);
+    $paymentMethod = $body['paymentMethod'] ?? 'Cash on Delivery / Pickup';
+    if (!is_string($paymentMethod) || !in_array($paymentMethod, ['Credit / Debit Card', 'Cash on Delivery / Pickup'], true)) {
+        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Select a supported payment method.']);
     }
 
     $requestedItems = [];
@@ -4725,7 +4726,7 @@ if ($method === 'POST' && $resource === 'orders') {
         )->execute([
             $orderId, $orderNumber, $customerName, $email, $phone, $deliveryMethod, $deliveryAddress,
             $subtotal, $shippingFee, $discountAmount, $couponCode === '' ? null : $couponCode,
-            $totalAmount, 'Cash on Delivery / Pickup', 'Pending Verification', 'Pending', $placedAt,
+            $totalAmount, $paymentMethod, 'Pending Verification', 'Pending', $placedAt,
         ]);
 
         $insertItem = $db->prepare(

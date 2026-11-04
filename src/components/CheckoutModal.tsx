@@ -2,11 +2,8 @@ import React, { useState } from 'react';
 import {
   X,
   CreditCard,
-  QrCode,
   CheckCircle2,
   Lock,
-  Copy,
-  Check,
   Truck,
   Building,
   Mail,
@@ -19,7 +16,7 @@ import {
   Clock,
   AlertCircle,
 } from 'lucide-react';
-import { CartItem, OnlineOrder, PaymentMethod, CryptoPaymentDetails, OrderItem } from '../types/pharmacy';
+import { CartItem, OnlineOrder, PaymentMethod, OrderItem } from '../types/pharmacy';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -28,44 +25,6 @@ interface CheckoutModalProps {
   onOrderSuccess: (order: OnlineOrder) => Promise<OnlineOrder>;
   onClearCart: () => void;
 }
-
-const CRYPTO_CONFIGS: Record<
-  'USDC' | 'BTC' | 'ETH' | 'SOL',
-  { name: string; symbol: string; network: string; address: string; ratePerUsd: number; qrColor: string }
-> = {
-  USDC: {
-    name: 'USD Coin',
-    symbol: 'USDC',
-    network: 'Ethereum (ERC-20) / Polygon / Solana',
-    address: '0x71C694294E968f9a2D5d71bB9d09c48b26124d9B',
-    ratePerUsd: 1.0,
-    qrColor: '#2775CA',
-  },
-  BTC: {
-    name: 'Bitcoin',
-    symbol: 'BTC',
-    network: 'Bitcoin Native SegWit',
-    address: 'bc1q9w3x7g65m3h2m9f8z0p82q9k8v7z0q7l4u82p0',
-    ratePerUsd: 0.000014,
-    qrColor: '#F7931A',
-  },
-  ETH: {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    network: 'Ethereum Mainnet',
-    address: '0x71C694294E968f9a2D5d71bB9d09c48b26124d9B',
-    ratePerUsd: 0.00038,
-    qrColor: '#627EEA',
-  },
-  SOL: {
-    name: 'Solana',
-    symbol: 'SOL',
-    network: 'Solana Mainnet-Beta',
-    address: '7XwK8fG9sQ9t3z1bM5h2r4k8v7x0p82q9k8v7z0q7l4u',
-    ratePerUsd: 0.0068,
-    qrColor: '#14F195',
-  },
-};
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   isOpen,
@@ -94,17 +53,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   // Payment tab
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash on Delivery / Pickup');
   const [paymentError, setPaymentError] = useState('');
-
-  // Card form state
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardHolder, setCardHolder] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-
-  // Crypto state
-  const [selectedCrypto, setSelectedCrypto] = useState<'USDC' | 'BTC' | 'ETH' | 'SOL'>('USDC');
-  const [copiedAddress, setCopiedAddress] = useState(false);
-  const [cryptoTxHash, setCryptoTxHash] = useState('');
 
   // Order state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -146,21 +94,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  const handleCopyCrypto = () => {
-    const config = CRYPTO_CONFIGS[selectedCrypto];
-    navigator.clipboard.writeText(config.address);
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2000);
-  };
-
   const handleProcessCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cartItems.length === 0) return;
-    if (paymentMethod !== 'Cash on Delivery / Pickup') {
-      setPaymentError('This payment method is not connected yet. No payment has been processed.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -262,11 +198,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-                Order received · Payment due on delivery or pickup
+                {completedOrder.paymentMethod === 'Credit / Debit Card'
+                  ? 'Order received · Card payment arranged manually'
+                  : 'Order received · Payment due on delivery or pickup'}
               </span>
               <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been added to the admin order queue. No payment or email has been processed.
+                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been added to the admin order queue. {completedOrder.paymentMethod === 'Credit / Debit Card'
+                  ? 'Our team will contact you to arrange card payment. Do not send card details by email or chat.'
+                  : 'No payment or email has been processed.'}
               </p>
             </div>
 
@@ -546,44 +486,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span className="w-5 h-5 rounded-full bg-teal-800 text-white flex items-center justify-center text-xs font-bold">
                     3
                   </span>
-                  <h4 className="font-bold text-sm text-slate-900">Payment Gateway</h4>
+                  <h4 className="font-bold text-sm text-slate-900">Payment Method</h4>
                 </div>
 
                 {/* Tabs */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <button
                     type="button"
-                    disabled
-                    title="Connect a secure card processor to enable card checkout"
-                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 font-semibold text-slate-400"
+                    onClick={() => setPaymentMethod('Credit / Debit Card')}
+                    aria-pressed={paymentMethod === 'Credit / Debit Card'}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 font-semibold transition-colors ${
+                      paymentMethod === 'Credit / Debit Card'
+                        ? 'border-teal-700 bg-teal-800 text-white'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Card · Setup</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled
-                    title="Connect PayPal to enable PayPal checkout"
-                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 font-semibold text-slate-400"
-                  >
-                    <span className="font-bold italic">P</span>
-                    <span>PayPal · Setup</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled
-                    title="Connect a crypto payment provider to enable cryptocurrency checkout"
-                    className="flex cursor-not-allowed items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 font-semibold text-slate-400"
-                  >
-                    <QrCode className="h-3.5 w-3.5" />
-                    <span>Crypto · Setup</span>
+                    <span>Card (processed manually)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('Cash on Delivery / Pickup')}
+                    aria-pressed={paymentMethod === 'Cash on Delivery / Pickup'}
                     className={`py-2 px-2.5 rounded-lg border font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       paymentMethod === 'Cash on Delivery / Pickup'
                         ? 'border-teal-700 bg-teal-800 text-white shadow-xs'
@@ -594,171 +519,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <span>Pay on delivery/pickup</span>
                   </button>
                 </div>
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
-                  Card, PayPal, and cryptocurrency payments are not connected in this build. They are disabled until secure providers are configured; this checkout does not collect card credentials or claim a payment was made.
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
+                  {paymentMethod === 'Credit / Debit Card'
+                    ? 'Your order will be saved for review. Our team will contact you to arrange card payment; this checkout never asks for or stores card details.'
+                    : 'Pay in person upon delivery or pickup. Your order will be saved for review, and payment will remain pending until confirmed by our team.'}
                 </p>
                 {paymentError && <p role="alert" className="text-xs font-medium text-rose-700">{paymentError}</p>}
 
-                {/* Card Payment Panel */}
+                {/* Card orders are coordinated by staff; never collect card credentials here. */}
                 {paymentMethod === 'Credit / Debit Card' && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-slate-700">Enter Card Information</span>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
-                        <Lock className="w-3 h-3 text-emerald-600" />
-                        <span>SSL Secure Checkout</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Card Number
-                      </label>
-                      <input
-                        type="text"
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(e.target.value)}
-                        placeholder="4242 4242 4242 4242"
-                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Expiration (MM/YY)
-                        </label>
-                        <input
-                          type="text"
-                          value={cardExpiry}
-                          onChange={(e) => setCardExpiry(e.target.value)}
-                          placeholder="08/28"
-                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                          Security CVV
-                        </label>
-                        <input
-                          type="password"
-                          maxLength={4}
-                          value={cardCvv}
-                          onChange={(e) => setCardCvv(e.target.value)}
-                          placeholder="883"
-                          className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Name on Card
-                      </label>
-                      <input
-                        type="text"
-                        value={cardHolder}
-                        onChange={(e) => setCardHolder(e.target.value)}
-                        placeholder="Eleanor Vance"
-                        className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* PayPal Panel */}
-                {paymentMethod === 'PayPal' && (
-                  <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-5 text-xs text-sky-950 space-y-3 text-center">
-                    <div className="w-10 h-10 rounded-full bg-white border border-sky-300 flex items-center justify-center mx-auto text-sky-700 font-bold italic text-base">
-                      PayPal
-                    </div>
-                    <div>
-                      <span className="font-bold text-sm block">Express PayPal Checkout</span>
-                      <p className="text-[11px] text-sky-800 max-w-sm mx-auto">
-                        Fast and secure payment with your PayPal account or PayPal Credit. You will confirm your payment directly upon submitting the order.
-                      </p>
-                    </div>
-                    <div className="p-2.5 bg-white rounded-lg border border-sky-200 text-left text-[11px] flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>Protected by PayPal Purchase Protection for pharmacy healthcare orders.</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Cryptocurrency Panel */}
-                {paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && (
-                  <div className="bg-slate-900 text-white rounded-xl p-4 sm:p-5 space-y-4 text-xs">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="font-bold text-slate-200 flex items-center gap-1.5">
-                        <QrCode className="w-4 h-4 text-teal-400" />
-                        <span>Decentralized Crypto Payment</span>
-                      </span>
-                      <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
-                        Zero Processing Surcharge
-                      </span>
-                    </div>
-
-                    {/* Crypto Select buttons */}
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {(['USDC', 'BTC', 'ETH', 'SOL'] as const).map((curr) => (
-                        <button
-                          key={curr}
-                          type="button"
-                          onClick={() => setSelectedCrypto(curr)}
-                          className={`py-1.5 px-2 rounded-lg text-center font-bold text-xs cursor-pointer transition-all ${
-                            selectedCrypto === curr
-                              ? 'bg-teal-600 text-white shadow-xs'
-                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                          }`}
-                        >
-                          {curr}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Details Box */}
-                    <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Total Due in {selectedCrypto}:</span>
-                        <span className="font-mono font-bold text-teal-300 text-sm">
-                          {(totalAmount * CRYPTO_CONFIGS[selectedCrypto].ratePerUsd).toFixed(
-                            selectedCrypto === 'BTC' ? 6 : selectedCrypto === 'ETH' ? 4 : 2
-                          )}{' '}
-                          {selectedCrypto}
-                        </span>
-                      </div>
-
-                      <div>
-                        <span className="text-[11px] text-slate-400 block mb-1">
-                          Official Dispensary Deposit Address ({CRYPTO_CONFIGS[selectedCrypto].network}):
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[11px] font-mono text-slate-300 truncate">
-                            {CRYPTO_CONFIGS[selectedCrypto].address}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={handleCopyCrypto}
-                            className="bg-teal-700 hover:bg-teal-600 text-white px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                          >
-                            {copiedAddress ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedAddress ? 'Copied' : 'Copy'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Mock QR graphic */}
-                      <div className="flex items-center gap-3 pt-1">
-                        <div className="w-16 h-16 bg-white p-1 rounded-md shrink-0 flex items-center justify-center">
-                          <div className="w-full h-full bg-slate-900 flex items-center justify-center text-teal-400 font-mono text-[9px] text-center p-1 font-bold leading-tight">
-                            QR CODE [{selectedCrypto}]
-                          </div>
-                        </div>
-                        <div className="text-[11px] text-slate-400 leading-relaxed">
-                          Scan with your web3 wallet or exchange app. Transaction is automatically verified and confirmed on the blockchain ledger.
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex items-start gap-2 rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs text-teal-950">
+                    <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
+                    <p>Card payment will be arranged by our team after order review. Please do not send card numbers, expiration dates, or security codes through this site, email, or chat.</p>
                   </div>
                 )}
 
