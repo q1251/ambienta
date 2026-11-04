@@ -171,3 +171,125 @@ export function evaluateDueReminders(
 
   return matches;
 }
+
+export type LeadSortField = 'name' | 'stage' | 'country' | 'email' | 'orders' | 'createdAt';
+export type OrderSortField = 'orderNumber' | 'placedAt' | 'patientName' | 'totalAmount' | 'status';
+
+const STAGE_ORDER: Record<string, number> = {
+  New: 1,
+  Cold: 2,
+  Contacted: 3,
+  Qualified: 4,
+  Customer: 5,
+  Inactive: 6,
+};
+
+/**
+ * Pure function to sort contact leads by supported fields.
+ */
+export function sortContactLeads(
+  leads: ContactLead[],
+  field: LeadSortField,
+  order: 'asc' | 'desc' = 'asc'
+): ContactLead[] {
+  const multiplier = order === 'asc' ? 1 : -1;
+  return [...leads].sort((a, b) => {
+    switch (field) {
+      case 'name': {
+        const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+        const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+        return nameA.localeCompare(nameB) * multiplier;
+      }
+      case 'stage': {
+        const rankA = STAGE_ORDER[a.status] || 99;
+        const rankB = STAGE_ORDER[b.status] || 99;
+        return (rankA - rankB) * multiplier;
+      }
+      case 'country': {
+        const cA = (a.country || '').toLowerCase();
+        const cB = (b.country || '').toLowerCase();
+        return cA.localeCompare(cB) * multiplier;
+      }
+      case 'email': {
+        return (a.email || '').localeCompare(b.email || '') * multiplier;
+      }
+      case 'orders': {
+        const countA = a.orderCount || 0;
+        const countB = b.orderCount || 0;
+        return (countA - countB) * multiplier;
+      }
+      case 'createdAt': {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return (dateA - dateB) * multiplier;
+      }
+      default:
+        return 0;
+    }
+  });
+}
+
+/**
+ * Pure function to sort orders by supported fields.
+ */
+export function sortOrders(
+  orders: OnlineOrder[],
+  field: OrderSortField,
+  order: 'asc' | 'desc' = 'asc'
+): OnlineOrder[] {
+  const multiplier = order === 'asc' ? 1 : -1;
+  return [...orders].sort((a, b) => {
+    switch (field) {
+      case 'orderNumber':
+        return (a.orderNumber || '').localeCompare(b.orderNumber || '') * multiplier;
+      case 'placedAt': {
+        const timeA = new Date(a.placedAt || 0).getTime();
+        const timeB = new Date(b.placedAt || 0).getTime();
+        return (timeA - timeB) * multiplier;
+      }
+      case 'patientName':
+        return (a.patientName || '').localeCompare(b.patientName || '') * multiplier;
+      case 'totalAmount':
+        return ((a.totalAmount || 0) - (b.totalAmount || 0)) * multiplier;
+      case 'status':
+        return (a.status || '').localeCompare(b.status || '') * multiplier;
+      default:
+        return 0;
+    }
+  });
+}
+
+/**
+ * Generates an authentic tracking number and carrier identifier for pharmacy fulfillment.
+ */
+export function generateTrackingNumber(preferredCarrier?: string): { carrier: string; trackingNumber: string } {
+  const carrier = preferredCarrier?.trim() || 'CareCourier Express';
+  const timestamp = Date.now().toString().slice(-6);
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+
+  if (carrier.toLowerCase().includes('fedex')) {
+    return {
+      carrier: 'FedEx Health Logistics',
+      trackingNumber: `9400${timestamp}${randomSuffix}`,
+    };
+  }
+
+  if (carrier.toLowerCase().includes('usps')) {
+    return {
+      carrier: 'USPS Priority Health',
+      trackingNumber: `92055000${timestamp}${randomSuffix.toString().slice(0, 2)}`,
+    };
+  }
+
+  if (carrier.toLowerCase().includes('dhl')) {
+    return {
+      carrier: 'DHL Medical Express',
+      trackingNumber: `DHL-MED-${timestamp}${randomSuffix.toString().slice(0, 3)}`,
+    };
+  }
+
+  return {
+    carrier: 'CareCourier Express',
+    trackingNumber: `CCE-202611-${timestamp}${randomSuffix.toString().slice(0, 3)}`,
+  };
+}

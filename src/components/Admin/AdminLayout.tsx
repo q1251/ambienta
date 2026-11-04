@@ -8,12 +8,13 @@ import {
   Mail,
   MessageCircle,
   Package,
+  RefreshCw,
   Settings2,
   ShieldCheck,
   Users,
   UserRound,
 } from 'lucide-react';
-import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadProfile, OnlineOrder } from '../../types/pharmacy';
+import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadProfile, OnlineOrder, Patient, ReminderRule, EmailLog, RefillRecord } from '../../types/pharmacy';
 import type { ProductCsvItem } from '../../utils/productCsv';
 import { AuditLogView } from './AuditLogView';
 import { HostingerMailIntegration } from './HostingerMailIntegration';
@@ -24,10 +25,11 @@ import { OrdersManager } from './OrdersManager';
 import { StaffManager } from './StaffManager';
 import { ProfileManager } from './ProfileManager';
 import { LiveChatInbox } from './LiveChatInbox';
+import { PrescriptionRenewalsManager } from './PrescriptionRenewalsManager';
 
 const ContactLeadManager = React.lazy(() => import('../CRM/ContactLeadManager').then((module) => ({ default: module.ContactLeadManager })));
 
-export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'chat' | 'email' | 'integrations' | 'profile' | 'staff' | 'audit';
+export type AdminTab = 'overview' | 'orders' | 'inventory' | 'leads' | 'renewals' | 'chat' | 'email' | 'integrations' | 'profile' | 'staff' | 'audit';
 export interface OrderSearch {
   query: string;
   status: string;

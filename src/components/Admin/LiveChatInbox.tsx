@@ -108,12 +108,34 @@ const countryName = (countryCode: string | null) => {
   }
 };
 
-const formatDate = (value: string) => new Date(value.replace(' ', 'T') + (value.endsWith('Z') ? '' : 'Z')).toLocaleString([], {
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
+const formatDate = (value?: string | null) => {
+  if (!value) return 'Recent';
+  try {
+    const raw = String(value);
+    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const date = new Date(normalized + (normalized.endsWith('Z') || normalized.includes('+') ? '' : 'Z'));
+    if (isNaN(date.getTime())) {
+      const fallback = new Date(raw);
+      if (!isNaN(fallback.getTime())) {
+        return fallback.toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+      }
+      return raw;
+    }
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return value || 'Recent';
+  }
+};
 
 interface LiveChatInboxProps {
   role: 'admin' | 'operator';

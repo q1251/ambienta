@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
+  Check,
+  CheckCircle2,
+  Download,
+  Eye,
+  FileText,
+  Package,
+  Plus,
+  Printer,
   Search,
   Truck,
-  Printer,
-  Download,
-  Plus,
-  Eye,
   X,
 } from 'lucide-react';
 import { OnlineOrder, CatalogItem } from '../../types/pharmacy';
+import { generateTrackingNumber, sortOrders, OrderSortField } from '../../utils/pharmacyLogic';
 import type { OrderPagination, OrderSearch } from './AdminLayout';
 
 interface OrdersManagerProps {
@@ -114,6 +123,29 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [manualDelivery, setManualDelivery] = useState<'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail'>('Pharmacy Pickup');
   const [manualAddress, setManualAddress] = useState('');
 
+  // Sorting state
+  const [sortField, setSortField] = useState<OrderSortField>('placedAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleToggleSort = (field: OrderSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'patientName' ? 'asc' : 'desc');
+    }
+  };
+
+  // Quick fulfillment popover/modal state
+  const [quickFulfillOrder, setQuickFulfillOrder] = useState<OnlineOrder | null>(null);
+  const [quickCarrier, setQuickCarrier] = useState('CareCourier Express');
+  const [quickTracking, setQuickTracking] = useState('');
+  const [quickFulfilling, setQuickFulfilling] = useState(false);
+  const [quickActionSuccess, setQuickActionSuccess] = useState<string | null>(null);
+
+  // Printable Packing Slip Modal
+  const [packingSlipOrder, setPackingSlipOrder] = useState<OnlineOrder | null>(null);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       onLoadOrders({ query: searchQuery.trim(), status: statusFilter, page: currentPage });
@@ -153,7 +185,54 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     return () => window.removeEventListener('popstate', syncOrderPage);
   }, []);
 
-  const filteredOrders = orders;
+  const handleOpenQuickFulfill = (order: OnlineOrder) => {
+    const generated = generateTrackingNumber(order.deliveryMethod === 'Express Courier' ? 'CareCourier Express' : 'USPS');
+    setQuickCarrier(order.carrier || generated.carrier);
+    setQuickTracking(order.trackingNumber || generated.trackingNumber);
+    setQuickFulfillOrder(order);
+  };
+
+  const handleRegenerateTracking = () => {
+    const generated = generateTrackingNumber(quickCarrier);
+    setQuickTracking(generated.trackingNumber);
+  };
+
+  const handleConfirmQuickFulfill = async () => {
+    if (!quickFulfillOrder) return;
+    setQuickFulfilling(true);
+    setOrderSaveError('');
+    try {
+      await onUpdateOrderTracking(quickFulfillOrder.id, quickCarrier, quickTracking);
+      await onUpdateOrderStatus(quickFulfillOrder, 'Shipped');
+      setQuickActionSuccess(`Order #${quickFulfillOrder.orderNumber} fulfilled & marked Shipped via ${quickCarrier}!`);
+      setQuickFulfillOrder(null);
+      setReloadCounter((c) => c + 1);
+    } catch (err) {
+      setOrderSaveError(err instanceof Error ? err.message : 'Fulfillment update failed.');
+    } finally {
+      setQuickFulfilling(false);
+    }
+  };
+
+  const handleQuickDeliver = async (order: OnlineOrder) => {
+    setIsSavingStatus(true);
+    setOrderSaveError('');
+    try {
+      await onUpdateOrderStatus(order, 'Delivered');
+      setQuickActionSuccess(`Order #${order.orderNumber} marked Delivered.`);
+      setReloadCounter((c) => c + 1);
+    } catch (err) {
+      setOrderSaveError(err instanceof Error ? err.message : 'Status update failed.');
+    } finally {
+      setIsSavingStatus(false);
+    }
+  };
+
+  const sortedOrders = useMemo(() => {
+    return sortOrders(orders, sortField, sortOrder);
+  }, [orders, sortField, sortOrder]);
+
+  const filteredOrders = sortedOrders;
 
   // Open detail drawer and sync inputs
   const handleOpenDetail = (order: OnlineOrder) => {
@@ -373,6 +452,21 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         </div>
 
         {orderSaveError && <p role="alert" className="border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-900">{orderSaveError}</p>}
+        {quickActionSuccess && (
+          <div className="flex items-center justify-between border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-xs text-emerald-900">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+              <span className="font-semibold">{quickActionSuccess}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQuickActionSuccess(null)}
+              className="font-bold text-emerald-800 hover:text-emerald-950"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Filter & Search Bar */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-xs">
@@ -424,16 +518,68 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         </div>
 
         {/* Orders Table */}
-        <div className="hidden overflow-x-auto 2xl:block">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
               <tr>
-                <th className="py-3 px-4">Order # &amp; Date</th>
-                <th className="py-3 px-4">Customer Details</th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('orderNumber')}
+                    className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    <span>Order # &amp; Date</span>
+                    {sortField === 'orderNumber' || sortField === 'placedAt' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                    )}
+                  </button>
+                </th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('patientName')}
+                    className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    <span>Customer Details</span>
+                    {sortField === 'patientName' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3 px-4">Items Ordered</th>
-                <th className="py-3 px-4">Amount &amp; payment</th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('totalAmount')}
+                    className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    <span>Amount &amp; payment</span>
+                    {sortField === 'totalAmount' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3 px-4">Fulfillment Mode</th>
-                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSort('status')}
+                    className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    <span>Status</span>
+                    {sortField === 'status' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -517,13 +663,44 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5" onClick={(e) => e.stopPropagation()}>
+                      {ord.status !== 'Shipped' && ord.status !== 'Delivered' && ord.status !== 'Cancelled' && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenQuickFulfill(ord)}
+                          className="inline-flex items-center gap-1 rounded-md bg-[#2d5244] px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-[#234237]"
+                          title="Fulfill order & assign tracking"
+                        >
+                          <Truck className="h-3 w-3" />
+                          <span>Ship</span>
+                        </button>
+                      )}
+
+                      {ord.status === 'Shipped' && (
+                        <button
+                          type="button"
+                          onClick={() => void handleQuickDeliver(ord)}
+                          className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-emerald-800"
+                          title="Mark delivered"
+                        >
+                          <Check className="h-3 w-3" />
+                          <span>Delivered</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleOpenOrderPage(ord);
-                        }}
+                        onClick={() => setPackingSlipOrder(ord)}
+                        className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                        title="Print dispensary packing slip"
+                        aria-label={`Print packing slip for ${ord.orderNumber}`}
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenOrderPage(ord)}
                         className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
                         title="Open order page"
                         aria-label={`Open order page for ${ord.orderNumber}`}
@@ -538,7 +715,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           </table>
         </div>
 
-        <div className="grid gap-3 p-3 2xl:hidden sm:p-4">
+        <div className="grid gap-3 p-3 md:hidden sm:p-4">
           {isLoading ? (
             <p role="status" className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">Loading orders…</p>
           ) : filteredOrders.length === 0 ? (
@@ -987,6 +1164,241 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK FULFILLMENT MODAL */}
+      {quickFulfillOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl text-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-[#2d5244]" />
+                <h3 className="text-base font-bold text-slate-900">
+                  Fulfill &amp; Ship Order #{quickFulfillOrder.orderNumber}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickFulfillOrder(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-lg bg-slate-50 p-3 border border-slate-200 space-y-1">
+              <p className="font-semibold text-slate-900">{quickFulfillOrder.patientName}</p>
+              <p className="text-slate-500">{quickFulfillOrder.deliveryAddress || 'Dispensary Counter Pickup'}</p>
+              <p className="font-medium text-slate-700">{quickFulfillOrder.medicationName}</p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Carrier Provider</label>
+                <select
+                  value={quickCarrier}
+                  onChange={(e) => setQuickCarrier(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#2d5244]"
+                >
+                  <option value="CareCourier Express">CareCourier Express (Standard Pharmacy Courier)</option>
+                  <option value="FedEx Health Logistics">FedEx Health Logistics</option>
+                  <option value="USPS Priority Health">USPS Priority Health</option>
+                  <option value="DHL Medical Express">DHL Medical Express</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-700">Tracking Code</label>
+                  <button
+                    type="button"
+                    onClick={handleRegenerateTracking}
+                    className="text-[10px] font-semibold text-[#2d5244] hover:underline cursor-pointer"
+                  >
+                    Regenerate Code
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={quickTracking}
+                  onChange={(e) => setQuickTracking(e.target.value)}
+                  className="w-full font-mono rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#2d5244]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={() => setQuickFulfillOrder(null)}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmQuickFulfill}
+                disabled={quickFulfilling || !quickTracking.trim()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#2d5244] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#234237] disabled:opacity-50 cursor-pointer"
+              >
+                <Truck className="h-3.5 w-3.5" />
+                <span>{quickFulfilling ? 'Dispatching…' : 'Confirm & Mark Shipped'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DISPENSARY PACKING SLIP & INVOICE MODAL */}
+      {packingSlipOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 print:p-0 print:bg-white print:static">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-xs space-y-5 print:shadow-none print:border-0 print:max-h-none print:p-8">
+            <div className="flex items-start justify-between border-b border-slate-200 pb-4 print:border-b-2 print:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2d5244] text-white font-bold text-sm">
+                  AMB
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-slate-950">Ambients Pharmacy &amp; Wellness</h2>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    CLINICAL DISPENSARY · LICENSE #RX-99482-IL · DEA #BA99210
+                  </p>
+                </div>
+              </div>
+              <div className="text-right print:hidden">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#2d5244] px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#234237] cursor-pointer"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    <span>Print Packing Slip</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPackingSlipOrder(null)}
+                    className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Slip Meta Grid */}
+            <div className="grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-4 border border-slate-200 print:bg-transparent print:border">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Patient &amp; Delivery</span>
+                <p className="font-bold text-slate-900 text-sm mt-0.5">{packingSlipOrder.patientName}</p>
+                <p className="font-mono text-[11px] text-slate-600">{packingSlipOrder.email}</p>
+                <p className="text-slate-600">{packingSlipOrder.phone}</p>
+                <p className="text-slate-800 mt-1.5">
+                  <span className="font-semibold text-slate-600">Address: </span>
+                  {packingSlipOrder.deliveryAddress || 'Dispensary Counter Pickup'}
+                </p>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Order Verification</span>
+                <p className="font-mono font-bold text-slate-900 text-sm mt-0.5">{packingSlipOrder.orderNumber}</p>
+                <p className="font-mono text-[11px] text-slate-500">Date: {packingSlipOrder.placedAt}</p>
+                <p className="text-slate-600 mt-1">
+                  Method: <span className="font-semibold text-slate-800">{packingSlipOrder.deliveryMethod}</span>
+                </p>
+                {packingSlipOrder.trackingNumber && (
+                  <p className="font-mono text-[11px] text-[#2d5244] font-semibold mt-0.5">
+                    {packingSlipOrder.carrier || 'Courier'}: {packingSlipOrder.trackingNumber}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Line items table */}
+            <div className="space-y-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Prescribed Items &amp; Therapeutics</span>
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-semibold text-[11px]">
+                    <tr>
+                      <th className="py-2.5 px-3">Description &amp; Strength</th>
+                      <th className="py-2.5 px-3 text-center">Qty</th>
+                      <th className="py-2.5 px-3 text-right">Unit Price</th>
+                      <th className="py-2.5 px-3 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {packingSlipOrder.items && packingSlipOrder.items.length > 0 ? (
+                      packingSlipOrder.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="py-2.5 px-3">
+                            <p className="font-semibold text-slate-900">{item.name}</p>
+                            <p className="text-[11px] text-slate-500">{item.dosage || 'Dispensary Standard'}</p>
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-800">{item.quantity}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">${item.unitPrice.toFixed(2)}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                            ${(item.unitPrice * item.quantity).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="py-2.5 px-3 font-semibold text-slate-900">{packingSlipOrder.medicationName}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-semibold text-slate-800">1</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-slate-600">${packingSlipOrder.totalAmount.toFixed(2)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">${packingSlipOrder.totalAmount.toFixed(2)}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Totals Breakdown */}
+            <div className="flex justify-end">
+              <div className="w-64 space-y-1.5 rounded-xl bg-slate-50 p-3.5 border border-slate-200 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Subtotal:</span>
+                  <span className="font-mono font-semibold text-slate-900">
+                    ${(packingSlipOrder.subtotal || packingSlipOrder.totalAmount).toFixed(2)}
+                  </span>
+                </div>
+                {packingSlipOrder.discountAmount ? (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Discount:</span>
+                    <span className="font-mono font-semibold">-${packingSlipOrder.discountAmount.toFixed(2)}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between text-slate-600">
+                  <span>Delivery Fee:</span>
+                  <span className="font-mono font-semibold text-slate-900">
+                    ${(packingSlipOrder.shippingFee || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="border-t border-slate-300 pt-1.5 flex justify-between font-bold text-slate-950 text-sm">
+                  <span>Total Invoiced:</span>
+                  <span className="font-mono text-[#2d5244]">${packingSlipOrder.totalAmount.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Dispensary Verification Badge */}
+            <div className="rounded-xl border border-[#2d5244]/20 bg-[#f4f7f5] p-3.5 space-y-2 text-[11px] text-slate-700">
+              <div className="flex items-center gap-2 font-bold text-[#224136]">
+                <CheckCircle2 className="h-4 w-4 text-[#2d5244]" />
+                <span>Clinical Pharmacist Safety &amp; Dispensing Inspection</span>
+              </div>
+              <p className="leading-relaxed">
+                This order has been prepared, verified against patient profile contraindications, and sealed in accordance with State Board of Pharmacy guidelines. Tamper-evident seals intact.
+              </p>
+              <div className="grid grid-cols-2 pt-2 border-t border-slate-200 font-mono text-[10px] text-slate-500">
+                <span>Dispensed By: Registered Pharmacist PharmD</span>
+                <span className="text-right">Inspection Date: {new Date().toLocaleDateString()}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

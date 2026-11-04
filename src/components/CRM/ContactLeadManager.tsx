@@ -1,7 +1,55 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Check, Copy, Download, Mail, MessageSquare, Package, Pencil, Phone, Search, Send, Upload, UserPlus, X } from 'lucide-react';
-import { ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivityInput, LeadProfile, LeadStatus } from '../../types/pharmacy';
-import { generateSampleCsv, getLeadCountry, parseLeadsCsv } from '../../utils/pharmacyLogic';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
+  Calendar,
+  Check,
+  CheckSquare,
+  Clock,
+  Copy,
+  DollarSign,
+  Download,
+  Filter,
+  Kanban,
+  LayoutGrid,
+  Mail,
+  MessageSquare,
+  Package,
+  Pencil,
+  Phone,
+  RefreshCw,
+  Search,
+  Send,
+  Sparkles,
+  Square,
+  Table as TableIcon,
+  TrendingUp,
+  Upload,
+  UserCheck,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
+import {
+  ContactLead,
+  ContactLeadInput,
+  ContactLeadUpdate,
+  LeadActivityInput,
+  LeadProfile,
+  LeadStatus,
+  OnlineOrder,
+} from '../../types/pharmacy';
+import {
+  generateSampleCsv,
+  getLeadCountry,
+  parseLeadsCsv,
+  sortContactLeads,
+  LeadSortField,
+} from '../../utils/pharmacyLogic';
 import { CountryFlag, CountrySelect, PhoneCountryInput } from './PhoneCountryInput';
 import { getLeadCountryCode } from '../../utils/countryOptions';
 
@@ -27,6 +75,15 @@ interface AgentOption {
   permissions: string[];
 }
 
+const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; border: string }> = [
+  { id: 'New', label: 'New', bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
+  { id: 'Cold', label: 'Cold', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  { id: 'Contacted', label: 'Contacted', bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
+  { id: 'Qualified', label: 'Qualified', bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' },
+  { id: 'Customer', label: 'Customer', bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
+  { id: 'Inactive', label: 'Inactive', bg: 'bg-zinc-100', text: 'text-zinc-600', border: 'border-zinc-200' },
+];
+
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   role,
   canSendEmail = false,
@@ -38,6 +95,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   onUpdateLead,
   onAddLeadActivity,
 }) => {
+  // View mode: 'table' vs 'kanban'
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+
+  // Modals & form state
   const [mode, setMode] = useState<'csv' | 'manual' | null>(null);
   const [csv, setCsv] = useState('');
   const [preview, setPreview] = useState<NewLead[]>([]);
@@ -45,11 +106,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [requestError, setRequestError] = useState('');
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
+
+  // Manual entry fields
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
+  const [marketingConsent, setMarketingConsent] = useState(false);
+
+  // Profile details editing
   const [profileFirstName, setProfileFirstName] = useState('');
   const [profileLastName, setProfileLastName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -58,11 +124,30 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [editingLead, setEditingLead] = useState<ContactLead | null>(null);
   const [editLeadError, setEditLeadError] = useState('');
   const [editLeadSaving, setEditLeadSaving] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
+
+  // Filters & Search
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
-  const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers'>('all');
+  const [countryFilter, setCountryFilter] = useState('All');
+  const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
   const [leadPage, setLeadPage] = useState(1);
+  const [sortField, setSortField] = useState<LeadSortField>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleToggleSort = (field: LeadSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'name' || field === 'country' ? 'asc' : 'desc');
+    }
+  };
+
+  // Multi-select batch actions
+  const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
+  const [batchUpdating, setBatchUpdating] = useState(false);
+
+  // Profile drawer
   const [profile, setProfile] = useState<LeadProfile | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(() => {
     const value = Number(new URLSearchParams(window.location.search).get('leadId'));
@@ -73,77 +158,165 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [contactDetailsEditing, setContactDetailsEditing] = useState(false);
+  const [profileActiveTab, setProfileActiveTab] = useState<'overview' | 'orders' | 'timeline'>('overview');
+
+  // Activities & Comments
   const [activityNote, setActivityNote] = useState('');
   const [activitySaving, setActivitySaving] = useState(false);
+
+  // Email Composer
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [copiedField, setCopiedField] = useState('');
+
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const isSuperadmin = role === 'admin';
   const canEditSelectedLead = isSuperadmin || profile?.lead.assignedStaffId != null;
+
+  // Load staff agents for assignment
   useEffect(() => {
     if (!isSuperadmin) return;
     let active = true;
     fetch('/api/data.php?resource=staff', {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
-    }).then(async (response) => {
-      const result = await response.json() as { staff?: AgentOption[]; message?: string };
-      if (!response.ok || !Array.isArray(result.staff)) {
-        throw new Error(result.message || 'Agent accounts could not be loaded for lead assignment.');
-      }
-      if (active) setAgents(result.staff.filter((agent) => agent.is_active && agent.permissions.includes('leads')));
-    }).catch((error: unknown) => {
-      if (active) setRequestError(error instanceof Error ? error.message : 'Agent accounts could not be loaded for lead assignment.');
-    });
-    return () => { active = false; };
+    })
+      .then(async (response) => {
+        const result = (await response.json()) as { staff?: AgentOption[]; message?: string };
+        if (!response.ok || !Array.isArray(result.staff)) {
+          throw new Error(result.message || 'Agent accounts could not be loaded for lead assignment.');
+        }
+        if (active) {
+          setAgents(result.staff.filter((agent) => agent.is_active && agent.permissions.includes('leads')));
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setRequestError(error instanceof Error ? error.message : 'Agent accounts could not be loaded.');
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [isSuperadmin]);
 
-  const assignLead = async (lead: ContactLead, value: string) => {
-    if (!onUpdateLead) return;
-    setRequestError('');
-    try {
-      await onUpdateLead(lead.id, { assignedStaffId: value ? Number(value) : null });
-      setSuccess(`Lead assignment updated for ${lead.firstName} ${lead.lastName}.`);
-    } catch (error) {
-      setRequestError(error instanceof Error ? error.message : 'The lead assignment could not be saved.');
+  // Keyboard handlers for modals
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (mode && !saving) setMode(null);
+        if (editingLead && !editLeadSaving) setEditingLead(null);
+        if (emailComposerOpen && !emailSending) setEmailComposerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mode, saving, editingLead, editLeadSaving, emailComposerOpen, emailSending]);
+
+  // Computed summary metrics
+  const totalLeadsCount = leads.length;
+  const customersCount = leads.filter((l) => (l.orderCount ?? 0) > 0 || l.status === 'Customer').length;
+  const eligibleMarketingCount = leads.filter((l) => l.marketingConsent).length;
+  const needsFollowupCount = leads.filter((l) => ['Cold', 'Contacted', 'Qualified'].includes(l.status)).length;
+
+  const isUncalledRepeatBuyer = (lead: ContactLead) =>
+    (lead.callCount ?? 0) === 0 && (lead.activeOrderCount ?? 0) >= 2;
+
+  // Unique countries list
+  const availableCountries = useMemo(() => {
+    const set = new Set<string>();
+    leads.forEach((l) => {
+      const c = l.country || getLeadCountry(l.phone);
+      if (c && c !== 'Not specified') set.add(c);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
+
+  // Filtered Leads
+  const filteredLeads = useMemo(() => {
+    return leads.filter((lead) => {
+      const leadCountry = lead.country || getLeadCountry(lead.phone);
+      const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
+      const matchesCountry = countryFilter === 'All' || leadCountry === countryFilter;
+      const query = search.trim().toLowerCase();
+      const matchesSearch =
+        !query ||
+        `${lead.firstName} ${lead.lastName} ${lead.email} ${lead.phone} ${leadCountry}`.toLowerCase().includes(query);
+
+      let matchesTab = true;
+      if (leadTab === 'uncalled_repeat_buyers') {
+        matchesTab = isUncalledRepeatBuyer(lead);
+      } else if (leadTab === 'opted_in') {
+        matchesTab = lead.marketingConsent;
+      } else if (leadTab === 'needs_followup') {
+        matchesTab = ['Cold', 'Contacted', 'Qualified'].includes(lead.status);
+      }
+
+      return matchesStage && matchesCountry && matchesSearch && matchesTab;
+    });
+  }, [leads, stageFilter, countryFilter, search, leadTab]);
+
+  const sortedLeads = useMemo(() => {
+    return sortContactLeads(filteredLeads, sortField, sortOrder);
+  }, [filteredLeads, sortField, sortOrder]);
+
+  const pageSize = 50;
+  const pageCount = Math.max(1, Math.ceil(sortedLeads.length / pageSize));
+  const currentPage = Math.min(leadPage, pageCount);
+  const visibleLeads = sortedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // Multi-select helpers
+  const isAllVisibleSelected = visibleLeads.length > 0 && visibleLeads.every((l) => selectedLeadIds.includes(l.id));
+
+  const toggleSelectAll = () => {
+    if (isAllVisibleSelected) {
+      setSelectedLeadIds((prev) => prev.filter((id) => !visibleLeads.some((l) => l.id === id)));
+    } else {
+      const newIds = new Set([...selectedLeadIds, ...visibleLeads.map((l) => l.id)]);
+      setSelectedLeadIds(Array.from(newIds));
     }
   };
-  useEffect(() => {
-    if (!mode) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !saving) setMode(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode, saving]);
-  useEffect(() => {
-    if (!editingLead) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !editLeadSaving) setEditingLead(null);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingLead, editLeadSaving]);
-  const eligibleCount = leads.filter((lead) => lead.marketingConsent).length;
-  const isUncalledRepeatBuyer = (lead: ContactLead) => (lead.callCount ?? 0) === 0 && (lead.activeOrderCount ?? 0) >= 2;
-  const uncalledRepeatBuyers = leads.filter(isUncalledRepeatBuyer);
-  const filteredLeads = leads.filter((lead) => {
-    const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
-    const query = search.trim().toLowerCase();
-    const matchesSearch = !query || `${lead.firstName} ${lead.lastName} ${lead.email} ${lead.phone}`.toLowerCase().includes(query);
-    const matchesTab = leadTab === 'all' || isUncalledRepeatBuyer(lead);
-    return matchesStage && matchesSearch && matchesTab;
-  });
-  const pageSize = 50;
-  const pageCount = Math.max(1, Math.ceil(filteredLeads.length / pageSize));
-  const currentPage = Math.min(leadPage, pageCount);
-  const visibleLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  const toggleSelectOne = (id: number) => {
+    setSelectedLeadIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  const handleBatchStageUpdate = async (newStage: LeadStatus) => {
+    if (!onUpdateLead || !selectedLeadIds.length) return;
+    setBatchUpdating(true);
+    setRequestError('');
+    try {
+      await Promise.all(selectedLeadIds.map((id) => onUpdateLead(id, { status: newStage })));
+      setSuccess(`Updated ${selectedLeadIds.length} contact${selectedLeadIds.length === 1 ? '' : 's'} to ${newStage}.`);
+      setSelectedLeadIds([]);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'Batch stage update failed.');
+    } finally {
+      setBatchUpdating(false);
+    }
+  };
+
+  const handleBatchAgentAssign = async (agentIdStr: string) => {
+    if (!onUpdateLead || !selectedLeadIds.length) return;
+    setBatchUpdating(true);
+    setRequestError('');
+    try {
+      const assignedStaffId = agentIdStr ? Number(agentIdStr) : null;
+      await Promise.all(selectedLeadIds.map((id) => onUpdateLead(id, { assignedStaffId })));
+      setSuccess(`Updated assignment for ${selectedLeadIds.length} contact${selectedLeadIds.length === 1 ? '' : 's'}.`);
+      setSelectedLeadIds([]);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'Batch agent assignment failed.');
+    } finally {
+      setBatchUpdating(false);
+    }
+  };
+
+  // CSV parser
   const parse = (value: string) => {
     setCsv(value);
     const result = parseLeadsCsv(value);
@@ -194,11 +367,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const downloadContacts = () => {
+  const downloadContacts = (contactsToExport = filteredLeads) => {
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = [
       ['first_name', 'last_name', 'email', 'phone', 'country', 'lead_source', 'status', 'marketing_consent', 'created_at'],
-      ...leads.map((lead) => [
+      ...contactsToExport.map((lead) => [
         lead.firstName,
         lead.lastName,
         lead.email,
@@ -214,25 +387,28 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     const url = URL.createObjectURL(new Blob([contents], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'ambients-contacts.csv';
+    link.download = `ambients-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
   const handleManualSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    void save([{
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      country: country.trim() || getLeadCountry(phone),
-      leadSource: 'Manual Entry',
-      status: 'Cold',
-      marketingConsent,
-    }]);
+    void save([
+      {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        country: country.trim() || getLeadCountry(phone),
+        leadSource: 'Manual Entry',
+        status: 'Cold',
+        marketingConsent,
+      },
+    ]);
   };
 
+  // Open single lead profile
   const openProfile = async (lead: ContactLead, beginEditing = false) => {
     if (!onLoadLeadProfile) return;
     const requestId = ++profileRequestId.current;
@@ -249,6 +425,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setEmailSubject('');
     setEmailBody('');
     setProfileLoading(true);
+    setProfileActiveTab('overview');
+
     try {
       const loadedProfile = await onLoadLeadProfile(lead.id);
       if (requestId === profileRequestId.current) {
@@ -268,8 +446,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }
   };
 
-  React.useEffect(() => {
-    if (initialProfileLoadStarted.current || selectedLeadId === null || profile || profileLoading || !onLoadLeadProfile) return;
+  useEffect(() => {
+    if (initialProfileLoadStarted.current || selectedLeadId === null || profile || profileLoading || !onLoadLeadProfile) {
+      return;
+    }
     const lead = leads.find((item) => item.id === selectedLeadId);
     if (!lead) return;
     initialProfileLoadStarted.current = true;
@@ -299,20 +479,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     try {
       const lead = await onUpdateLead(leadId, update);
       if (requestId !== profileRequestId.current) return false;
-      setProfile((current) => current?.lead.id === leadId ? { ...current, lead } : current);
+      setProfile((current) => (current?.lead.id === leadId ? { ...current, lead } : current));
       if (update.firstName !== undefined) setProfileFirstName(lead.firstName);
       if (update.lastName !== undefined) setProfileLastName(lead.lastName);
       if (update.email !== undefined) setProfileEmail(lead.email);
       if (update.phone !== undefined) setProfilePhone(lead.phone);
       if (update.country !== undefined) setProfileCountry(lead.country || '');
-      if ((update.firstName !== undefined || update.lastName !== undefined || update.email !== undefined || update.status !== undefined || update.phone !== undefined || update.country !== undefined) && onLoadLeadProfile) {
+
+      if (onLoadLeadProfile) {
         try {
           const refreshed = await onLoadLeadProfile(lead.id);
           if (requestId === profileRequestId.current) setProfile(refreshed);
-        } catch (error) {
-          if (requestId !== profileRequestId.current) return false;
-          const reason = error instanceof Error ? ` ${error.message}` : '';
-          setProfileError(`The change was saved, but the activity timeline could not be refreshed. Reload the profile to see the latest history.${reason}`);
+        } catch {
+          // Keep current profile state
         }
       }
       return true;
@@ -323,6 +502,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     } finally {
       if (requestId === profileRequestId.current) setProfileSaving(false);
     }
+  };
+
+  const cancelContactDetailsEdit = () => {
+    if (!profile) return;
+    setProfileFirstName(profile.lead.firstName);
+    setProfileLastName(profile.lead.lastName);
+    setProfileEmail(profile.lead.email);
+    setProfilePhone(profile.lead.phone);
+    setProfileCountry(profile.lead.country || getLeadCountry(profile.lead.phone));
+    setContactDetailsEditing(false);
   };
 
   const saveContactDetails = (event: React.FormEvent) => {
@@ -370,16 +559,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }
   };
 
-  const cancelContactDetailsEdit = () => {
-    if (!profile) return;
-    setProfileFirstName(profile.lead.firstName);
-    setProfileLastName(profile.lead.lastName);
-    setProfileEmail(profile.lead.email);
-    setProfilePhone(profile.lead.phone);
-    setProfileCountry(profile.lead.country || getLeadCountry(profile.lead.phone));
-    setContactDetailsEditing(false);
-  };
-
   const saveActivity = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!profile || !canEditSelectedLead || !onAddLeadActivity) return;
@@ -393,7 +572,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         note: activityNote.trim(),
       });
       if (requestId !== profileRequestId.current) return;
-      setProfile((current) => current?.lead.id === leadId ? { ...current, activities: [saved, ...current.activities] } : current);
+      setProfile((current) =>
+        current?.lead.id === leadId ? { ...current, activities: [saved, ...current.activities] } : current
+      );
       setActivityNote('');
     } catch (error) {
       if (requestId !== profileRequestId.current) return;
@@ -403,18 +584,18 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }
   };
 
-  const statusActivities = profile?.activities.filter((activity) => activity.type === 'status_change') ?? [];
-  const noteActivities = profile?.activities.filter((activity) => activity.type === 'note') ?? [];
-
-  const phoneLink = (value: string) => value.replace(/[^\d+]/g, '');
-
-  const copyLeadValue = async (event: React.MouseEvent<HTMLButtonElement>, leadId: number, field: 'name' | 'email' | 'phone', value: string) => {
+  const copyLeadValue = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    leadId: number,
+    field: 'name' | 'email' | 'phone',
+    value: string
+  ) => {
     event.preventDefault();
     event.stopPropagation();
     try {
       await navigator.clipboard.writeText(value);
       setCopiedField(`${leadId}-${field}`);
-      window.setTimeout(() => setCopiedField((current) => current === `${leadId}-${field}` ? '' : current), 1600);
+      window.setTimeout(() => setCopiedField((current) => (current === `${leadId}-${field}` ? '' : current)), 1600);
     } catch (error) {
       setRequestError(error instanceof Error ? `Could not copy ${field}: ${error.message}` : `Could not copy ${field}.`);
     }
@@ -431,7 +612,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         title={copied ? 'Copied' : `Copy ${field}`}
         className="ml-1 inline-flex shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700"
       >
-        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     );
   };
@@ -452,571 +633,1602 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           body: emailBody.trim(),
         }),
       });
-      const result = await response.json() as { sent?: boolean; message?: string };
+      const result = (await response.json()) as { sent?: boolean; message?: string };
       if (!response.ok || result.sent !== true) {
-        throw new Error(result.message || 'The email could not be sent through Hostinger.');
+        throw new Error(result.message || 'The email could not be sent.');
       }
       setEmailComposerOpen(false);
       setEmailSubject('');
       setEmailBody('');
-      setSuccess(result.message || 'Hostinger accepted the email for sending.');
+      setSuccess(result.message || 'Email sent successfully via Hostinger.');
     } catch (error) {
-      setEmailError(error instanceof Error ? error.message : 'The email could not be sent through Hostinger.');
+      setEmailError(error instanceof Error ? error.message : 'The email could not be sent.');
     } finally {
       setEmailSending(false);
     }
   };
 
+  // Quick email templates
+  const applyEmailTemplate = (templateType: 'welcome' | 'order_followup' | 'consult') => {
+    if (!profile) return;
+    const name = profile.lead.firstName || 'there';
+    if (templateType === 'welcome') {
+      setEmailSubject('Welcome to Ambients Pharmacy & Wellness');
+      setEmailBody(
+        `Hello ${name},\n\nThank you for connecting with Ambients Pharmacy & Wellness. Our clinical team is dedicated to supporting your health, sleep, and metabolic wellness goals.\n\nIf you have any questions about our formulas or current regimens, simply reply to this email.\n\nWarm regards,\nAmbients Clinical Care Team`
+      );
+    } else if (templateType === 'order_followup') {
+      setEmailSubject('Checking in on your recent Ambients order');
+      setEmailBody(
+        `Dear ${name},\n\nWe wanted to confirm that your recent order arrived safely and ensure you have all dosage instructions.\n\nOur on-duty specialists are available if you need any adjustments or wellness guidance.\n\nBest regards,\nAmbients Support`
+      );
+    } else {
+      setEmailSubject('Consultation follow-up from Ambients');
+      setEmailBody(
+        `Hi ${name},\n\nFollowing up on our recent conversation regarding your wellness regimen. Let us know if you would like to schedule time to review your health categories or product options.\n\nSincerely,\nAmbients Wellness Team`
+      );
+    }
+  };
+
+  // Profile financial calculations
+  const totalCustomerSpend = useMemo(() => {
+    if (!profile?.orders) return 0;
+    return profile.orders
+      .filter((o) => o.status !== 'Cancelled')
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  }, [profile?.orders]);
+
+  const averageOrderValue = useMemo(() => {
+    if (!profile?.orders || profile.orders.length === 0) return 0;
+    const validOrders = profile.orders.filter((o) => o.status !== 'Cancelled');
+    if (!validOrders.length) return 0;
+    return totalCustomerSpend / validOrders.length;
+  }, [profile?.orders, totalCustomerSpend]);
+
+  // Combined chronological timeline
+  const combinedTimeline = useMemo(() => {
+    if (!profile) return [];
+    type TimelineItem =
+      | { type: 'activity'; date: string; data: LeadProfile['activities'][number] }
+      | { type: 'order'; date: string; data: OnlineOrder };
+
+    const items: TimelineItem[] = [];
+
+    (profile.activities || []).forEach((act) => {
+      items.push({ type: 'activity', date: act.createdAt, data: act });
+    });
+
+    (profile.orders || []).forEach((ord) => {
+      items.push({ type: 'order', date: ord.placedAt || '2026-11-01', data: ord });
+    });
+
+    return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [profile]);
+
+  // ----------------------------------------------------
+  // RENDER: SINGLE LEAD PROFILE VIEW
+  // ----------------------------------------------------
   if (selectedLeadId !== null) {
     const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+    const leadStageObj = STAGES.find((s) => s.id === (profile?.lead.status || selectedLead?.status)) || STAGES[0];
+
     return (
       <section className="space-y-6">
-        <button
-          type="button"
-          onClick={closeProfile}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to contact leads
-        </button>
+        {/* Navigation & Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={closeProfile}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to contacts
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!canEditSelectedLead || !canSendEmail}
+              onClick={() => {
+                setEmailError('');
+                setEmailComposerOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#115e59] disabled:opacity-50"
+            >
+              <Mail className="h-4 w-4" /> Compose email
+            </button>
+          </div>
+        </div>
 
+        {/* Profile Header & Financial KPI Banner */}
         <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Lead profile</p>
-          <div className="mt-2 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-950">
-                {profile ? `${profile.lead.firstName} ${profile.lead.lastName}` : selectedLead ? `${selectedLead.firstName} ${selectedLead.lastName}` : 'Lead profile'}
-              </h2>
-              <a className="mt-1 inline-block break-all text-sm text-teal-800 hover:underline" href={`mailto:${profile?.lead.email || selectedLead?.email || ''}`}>
-                {profile?.lead.email || selectedLead?.email}
-              </a>
+          <div className="flex flex-wrap items-start justify-between gap-5">
+            <div className="flex items-start gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-xl font-bold uppercase text-teal-800">
+                {(profile?.lead.firstName || selectedLead?.firstName || 'C')[0]}
+                {(profile?.lead.lastName || selectedLead?.lastName || '')[0]}
+              </span>
+              <div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-2xl font-bold text-slate-900">
+                    {profile
+                      ? `${profile.lead.firstName} ${profile.lead.lastName}`
+                      : selectedLead
+                      ? `${selectedLead.firstName} ${selectedLead.lastName}`
+                      : 'Lead profile'}
+                  </h1>
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${leadStageObj.bg} ${leadStageObj.text} border ${leadStageObj.border}`}
+                  >
+                    {profile?.lead.status || selectedLead?.status}
+                  </span>
+                  {profile?.lead.marketingConsent && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                      <Check className="h-3 w-3" /> Opted in
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                  <span className="font-mono text-slate-700">{profile?.lead.email || selectedLead?.email}</span>
+                  {profile?.lead.phone && <span>· {profile.lead.phone}</span>}
+                  <span>· {profile?.lead.country || getLeadCountry(profile?.lead.phone || '')}</span>
+                  <span>· Source: {profile?.lead.leadSource || selectedLead?.leadSource}</span>
+                </div>
+              </div>
             </div>
-            {profile && <span className="rounded-full bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-900">{profile.lead.status}</span>}
+
+            {/* Quick KPI stats */}
+            <div className="flex flex-wrap gap-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Lifetime Spend</p>
+                <p className="mt-0.5 text-lg font-bold text-slate-900">${totalCustomerSpend.toFixed(2)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Orders</p>
+                <p className="mt-0.5 text-lg font-bold text-slate-900">{profile?.orders.length ?? selectedLead?.orderCount ?? 0}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Avg. Order Value</p>
+                <p className="mt-0.5 text-lg font-bold text-slate-900">${averageOrderValue.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Profile Navigation Tabs */}
+          <div className="mt-6 flex gap-2 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setProfileActiveTab('overview')}
+              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                profileActiveTab === 'overview'
+                  ? 'bg-teal-50 text-teal-800'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              Contact & Notes
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileActiveTab('orders')}
+              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                profileActiveTab === 'orders'
+                  ? 'bg-teal-50 text-teal-800'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              Orders ({profile?.orders.length ?? 0})
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileActiveTab('timeline')}
+              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                profileActiveTab === 'timeline'
+                  ? 'bg-teal-50 text-teal-800'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              Unified Timeline ({combinedTimeline.length})
+            </button>
           </div>
         </header>
 
-        {profileLoading && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Loading contact profile and order history…</p>}
+        {profileLoading && (
+          <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm font-medium text-teal-900">
+            Loading contact profile, orders, and interaction history…
+          </p>
+        )}
+
         {profileError && (
           <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
             <p>{profileError}</p>
-            {selectedLead && <button type="button" onClick={() => void openProfile(selectedLead)} className="mt-2 font-semibold underline">Try again</button>}
+            {selectedLead && (
+              <button
+                type="button"
+                onClick={() => void openProfile(selectedLead)}
+                className="mt-2 font-semibold underline"
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 
         {profile && (
           <>
-            <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="text-base font-bold text-slate-900">Contact details</h3>
-                <button
-                  type="button"
-                  aria-expanded={contactDetailsEditing}
-                  disabled={!isSuperadmin}
-                  title={isSuperadmin ? undefined : 'Only a superadmin can edit contact details.'}
-                  onClick={() => contactDetailsEditing ? cancelContactDetailsEdit() : setContactDetailsEditing(true)}
-                  className="inline-flex items-center gap-2 rounded-md border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-500 disabled:hover:bg-white"
-                >
-                  {contactDetailsEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-                  {isSuperadmin
-                    ? contactDetailsEditing ? 'Cancel editing' : 'Edit contact details'
-                    : 'Edit contact details (admin only)'}
-                </button>
-              </div>
-              <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                <div><p className="text-xs font-medium uppercase text-slate-500">Email</p><p className="mt-1 break-all text-sm text-slate-900">{profile.lead.email}</p></div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-slate-500">Phone</p>
-                  {profile.lead.phone
-                    ? <a href={`tel:${phoneLink(profile.lead.phone)}`} className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline"><Phone className="h-4 w-4" />{profile.lead.phone}</a>
-                    : <p className="mt-1 text-sm text-slate-500">No phone number saved</p>}
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-slate-500">Country</p>
-                  <p className="mt-1 text-sm text-slate-900">{profile.lead.country || getLeadCountry(profile.lead.phone)}</p>
-                </div>
-                <div><p className="text-xs font-medium uppercase text-slate-500">Source</p><p className="mt-1 text-sm text-slate-900">{profile.lead.leadSource}</p></div>
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium uppercase text-slate-500">Added</p>
-                      <p className="mt-1 text-sm text-slate-900">{new Date(profile.lead.createdAt).toLocaleDateString()}</p>
+            {/* TAB 1: OVERVIEW & NOTES */}
+            {profileActiveTab === 'overview' && (
+              <div className="grid gap-6 lg:grid-cols-3">
+                {/* Left 2 Cols: Contact info & Activity Notes */}
+                <div className="space-y-6 lg:col-span-2">
+                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h2 className="text-base font-bold text-slate-900">Contact details</h2>
+                      {isSuperadmin && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            contactDetailsEditing ? cancelContactDetailsEdit() : setContactDetailsEditing(true)
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          {contactDetailsEditing ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                          {contactDetailsEditing ? 'Cancel' : 'Edit details'}
+                        </button>
+                      )}
                     </div>
-                    <button type="button" disabled={!canEditSelectedLead || !canSendEmail} title={!canEditSelectedLead ? 'Assign this new lead before contacting them from the CRM.' : !canSendEmail ? 'Your account does not have permission to send email.' : undefined} onClick={() => { setEmailError(''); setEmailComposerOpen(true); }} className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-teal-800 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline">
-                      <Mail className="h-4 w-4" /> Compose email
-                    </button>
-                  </div>
-                </div>
-              </div>
-              {isSuperadmin && contactDetailsEditing && (
-                <form onSubmit={saveContactDetails} className="mt-5 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2">
-                  <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                  <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                  <label className="text-sm font-medium text-slate-700">Email<input required type="email" maxLength={254} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                  <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} disabled={profileSaving} /></span></label>
-                  <label className="block text-sm font-medium text-slate-700">Country<span className="mt-1 block"><CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={profileSaving} /></span></label>
-                  <div className="flex items-end sm:col-span-2">
-                    <button type="submit" disabled={profileSaving || !onUpdateLead} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                      {profileSaving ? 'Saving contact details…' : 'Save contact details'}
-                    </button>
-                    <button type="button" disabled={profileSaving} onClick={cancelContactDetailsEdit} className="ml-2 rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
-              <div className="mt-5 grid items-start gap-5 border-t border-slate-100 pt-5 lg:grid-cols-2">
-                <div>
-                  <form onSubmit={(event) => void saveActivity(event)} className="space-y-3">
-                  <label className="block text-sm font-medium text-slate-700">Add an internal comment
-                    <textarea required maxLength={2000} rows={3} value={activityNote} onChange={(event) => setActivityNote(event.target.value)} disabled={!canEditSelectedLead} placeholder={canEditSelectedLead ? 'Add an internal comment. Do not enter health, prescription, payment, or other sensitive information.' : 'Unassigned new leads are view-only until the administrator assigns them.'} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 disabled:bg-slate-50" />
-                  </label>
-                  <button type="submit" disabled={!canEditSelectedLead || activitySaving || !onAddLeadActivity || !activityNote.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                    <MessageSquare className="h-4 w-4" />
-                    {activitySaving ? 'Saving…' : 'Add comment'}
-                  </button>
-                  </form>
-                  <div className="mt-6">
-                    <h4 className="mb-3 text-sm font-bold text-slate-900">Comment history</h4>
-                    {noteActivities.length ? (
-                      <ol className="space-y-3">
-                        {noteActivities.map((activity) => (
-                          <li key={activity.id} className="border-l-2 border-slate-200 pl-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-sm font-semibold text-slate-900">Comment added</p>
-                              <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
-                            {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
-                          </li>
-                        ))}
-                      </ol>
-                    ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No comments have been recorded yet.</p>}
-                  </div>
-                </div>
 
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-slate-700">Status
-                    <select
-                      disabled={!canEditSelectedLead || profileSaving || !onUpdateLead}
-                      value={profile.lead.status}
-                      onChange={(event) => void updateProfile({ status: event.target.value as LeadStatus })}
-                      className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2"
-                    >
-                      {(['New', 'Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status} value={status}>{status}</option>)}
-                    </select>
-                  </label>
-                  <p aria-live="polite" className="text-xs text-slate-500">{!canEditSelectedLead ? 'Unassigned new leads are view-only until the administrator assigns them.' : profileSaving ? 'Saving stage…' : 'Stage changes save immediately and are added to the staff history below.'}</p>
-                  <div className="pt-3">
-                    <h4 className="mb-3 text-sm font-bold text-slate-900">Status history</h4>
-                    {statusActivities.length ? (
-                      <ol className="space-y-3">
-                        {statusActivities.map((activity) => (
-                          <li key={activity.id} className="border-l-2 border-teal-200 pl-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-sm font-semibold text-slate-900">Stage changed: {activity.fromStatus || 'Unknown'} → {activity.toStatus || 'Unknown'}</p>
-                              <time className="text-xs text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-600">By {activity.actorName || activity.actorEmail}</p>
-                            {activity.note && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{activity.note}</p>}
-                          </li>
-                        ))}
-                      </ol>
-                    ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No stage changes have been recorded yet.</p>}
-                  </div>
-                </div>
-
-                <label className="flex items-start gap-2 border-t border-slate-100 pt-4 text-sm text-slate-700 lg:col-span-2">
-                  <input type="checkbox" disabled={!canEditSelectedLead || profileSaving || !onUpdateLead} checked={profile.lead.marketingConsent} onChange={(event) => void updateProfile({ marketingConsent: event.target.checked })} className="mt-1" />
-                  <span><span className="font-medium">Explicit marketing opt-in recorded.</span> Only mark this when the contact has actually consented to marketing email.</span>
-                </label>
-              </div>
-            </section>
-
-            {emailComposerOpen && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="lead-email-title">
-                <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-                  <div className="flex items-start justify-between border-b border-slate-200 p-5">
-                    <div>
-                      <h3 id="lead-email-title" className="flex items-center gap-2 text-lg font-bold text-slate-900"><Mail className="h-5 w-5 text-teal-800" />Compose email</h3>
-                      <p className="mt-1 text-sm text-slate-600">Send through the connected Hostinger account. The message will be logged in CRM email activity.</p>
-                    </div>
-                    <button type="button" disabled={emailSending} onClick={() => setEmailComposerOpen(false)} aria-label="Close email composer" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
-                  </div>
-                  <form onSubmit={(event) => void sendLeadEmail(event)} className="space-y-4 p-5">
-                    <label className="block text-sm font-medium text-slate-700">To
-                      <input type="email" readOnly value={profile.lead.email} className="mt-1 block w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-slate-600" />
-                    </label>
-                    <label className="block text-sm font-medium text-slate-700">Subject
-                      <input required maxLength={180} value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
-                    </label>
-                    <label className="block text-sm font-medium text-slate-700">Message
-                      <textarea required maxLength={10000} rows={7} value={emailBody} onChange={(event) => setEmailBody(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" />
-                    </label>
-                    {!profile.lead.marketingConsent && (
-                      <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                        This contact has not opted in to marketing. Do not use this composer for promotional outreach unless valid consent is recorded.
-                      </p>
+                    {!contactDetailsEditing ? (
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Email Address</p>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="truncate text-sm font-semibold text-slate-900">{profile.lead.email}</span>
+                            {copyButton(profile.lead, 'email', profile.lead.email)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Phone Number</p>
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="truncate text-sm font-semibold text-slate-900">{profile.lead.phone || 'Not provided'}</span>
+                            {profile.lead.phone && copyButton(profile.lead, 'phone', profile.lead.phone)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Country / Region</p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <CountryFlag countryCode={getLeadCountryCode(profile.lead.country ?? '', profile.lead.phone)} />
+                            <span className="text-sm font-semibold text-slate-900">{profile.lead.country || getLeadCountry(profile.lead.phone)}</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Acquisition Source</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">{profile.lead.leadSource}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <form onSubmit={saveContactDetails} className="mt-4 grid gap-4 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-slate-700">
+                          First name
+                          <input
+                            required
+                            maxLength={100}
+                            value={profileFirstName}
+                            onChange={(e) => setProfileFirstName(e.target.value)}
+                            className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700">
+                          Last name
+                          <input
+                            required
+                            maxLength={100}
+                            value={profileLastName}
+                            onChange={(e) => setProfileLastName(e.target.value)}
+                            className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700">
+                          Email
+                          <input
+                            required
+                            type="email"
+                            maxLength={254}
+                            value={profileEmail}
+                            onChange={(e) => setProfileEmail(e.target.value)}
+                            className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700">
+                          Phone
+                          <span className="mt-1 block">
+                            <PhoneCountryInput value={profilePhone} onChange={setProfilePhone} disabled={profileSaving} />
+                          </span>
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700 sm:col-span-2">
+                          Country
+                          <span className="mt-1 block">
+                            <CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={profileSaving} />
+                          </span>
+                        </label>
+                        <div className="flex items-center gap-2 sm:col-span-2">
+                          <button
+                            type="submit"
+                            disabled={profileSaving}
+                            className="rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm disabled:opacity-50"
+                          >
+                            {profileSaving ? 'Saving…' : 'Save changes'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelContactDetailsEdit}
+                            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     )}
-                    {emailError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{emailError}</p>}
-                    <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                      <button type="button" disabled={emailSending} onClick={() => setEmailComposerOpen(false)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-                      <button type="submit" disabled={emailSending || !emailSubject.trim() || !emailBody.trim()} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                        <Send className="h-4 w-4" /> {emailSending ? 'Sending…' : 'Send via Hostinger'}
+                  </section>
+
+                  {/* Internal Staff Comments */}
+                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-base font-bold text-slate-900">Internal notes & comments</h2>
+                    <form onSubmit={(e) => void saveActivity(e)} className="mt-4 space-y-3">
+                      <textarea
+                        required
+                        maxLength={2000}
+                        rows={3}
+                        value={activityNote}
+                        onChange={(e) => setActivityNote(e.target.value)}
+                        placeholder="Add an internal note or consult log for team reference…"
+                        className="w-full rounded-xl border border-slate-300 p-3 text-sm focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                      />
+                      <button
+                        type="submit"
+                        disabled={activitySaving || !activityNote.trim()}
+                        className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm disabled:opacity-50"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {activitySaving ? 'Saving note…' : 'Post comment'}
                       </button>
+                    </form>
+
+                    <div className="mt-6 space-y-3">
+                      {profile.activities.filter((a) => a.type === 'note').length > 0 ? (
+                        profile.activities
+                          .filter((a) => a.type === 'note')
+                          .map((note) => (
+                            <div key={note.id} className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                                <span className="font-semibold text-slate-700">{note.actorName || note.actorEmail || 'Staff'}</span>
+                                <time>{new Date(note.createdAt).toLocaleString()}</time>
+                              </div>
+                              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{note.note}</p>
+                            </div>
+                          ))
+                      ) : (
+                        <p className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
+                          No internal notes recorded yet.
+                        </p>
+                      )}
                     </div>
-                  </form>
+                  </section>
+                </div>
+
+                {/* Right Col: Stage management, Agent Assignment & Marketing Consent */}
+                <div className="space-y-6">
+                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">Lead Status & Stage</h2>
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">Current Pipeline Stage</label>
+                        <select
+                          disabled={!canEditSelectedLead || profileSaving}
+                          value={profile.lead.status}
+                          onChange={(e) => void updateProfile({ status: e.target.value as LeadStatus })}
+                          className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+                        >
+                          {STAGES.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {isSuperadmin && (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600">Assigned Staff Agent</label>
+                          <select
+                            value={profile.lead.assignedStaffId ?? ''}
+                            onChange={(e) =>
+                              void updateProfile({ assignedStaffId: e.target.value ? Number(e.target.value) : null })
+                            }
+                            className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800"
+                          >
+                            <option value="">Unassigned</option>
+                            {agents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.display_name || agent.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
+                        <label className="flex items-start gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            disabled={!canEditSelectedLead || profileSaving}
+                            checked={profile.lead.marketingConsent}
+                            onChange={(e) => void updateProfile({ marketingConsent: e.target.checked })}
+                            className="mt-0.5 rounded text-teal-800"
+                          />
+                          <span>
+                            <strong className="block font-semibold text-slate-900">Marketing Consent</strong>
+                            Explicit opt-in recorded for wellness updates and promotional correspondence.
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
             )}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6">
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <h3 className="flex items-center gap-2 text-base font-bold text-slate-900"><Package className="h-4 w-4 text-teal-800" />Orders and tracking</h3>
-                  <p className="mt-1 text-sm text-slate-600">{profile.lead.orderCount || 0} order{profile.lead.orderCount === 1 ? '' : 's'} linked to this email</p>
+            {/* TAB 2: ORDERS & TRACKING */}
+            {profileActiveTab === 'orders' && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">Customer Purchase History</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {profile.orders.length} order{profile.orders.length === 1 ? '' : 's'} linked to {profile.lead.email}
+                    </p>
+                  </div>
+                  <span className="text-sm font-bold text-slate-900">
+                    Total: ${totalCustomerSpend.toFixed(2)}
+                  </span>
                 </div>
-                {profile.lead.lastOrderAt && <p className="text-xs text-slate-500">Last order {new Date(profile.lead.lastOrderAt).toLocaleDateString()}</p>}
-              </div>
-              {profile.orders.length ? (
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2">Order</th><th className="px-3 py-2">Placed</th><th className="px-3 py-2">Items</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Tracking</th></tr></thead>
-                    <tbody>{profile.orders.map((order) => (
-                      <tr key={order.id} className="border-t border-slate-100">
-                        <td className="px-3 py-3 font-medium">{order.orderNumber}</td>
-                        <td className="px-3 py-3">{new Date(order.placedAt).toLocaleDateString()}</td>
-                        <td className="px-3 py-3">{order.medicationName}</td>
-                        <td className="px-3 py-3">${order.totalAmount.toFixed(2)}</td>
-                        <td className="px-3 py-3">{order.status}</td>
-                        <td className="px-3 py-3">{order.trackingNumber ? `${order.carrier || 'Carrier'} · ${order.trackingNumber}` : 'Not available'}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
+
+                {profile.orders.length > 0 ? (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Order #</th>
+                          <th className="px-4 py-3">Placed</th>
+                          <th className="px-4 py-3">Medications & Products</th>
+                          <th className="px-4 py-3">Total</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3">Delivery & Tracking</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-800">
+                        {profile.orders.map((order) => (
+                          <tr key={order.id} className="hover:bg-slate-50/50">
+                            <td className="px-4 py-3 font-mono font-semibold text-slate-900">{order.orderNumber}</td>
+                            <td className="px-4 py-3 text-xs text-slate-600">
+                              {new Date(order.placedAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-slate-900">{order.medicationName || 'Wellness Item'}</p>
+                              {order.items && order.items.length > 0 && (
+                                <p className="text-xs text-slate-500">
+                                  {order.items.map((i) => `${i.name} (x${i.quantity})`).join(', ')}
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-900">
+                              ${order.totalAmount.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                  order.status === 'Delivered'
+                                    ? 'bg-emerald-50 text-emerald-800'
+                                    : order.status === 'Cancelled'
+                                    ? 'bg-rose-50 text-rose-800'
+                                    : 'bg-blue-50 text-blue-800'
+                                }`}
+                              >
+                                {order.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs">
+                              {order.trackingNumber ? (
+                                <span className="font-medium text-slate-700">
+                                  {order.carrier || 'Carrier'}: <span className="font-mono">{order.trackingNumber}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">Processing</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+                    No orders linked to this customer email yet.
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* TAB 3: UNIFIED TIMELINE */}
+            {profileActiveTab === 'timeline' && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-base font-bold text-slate-900">Chronological Customer History</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Unified feed of orders, stage changes, call outcomes, and staff notes.
+                </p>
+
+                <div className="mt-6 flow-root">
+                  <ul className="-mb-8">
+                    {combinedTimeline.map((item, index) => {
+                      const isLast = index === combinedTimeline.length - 1;
+                      if (item.type === 'order') {
+                        const order = item.data;
+                        return (
+                          <li key={`order-${order.id}`}>
+                            <div className="relative pb-8">
+                              {!isLast && (
+                                <span
+                                  className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-slate-200"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <div className="relative flex space-x-3">
+                                <div>
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 ring-4 ring-white">
+                                    <Package className="h-4 w-4" />
+                                  </span>
+                                </div>
+                                <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-900">
+                                      Order Placed: {order.orderNumber} (${order.totalAmount.toFixed(2)})
+                                    </p>
+                                    <p className="text-xs text-slate-500">
+                                      {order.medicationName || 'Wellness purchase'} · {order.deliveryMethod}
+                                    </p>
+                                  </div>
+                                  <div className="whitespace-nowrap text-right text-xs text-slate-400">
+                                    <time>{new Date(order.placedAt).toLocaleDateString()}</time>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      }
+
+                      const activity = item.data;
+                      const isStage = activity.type === 'status_change';
+                      return (
+                        <li key={`activity-${activity.id}`}>
+                          <div className="relative pb-8">
+                            {!isLast && (
+                              <span
+                                className="absolute left-4 top-4 -ml-px h-full w-0.5 bg-slate-200"
+                                aria-hidden="true"
+                              />
+                            )}
+                            <div className="relative flex space-x-3">
+                              <div>
+                                <span
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full ring-4 ring-white ${
+                                    isStage
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : 'bg-teal-100 text-teal-800'
+                                  }`}
+                                >
+                                  {isStage ? <TrendingUp className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
+                                </span>
+                              </div>
+                              <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {isStage
+                                      ? `Stage transition: ${activity.fromStatus || 'Initial'} → ${activity.toStatus}`
+                                      : 'Internal Staff Note'}
+                                  </p>
+                                  {activity.note && (
+                                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">
+                                      {activity.note}
+                                    </p>
+                                  )}
+                                  <p className="mt-1 text-[11px] text-slate-400">
+                                    Recorded by {activity.actorName || activity.actorEmail || 'Staff'}
+                                  </p>
+                                </div>
+                                <div className="whitespace-nowrap text-right text-xs text-slate-400">
+                                  <time>{new Date(activity.createdAt).toLocaleDateString()}</time>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
-              ) : <p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">No orders are associated with this email address yet.</p>}
-              {(profile.lead.orderCount || 0) > profile.orders.length && <p className="mt-2 text-xs text-slate-500">Showing the 100 most recent orders.</p>}
-            </section>
+              </section>
+            )}
           </>
+        )}
+
+        {/* EMAIL COMPOSER MODAL */}
+        {emailComposerOpen && profile && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-start justify-between border-b border-slate-200 p-5">
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+                    <Mail className="h-5 w-5 text-teal-800" />
+                    Compose Email to {profile.lead.firstName}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Dispatched securely via connected Hostinger mail servers.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={emailSending}
+                  onClick={() => setEmailComposerOpen(false)}
+                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Quick Template Fill Buttons */}
+              <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Quick Fill Templates:</p>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => applyEmailTemplate('welcome')}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Welcome Intro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyEmailTemplate('order_followup')}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Order Check-in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyEmailTemplate('consult')}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Consult Follow-up
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={(e) => void sendLeadEmail(e)} className="space-y-4 p-5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">Recipient</label>
+                  <input
+                    type="email"
+                    readOnly
+                    value={profile.lead.email}
+                    className="mt-1 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">Subject</label>
+                  <input
+                    required
+                    maxLength={180}
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Subject line…"
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">Message</label>
+                  <textarea
+                    required
+                    maxLength={10000}
+                    rows={7}
+                    value={emailBody}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    placeholder="Write your email message…"
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                  />
+                </div>
+
+                {!profile.lead.marketingConsent && (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    This contact has not explicitly opted into marketing email. Keep messages strictly operational or consultation-focused.
+                  </p>
+                )}
+
+                {emailError && (
+                  <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">{emailError}</p>
+                )}
+
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    disabled={emailSending}
+                    onClick={() => setEmailComposerOpen(false)}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={emailSending || !emailSubject.trim() || !emailBody.trim()}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#115e59] disabled:opacity-50"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {emailSending ? 'Sending…' : 'Send via Hostinger'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </section>
     );
   }
 
+  // ----------------------------------------------------
+  // RENDER: MAIN CRM HUB (TABLE & KANBAN PIPELINE)
+  // ----------------------------------------------------
   return (
-    <section className="space-y-5">
-      {dataError && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
-      {requestError && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
-      {success && <p role="status" className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{success}</p>}
-      {!isSuperadmin && <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">Existing lead contact details are read-only for your role. A superadmin can edit them from the table or lead profile.</p>}
+    <section className="space-y-6">
+      {/* Notifications */}
+      {dataError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
+      {requestError && <p role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
+      {success && <p role="status" className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{success}</p>}
 
-      {mode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !saving) setMode(null);
-        }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="lead-modal-title" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
-            <header className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h3 id="lead-modal-title" className="text-lg font-bold text-slate-900">{mode === 'csv' ? 'Import contacts from CSV' : 'Add contact'}</h3>
-                <p className="mt-1 text-sm text-slate-500">{mode === 'csv' ? 'Upload a CSV file or paste contact rows to preview before saving.' : 'Enter the contact details below.'}</p>
+      {/* TOP KPI COMMAND CENTER */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Contacts</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-800">
+              <Users className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-3xl font-extrabold text-slate-900">{totalLeadsCount}</p>
+          <p className="mt-1 text-xs text-slate-500">Active customer & prospect directory</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Converted Customers</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800">
+              <Package className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-3xl font-extrabold text-slate-900">{customersCount}</p>
+          <p className="mt-1 text-xs text-slate-500">Contacts with completed orders</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Pipeline in Progress</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 text-purple-800">
+              <Clock className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-3xl font-extrabold text-slate-900">{needsFollowupCount}</p>
+          <p className="mt-1 text-xs text-slate-500">Cold, Contacted & Qualified prospects</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Marketing Audience</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
+              <Mail className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-3xl font-extrabold text-slate-900">{eligibleMarketingCount}</p>
+          <p className="mt-1 text-xs text-slate-500">Opted in for Hostinger campaigns</p>
+        </div>
+      </div>
+
+      {/* FILTER & CONTROL BAR */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        {/* Quick Segment Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setLeadTab('all');
+                setLeadPage(1);
+              }}
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                leadTab === 'all'
+                  ? 'bg-teal-800 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              }`}
+            >
+              All contacts ({leads.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLeadTab('uncalled_repeat_buyers');
+                setLeadPage(1);
+              }}
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                leadTab === 'uncalled_repeat_buyers'
+                  ? 'bg-teal-800 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              }`}
+            >
+              Repeat Buyers ({leads.filter(isUncalledRepeatBuyer).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLeadTab('needs_followup');
+                setLeadPage(1);
+              }}
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                leadTab === 'needs_followup'
+                  ? 'bg-teal-800 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              }`}
+            >
+              In Pipeline ({needsFollowupCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLeadTab('opted_in');
+                setLeadPage(1);
+              }}
+              className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                leadTab === 'opted_in'
+                  ? 'bg-teal-800 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+              }`}
+            >
+              Email Opt-in ({eligibleMarketingCount})
+            </button>
+          </div>
+
+          {/* Action Buttons: Add, Import, Export, View Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRequestError('');
+                setMode('manual');
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#0f766e] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#115e59]"
+            >
+              <UserPlus className="h-4 w-4" /> Add contact
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRequestError('');
+                setMode('csv');
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" /> Import CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadContacts(filteredLeads)}
+              disabled={!filteredLeads.length}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              <Download className="h-4 w-4" /> Export CSV
+            </button>
+
+            {/* View switcher: Table vs Kanban */}
+            <div className="ml-2 flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                aria-label="Table view"
+                className={`rounded-lg p-1.5 text-xs font-semibold transition ${
+                  viewMode === 'table' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Dense Data Table"
+              >
+                <TableIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                aria-label="Kanban pipeline view"
+                className={`rounded-lg p-1.5 text-xs font-semibold transition ${
+                  viewMode === 'kanban' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                }`}
+                title="Visual Pipeline Kanban"
+              >
+                <Kanban className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Search, Country & Stage Filters */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setLeadPage(1);
+              }}
+              placeholder="Search by name, email, phone, or country…"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-3.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              aria-label="Filter by stage"
+              value={stageFilter}
+              onChange={(e) => {
+                setStageFilter(e.target.value as 'All' | LeadStatus);
+                setLeadPage(1);
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm"
+            >
+              <option value="All">All stages</option>
+              {STAGES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Filter by country"
+              value={countryFilter}
+              onChange={(e) => {
+                setCountryFilter(e.target.value);
+                setLeadPage(1);
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm"
+            >
+              <option value="All">All countries</option>
+              {availableCountries.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            {(search || stageFilter !== 'All' || countryFilter !== 'All' || leadTab !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setStageFilter('All');
+                  setCountryFilter('All');
+                  setLeadTab('all');
+                }}
+                className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* BATCH ACTION TOOLBAR (VISIBLE WHEN 1+ LEADS SELECTED) */}
+        {selectedLeadIds.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/70 px-4 py-2.5 text-xs">
+            <div className="flex items-center gap-2 font-semibold text-teal-900">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-800 text-[10px] font-bold text-white">
+                {selectedLeadIds.length}
+              </span>
+              <span>contact{selectedLeadIds.length === 1 ? '' : 's'} selected</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-1.5 font-medium text-slate-700">
+                Move to stage:
+                <select
+                  disabled={batchUpdating}
+                  onChange={(e) => {
+                    if (e.target.value) void handleBatchStageUpdate(e.target.value as LeadStatus);
+                  }}
+                  defaultValue=""
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                >
+                  <option value="" disabled>
+                    Select stage
+                  </option>
+                  {STAGES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {isSuperadmin && (
+                <label className="flex items-center gap-1.5 font-medium text-slate-700">
+                  Assign agent:
+                  <select
+                    disabled={batchUpdating}
+                    onChange={(e) => void handleBatchAgentAssign(e.target.value)}
+                    defaultValue=""
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    <option value="" disabled>
+                      Assign staff
+                    </option>
+                    <option value="">Unassigned</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.display_name || a.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const selectedContacts = leads.filter((l) => selectedLeadIds.includes(l.id));
+                  downloadContacts(selectedContacts);
+                }}
+                className="rounded-lg border border-teal-300 bg-white px-2.5 py-1 font-semibold text-teal-800 hover:bg-teal-50"
+              >
+                Export selected
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedLeadIds([])}
+                className="font-medium text-slate-500 hover:text-slate-800"
+              >
+                Deselect
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ------------------------------------------- */}
+      {/* VIEW 1: RESPONSIVE DATA TABLE */}
+      {/* ------------------------------------------- */}
+      {viewMode === 'table' && (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-slate-200 bg-slate-50/80 font-semibold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="w-10 px-4 py-3.5">
+                    <input
+                      type="checkbox"
+                      checked={isAllVisibleSelected}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-300 text-teal-800 cursor-pointer"
+                      aria-label="Select all contacts on this page"
+                    />
+                  </th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('name')}
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Name</span>
+                      {sortField === 'name' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('email')}
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Email</span>
+                      {sortField === 'email' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3.5">Phone</th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('country')}
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Country</span>
+                      {sortField === 'country' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('stage')}
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Stage</span>
+                      {sortField === 'stage' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('orders')}
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Orders</span>
+                      {sortField === 'orders' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('createdAt')}
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Source / Added</span>
+                      {sortField === 'createdAt' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
+                  {isSuperadmin && <th className="px-4 py-3.5">Assigned Agent</th>}
+                  <th className="px-4 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {visibleLeads.map((lead) => {
+                  const stageObj = STAGES.find((s) => s.id === lead.status) || STAGES[0];
+                  const isSelected = selectedLeadIds.includes(lead.id);
+
+                  return (
+                    <tr
+                      key={lead.id}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+                        void openProfile(lead);
+                      }}
+                      className={`cursor-pointer transition hover:bg-slate-50/80 ${
+                        isSelected ? 'bg-teal-50/40' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(lead.id)}
+                          className="rounded border-slate-300 text-teal-800"
+                          aria-label={`Select ${lead.firstName} ${lead.lastName}`}
+                        />
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-teal-900">
+                        <div className="flex items-center">
+                          <span>
+                            {lead.firstName} {lead.lastName}
+                          </span>
+                          {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3 font-mono text-slate-600">
+                        <div className="flex items-center">
+                          <span className="truncate max-w-[180px]">{lead.email}</span>
+                          {copyButton(lead, 'email', lead.email)}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {lead.phone ? (
+                          <div className="flex items-center text-slate-800">
+                            <span>{lead.phone}</span>
+                            {copyButton(lead, 'phone', lead.phone)}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
+                          <span>{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</span>
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${stageObj.bg} ${stageObj.text} border ${stageObj.border}`}
+                        >
+                          {lead.status}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3 font-semibold text-slate-900">
+                        {leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}
+                      </td>
+
+                      <td className="px-4 py-3 text-slate-500">{lead.leadSource}</td>
+
+                      {isSuperadmin && (
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <select
+                            aria-label={`Assign ${lead.firstName} ${lead.lastName}`}
+                            value={lead.assignedStaffId ?? ''}
+                            onChange={(e) => {
+                              if (onUpdateLead) void onUpdateLead(lead.id, { assignedStaffId: e.target.value ? Number(e.target.value) : null });
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+                          >
+                            <option value="">Unassigned</option>
+                            {agents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.display_name || agent.email}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => void openProfile(lead)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {!visibleLeads.length && (
+                  <tr>
+                    <td colSpan={isSuperadmin ? 10 : 9} className="px-6 py-12 text-center text-slate-400">
+                      No contacts match the current filters or search query.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+            <span>
+              Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredLeads.length)} of{' '}
+              {filteredLeads.length} contacts
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() => setLeadPage(currentPage - 1)}
+                className="rounded-lg border border-slate-200 px-3 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span>
+                Page {currentPage} of {pageCount}
+              </span>
+              <button
+                type="button"
+                disabled={currentPage >= pageCount}
+                onClick={() => setLeadPage(currentPage + 1)}
+                className="rounded-lg border border-slate-200 px-3 py-1 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------- */}
+      {/* VIEW 2: VISUAL KANBAN PIPELINE VIEW */}
+      {/* ------------------------------------------- */}
+      {viewMode === 'kanban' && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+          {STAGES.map((col) => {
+            const columnLeads = filteredLeads.filter((l) => l.status === col.id);
+
+            return (
+              <div key={col.id} className="flex flex-col rounded-2xl border border-slate-200/90 bg-slate-50/70 p-3 shadow-sm">
+                {/* Column Header */}
+                <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${col.bg} ${col.text}`}
+                    >
+                      {col.label}
+                    </span>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">{columnLeads.length}</span>
+                </div>
+
+                {/* Column Cards */}
+                <div className="mt-3 flex-1 space-y-2.5 overflow-y-auto max-h-[680px]">
+                  {columnLeads.map((lead) => (
+                    <article
+                      key={lead.id}
+                      onClick={() => void openProfile(lead)}
+                      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:border-teal-400 hover:shadow"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-bold text-slate-900 truncate">
+                          {lead.firstName} {lead.lastName}
+                        </h4>
+                        <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
+                      </div>
+
+                      <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{lead.email}</p>
+
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500 border-t border-slate-100 pt-2.5">
+                        <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
+                          <Package className="h-3 w-3 text-slate-400" />
+                          {lead.orderCount || 0} order{lead.orderCount === 1 ? '' : 's'}
+                        </span>
+
+                        {lead.marketingConsent && (
+                          <span className="text-[10px] font-semibold text-emerald-700">Opted in</span>
+                        )}
+                      </div>
+
+                      {/* Quick stage transition button */}
+                      <div className="mt-2.5 flex items-center justify-between gap-1 pt-2 border-t border-slate-100/80" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[10px] text-slate-400">Move:</span>
+                        <select
+                          value={lead.status}
+                          onChange={(e) => {
+                            if (onUpdateLead) void onUpdateLead(lead.id, { status: e.target.value as LeadStatus });
+                          }}
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700"
+                        >
+                          {STAGES.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </article>
+                  ))}
+
+                  {!columnLeads.length && (
+                    <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+                      No contacts in this stage
+                    </div>
+                  )}
+                </div>
               </div>
-              <button type="button" onClick={() => setMode(null)} disabled={saving} aria-label="Close dialog" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50">
+            );
+          })}
+        </div>
+      )}
+
+      {/* CSV & MANUAL ADD MODAL */}
+      {mode && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !saving) setMode(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <header className="mb-5 flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {mode === 'csv' ? 'Import Contacts from CSV' : 'Create New Contact Lead'}
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {mode === 'csv'
+                    ? 'Upload or paste contact records to preview and import into the database.'
+                    : 'Add an individual customer or prospect to the CRM.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMode(null)}
+                disabled={saving}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              >
                 <X className="h-5 w-5" />
               </button>
             </header>
+
             {mode === 'csv' ? (
-              <div>
+              <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
-                    <Upload className="h-4 w-4" /> Choose CSV
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                    <Upload className="h-4 w-4" /> Choose CSV File
                     <input type="file" accept=".csv,text/csv" className="sr-only" onChange={handleFile} />
                   </label>
-                  <button type="button" onClick={downloadSample} className="inline-flex items-center gap-2 text-sm font-medium text-teal-800 underline">
-                    <Download className="h-4 w-4" /> Download contact-only template
+                  <button
+                    type="button"
+                    onClick={downloadSample}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:underline"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download Template
                   </button>
                 </div>
-                <label htmlFor="contact-leads-csv" className="mt-4 block text-sm font-medium text-slate-700">Or paste CSV</label>
+
                 <textarea
-                  id="contact-leads-csv"
                   value={csv}
-                  onChange={(event) => parse(event.target.value)}
+                  onChange={(e) => parse(e.target.value)}
                   rows={5}
-                  placeholder={'first_name,last_name,email,phone\nJane,Doe,jane@example.com,555-0100'}
-                  className="mt-2 w-full rounded-md border border-slate-300 p-3 font-mono text-sm"
+                  placeholder={'first_name,last_name,email,phone\nEleanor,Vance,eleanor@example.com,+15553491102'}
+                  className="w-full rounded-xl border border-slate-300 p-3 font-mono text-xs focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
                 />
-                {errors.map((error) => <p key={error} className="mt-2 flex items-center gap-2 text-sm text-rose-700"><AlertCircle className="h-4 w-4" />{error}</p>)}
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead><tr className="border-b text-slate-500"><th className="py-2">Name</th><th>Email</th><th>Phone</th><th>Country</th><th>Marketing consent</th></tr></thead>
-                    <tbody>
-                      {preview.map((lead, index) => <tr key={`${lead.email}-${index}`} className="border-b border-slate-100"><td className="py-2">{lead.firstName} {lead.lastName}</td><td>{lead.email}</td><td>{lead.phone || '—'}</td><td>{lead.country || getLeadCountry(lead.phone)}</td><td>{lead.marketingConsent ? 'Opted in' : 'Not opted in'}</td></tr>)}
-                    </tbody>
-                  </table>
+
+                {errors.map((err) => (
+                  <p key={err} className="flex items-center gap-2 text-xs text-rose-700">
+                    <AlertCircle className="h-4 w-4 shrink-0" /> {err}
+                  </p>
+                ))}
+
+                {preview.length > 0 && (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 font-semibold text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2">Name</th>
+                          <th className="px-3 py-2">Email</th>
+                          <th className="px-3 py-2">Phone</th>
+                          <th className="px-3 py-2">Consent</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {preview.slice(0, 10).map((p, i) => (
+                          <tr key={`${p.email}-${i}`}>
+                            <td className="px-3 py-2">
+                              {p.firstName} {p.lastName}
+                            </td>
+                            <td className="px-3 py-2 font-mono">{p.email}</td>
+                            <td className="px-3 py-2">{p.phone || '—'}</td>
+                            <td className="px-3 py-2">{p.marketingConsent ? 'Opted in' : 'No'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setMode(null)}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!preview.length || saving}
+                    onClick={() => void save(preview)}
+                    className="rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#115e59] disabled:opacity-50"
+                  >
+                    {saving ? 'Importing…' : `Import ${preview.length} leads`}
+                  </button>
                 </div>
-                <button type="button" disabled={!preview.length || saving} onClick={() => void save(preview)} className="mt-4 rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                  {saving ? 'Saving…' : `Save ${preview.length} leads`}
-                </button>
               </div>
             ) : (
               <form onSubmit={handleManualSubmit} className="grid gap-4 sm:grid-cols-2">
-                <label className="text-sm font-medium text-slate-700">First name<input required value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="text-sm font-medium text-slate-700">Last name<input required value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="text-sm font-medium text-slate-700">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-                <label className="block text-sm font-medium text-slate-700">Phone (optional)<span className="mt-1 block"><PhoneCountryInput value={phone} onChange={setPhone} /></span></label>
-                <label className="block text-sm font-medium text-slate-700">Country (optional)<span className="mt-1 block"><CountrySelect value={country} onChange={setCountry} /></span></label>
-                <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
-                  <input type="checkbox" checked={marketingConsent} onChange={(event) => setMarketingConsent(event.target.checked)} className="mt-1" />
-                  <span>Contact explicitly opted in to marketing emails. Leave unchecked unless consent was actually given.</span>
+                <label className="text-xs font-semibold text-slate-700">
+                  First name
+                  <input
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
                 </label>
-                <button disabled={saving} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-2">{saving ? 'Saving…' : 'Save contact lead'}</button>
+                <label className="text-xs font-semibold text-slate-700">
+                  Last name
+                  <input
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-slate-700">
+                  Email address
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-slate-700">
+                  Phone (optional)
+                  <span className="mt-1 block">
+                    <PhoneCountryInput value={phone} onChange={setPhone} />
+                  </span>
+                </label>
+                <label className="text-xs font-semibold text-slate-700 sm:col-span-2">
+                  Country
+                  <span className="mt-1 block">
+                    <CountrySelect value={country} onChange={setCountry} />
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-xs text-slate-700 sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={marketingConsent}
+                    onChange={(e) => setMarketingConsent(e.target.checked)}
+                    className="mt-0.5 rounded text-teal-800"
+                  />
+                  <span>Contact explicitly opted in to promotional and educational correspondence.</span>
+                </label>
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 sm:col-span-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setMode(null)}
+                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#115e59] disabled:opacity-50"
+                  >
+                    {saving ? 'Saving…' : 'Save contact'}
+                  </button>
+                </div>
               </form>
             )}
           </section>
         </div>
       )}
-
-      {editingLead && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !editLeadSaving) setEditingLead(null);
-          }}
-        >
-          <section role="dialog" aria-modal="true" aria-labelledby="edit-lead-title" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
-            <header className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h3 id="edit-lead-title" className="text-lg font-bold text-slate-900">Edit lead contact</h3>
-                <p className="mt-1 text-sm text-slate-500">Update contact details for {editingLead.firstName} {editingLead.lastName}.</p>
-              </div>
-              <button type="button" disabled={editLeadSaving} onClick={() => setEditingLead(null)} aria-label="Close edit lead dialog" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50">
-                <X className="h-5 w-5" />
-              </button>
-            </header>
-            {editLeadError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{editLeadError}</p>}
-            <form onSubmit={saveLeadFromTable} className="grid gap-4 sm:grid-cols-2">
-              <label className="text-sm font-medium text-slate-700">First name<input required maxLength={100} value={profileFirstName} onChange={(event) => setProfileFirstName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-              <label className="text-sm font-medium text-slate-700">Last name<input required maxLength={100} value={profileLastName} onChange={(event) => setProfileLastName(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-              <label className="text-sm font-medium text-slate-700">Email<input required type="email" maxLength={254} value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2" /></label>
-              <label className="block text-sm font-medium text-slate-700">Phone<span className="mt-1 block"><PhoneCountryInput value={profilePhone} onChange={setProfilePhone} disabled={editLeadSaving} /></span></label>
-              <label className="block text-sm font-medium text-slate-700">Country<span className="mt-1 block"><CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={editLeadSaving} /></span></label>
-              <div className="flex items-end justify-end gap-2 sm:col-span-2">
-                <button type="button" disabled={editLeadSaving} onClick={() => setEditingLead(null)} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={editLeadSaving || !onUpdateLead} className="rounded-md bg-teal-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                  {editLeadSaving ? 'Saving…' : 'Save changes'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap gap-2 border-b border-slate-200 px-5 pt-4" role="group" aria-label="Lead groups">
-          <button
-            type="button"
-            aria-pressed={leadTab === 'all'}
-            onClick={() => { setLeadPage(1); setLeadTab('all'); }}
-            className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'all' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-          >
-            All leads ({leads.length})
-          </button>
-          <button
-            type="button"
-            aria-pressed={leadTab === 'uncalled_repeat_buyers'}
-            onClick={() => { setLeadPage(1); setLeadTab('uncalled_repeat_buyers'); }}
-            className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-semibold ${leadTab === 'uncalled_repeat_buyers' ? 'border-teal-700 text-teal-800' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-            title="Leads with no recorded call and at least two non-cancelled orders"
-          >
-            Active ({uncalledRepeatBuyers.length})
-          </button>
-        </div>
-        <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-3">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">Saved contacts ({leads.length})</h3>
-            <p className="mt-1 text-xs text-slate-500">{eligibleCount} explicitly opted-in contact{eligibleCount === 1 ? '' : 's'} eligible for bulk email</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => { setRequestError(''); setMode('csv'); }} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Upload className="h-4 w-4" /> CSV import
-            </button>
-            <button type="button" onClick={() => { setRequestError(''); setMode('manual'); }} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-900">
-              <UserPlus className="h-4 w-4" /> Add contact
-            </button>
-            <button type="button" onClick={downloadContacts} disabled={!leads.length} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
-              <Download className="h-4 w-4" /> Download contacts
-            </button>
-            {isSuperadmin && onOpenEmailCampaigns && (
-              <button type="button" onClick={onOpenEmailCampaigns} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                <Mail className="h-4 w-4" /> Bulk email campaigns
-              </button>
-            )}
-            <label className="relative">
-              <span className="sr-only">Search leads</span>
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={search} onChange={(event) => { setLeadPage(1); setSearch(event.target.value); }} placeholder="Search contacts" className="rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm" />
-            </label>
-            <select aria-label="Filter by lead stage" value={stageFilter} onChange={(event) => { setLeadPage(1); setStageFilter(event.target.value as 'All' | LeadStatus); }} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="All">All stages</option>
-              {(['New', 'Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'] as const).map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="mt-3 hidden overflow-x-auto min-[1800px]:block">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Name</th><th className="py-3">Email</th><th className="py-3">Phone</th><th className="py-3">Country</th><th className="py-3">Status</th><th className="py-3">{leadTab === 'uncalled_repeat_buyers' ? 'Active orders' : 'Orders'}</th><th className="py-3">Source</th>{isSuperadmin && <th className="py-3">Assigned agent</th>}<th className="py-3 pr-5 text-right">Actions</th></tr></thead>
-            <tbody>
-              {visibleLeads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className={`border-t border-slate-100 hover:bg-slate-50 ${onLoadLeadProfile ? 'cursor-pointer focus-visible:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-teal-700' : ''}`}
-                  tabIndex={onLoadLeadProfile ? 0 : undefined}
-                  aria-label={onLoadLeadProfile ? `Open profile for ${lead.firstName} ${lead.lastName}` : undefined}
-                  onClick={(event) => {
-                    if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
-                    void openProfile(lead);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      void openProfile(lead);
-                    }
-                  }}
-                >
-                  <td className="px-5 py-3">
-                    <span className="inline-flex items-center">
-                      <span className={onLoadLeadProfile ? 'font-semibold text-teal-800' : ''}>{lead.firstName} {lead.lastName}</span>
-                      {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span className="inline-flex items-center">
-                      {lead.email}
-                      {copyButton(lead, 'email', lead.email)}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span className="inline-flex items-center">
-                      {lead.phone
-                        ? <a href={`tel:${phoneLink(lead.phone)}`} onClick={(event) => event.stopPropagation()} className="inline-flex items-center gap-1 text-teal-800 hover:underline"><Phone className="h-3.5 w-3.5" />{lead.phone}</a>
-                        : <span className="text-slate-400">Not provided</span>}
-                      {lead.phone && copyButton(lead, 'phone', lead.phone)}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
-                      {lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}
-                    </span>
-                  </td>
-                  <td className="py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{lead.status}</span></td>
-                  <td className="py-3">{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}</td>
-                  <td className="py-3">{lead.leadSource}</td>
-                  {isSuperadmin && (
-                    <td className="py-3 pr-3">
-                      <select
-                        aria-label={`Assign ${lead.firstName} ${lead.lastName}`}
-                        value={lead.assignedStaffId ?? ''}
-                        onChange={(event) => void assignLead(lead, event.target.value)}
-                        className="max-w-40 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs"
-                      >
-                        <option value="">Unassigned</option>
-                        {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || agent.email}</option>)}
-                      </select>
-                    </td>
-                  )}
-                  <td className="py-3 pr-5 text-right">
-                    <button
-                      type="button"
-                      disabled={!isSuperadmin}
-                      title={isSuperadmin ? `Edit ${lead.firstName} ${lead.lastName}` : 'Only a superadmin can edit contact details.'}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (isSuperadmin) openLeadEditor(lead);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-teal-700 px-3 py-1.5 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-500 disabled:hover:bg-white"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!filteredLeads.length && <tr><td colSpan={isSuperadmin ? 9 : 8} className="px-5 py-8 text-center text-slate-500">{!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}</td></tr>}
-            </tbody>
-          </table>
-        </div>
-        <div className="grid gap-0 px-2 min-[1800px]:hidden">
-          {visibleLeads.map((lead) => (
-            <article key={lead.id} className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 px-2 py-2.5 transition hover:bg-slate-50">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-                <button type="button" disabled={!onLoadLeadProfile} onClick={() => void openProfile(lead)} className="max-w-full truncate text-left text-sm font-semibold text-[#315649] hover:underline disabled:cursor-default disabled:no-underline">
-                    {lead.firstName} {lead.lastName}
-                </button>
-                <span className="flex min-w-0 items-center">
-                  <a href={`mailto:${lead.email}`} onClick={(event) => event.stopPropagation()} className="max-w-56 truncate text-xs text-slate-600 hover:text-[#315649] hover:underline">{lead.email}</a>
-                  {copyButton(lead, 'email', lead.email)}
-                </span>
-              </div>
-              <span className="shrink-0 rounded-full bg-[#edf2ed] px-2.5 py-1 text-[11px] font-semibold text-[#456953]">{lead.status}</span>
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-                {lead.phone ? (
-                  <span className="flex min-w-0 items-center">
-                    <a href={`tel:${phoneLink(lead.phone)}`} onClick={(event) => event.stopPropagation()} className="max-w-40 truncate hover:text-[#315649]">{lead.phone}</a>
-                    {copyButton(lead, 'phone', lead.phone)}
-                  </span>
-                ) : <span className="text-slate-400">No phone</span>}
-                <span className="inline-flex items-center gap-1.5">
-                  <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
-                  <span className="max-w-28 truncate">{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</span>
-                </span>
-                <span>{leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0} orders</span>
-                <span className="max-w-32 truncate" title={`Source: ${lead.leadSource}`}>{lead.leadSource}</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {isSuperadmin ? (
-                  <>
-                    <label className="sr-only" htmlFor={`lead-assignment-${lead.id}`}>Assign {lead.firstName} {lead.lastName}</label>
-                    <select
-                      id={`lead-assignment-${lead.id}`}
-                      value={lead.assignedStaffId ?? ''}
-                      onChange={(event) => void assignLead(lead, event.target.value)}
-                      className="min-w-0 max-w-40 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
-                    >
-                      <option value="">Unassigned</option>
-                      {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || agent.email}</option>)}
-                    </select>
-                  </>
-                ) : <span className="max-w-28 truncate text-xs text-slate-500">{lead.assignedStaffName || 'Assigned to you'}</span>}
-                <button
-                  type="button"
-                  disabled={!isSuperadmin}
-                  title={isSuperadmin ? `Edit ${lead.firstName} ${lead.lastName}` : 'Only a superadmin can edit contact details.'}
-                  onClick={() => { if (isSuperadmin) openLeadEditor(lead); }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#bdcdbf] hover:bg-[#f5f8f4] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> Edit
-                </button>
-              </div>
-            </article>
-          ))}
-          {!filteredLeads.length && (
-            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center text-sm text-slate-500">
-              {!leads.length ? 'No contact leads are stored yet.' : leadTab === 'uncalled_repeat_buyers' ? 'No uncalled repeat buyers match these filters.' : 'No contacts match these filters.'}
-            </p>
-          )}
-        </div>
-        <nav aria-label="Saved contacts pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
-          <span>
-            {filteredLeads.length
-              ? `Showing ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredLeads.length)} of ${filteredLeads.length}`
-              : 'No matching contacts'}
-          </span>
-          <div className="flex items-center gap-2">
-            <button type="button" disabled={currentPage <= 1} onClick={() => setLeadPage(currentPage - 1)} className="rounded-md border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
-            <span aria-live="polite">Page {currentPage} of {pageCount}</span>
-            <button type="button" disabled={currentPage >= pageCount} onClick={() => setLeadPage(currentPage + 1)} className="rounded-md border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
-          </div>
-        </nav>
-      </div>
-
     </section>
   );
 };

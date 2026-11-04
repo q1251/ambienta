@@ -8,6 +8,9 @@ import {
   getLeadCountry,
   parseLeadsCsv,
   evaluateDueReminders,
+  sortContactLeads,
+  sortOrders,
+  generateTrackingNumber,
 } from './pharmacyLogic';
 import { countryOptions, getLeadCountryCode, phoneInputParts } from './countryOptions';
 import { Patient, ReminderRule } from '../types/pharmacy';
@@ -167,4 +170,59 @@ test('evaluateDueReminders detects records within active threshold', () => {
   assert.equal(due.length, 1);
   assert.equal(due[0].patient.firstName, 'Eleanor');
   assert.equal(due[0].daysLeft, 3);
+});
+
+test('sortContactLeads sorts alphabetically, by stage priority, by orders, and by date', () => {
+  const sampleLeads: any[] = [
+    { id: 1, firstName: 'Zach', lastName: 'Taylor', status: 'New', country: 'United States', email: 'z@example.com', orderCount: 1, createdAt: '2026-10-01' },
+    { id: 2, firstName: 'Alice', lastName: 'Brown', status: 'Customer', country: 'Canada', email: 'a@example.com', orderCount: 5, createdAt: '2026-10-05' },
+    { id: 3, firstName: 'Brian', lastName: 'Adams', status: 'Cold', country: 'United Kingdom', email: 'b@example.com', orderCount: 0, createdAt: '2026-10-03' },
+  ];
+
+  const sortedByName = sortContactLeads(sampleLeads, 'name', 'asc');
+  assert.equal(sortedByName[0].firstName, 'Alice');
+  assert.equal(sortedByName[2].firstName, 'Zach');
+
+  const sortedByNameDesc = sortContactLeads(sampleLeads, 'name', 'desc');
+  assert.equal(sortedByNameDesc[0].firstName, 'Zach');
+  assert.equal(sortedByNameDesc[2].firstName, 'Alice');
+
+  const sortedByStage = sortContactLeads(sampleLeads, 'stage', 'asc');
+  assert.equal(sortedByStage[0].status, 'New');
+  assert.equal(sortedByStage[1].status, 'Cold');
+  assert.equal(sortedByStage[2].status, 'Customer');
+
+  const sortedByOrders = sortContactLeads(sampleLeads, 'orders', 'desc');
+  assert.equal(sortedByOrders[0].orderCount, 5);
+  assert.equal(sortedByOrders[2].orderCount, 0);
+});
+
+test('sortOrders sorts by total amount and order date accurately', () => {
+  const sampleOrders: any[] = [
+    { id: '1', orderNumber: 'ORD-101', placedAt: '2026-11-01', patientName: 'Alice', totalAmount: 45.0, status: 'Pending' },
+    { id: '2', orderNumber: 'ORD-102', placedAt: '2026-11-03', patientName: 'Bob', totalAmount: 120.0, status: 'Shipped' },
+    { id: '3', orderNumber: 'ORD-103', placedAt: '2026-11-02', patientName: 'Charlie', totalAmount: 75.0, status: 'Delivered' },
+  ];
+
+  const sortedByAmount = sortOrders(sampleOrders, 'totalAmount', 'desc');
+  assert.equal(sortedByAmount[0].totalAmount, 120.0);
+  assert.equal(sortedByAmount[2].totalAmount, 45.0);
+
+  const sortedByDate = sortOrders(sampleOrders, 'placedAt', 'desc');
+  assert.equal(sortedByDate[0].orderNumber, 'ORD-102');
+  assert.equal(sortedByDate[2].orderNumber, 'ORD-101');
+});
+
+test('generateTrackingNumber produces valid carrier prefix and tracking code', () => {
+  const defaultTrack = generateTrackingNumber();
+  assert.equal(defaultTrack.carrier, 'CareCourier Express');
+  assert.ok(defaultTrack.trackingNumber.startsWith('CCE-202611-'));
+
+  const fedexTrack = generateTrackingNumber('FedEx');
+  assert.equal(fedexTrack.carrier, 'FedEx Health Logistics');
+  assert.ok(fedexTrack.trackingNumber.startsWith('9400'));
+
+  const uspsTrack = generateTrackingNumber('USPS Priority');
+  assert.equal(uspsTrack.carrier, 'USPS Priority Health');
+  assert.ok(uspsTrack.trackingNumber.startsWith('92055000'));
 });
