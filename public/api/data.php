@@ -604,7 +604,7 @@ function data_ensure_schema(PDO $db): void
             role VARCHAR(24) NOT NULL DEFAULT 'operator',
             permissions TEXT NOT NULL DEFAULT '[\"leads\"]',
             is_active TINYINT(1) NOT NULL DEFAULT 1,
-            must_change_password TINYINT(1) NOT NULL DEFAULT 1,
+            must_change_password TINYINT(1) NOT NULL DEFAULT 0,
             session_version INT UNSIGNED NOT NULL DEFAULT 1,
             created_by VARCHAR(254) NOT NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -617,7 +617,7 @@ function data_ensure_schema(PDO $db): void
     $staffPasswordChangeColumn = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
     $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', 'must_change_password']);
     if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
-        $db->exec('ALTER TABLE staff_users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1 AFTER is_active');
+        $db->exec('ALTER TABLE staff_users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active');
     }
     $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', 'display_name']);
     if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
@@ -773,10 +773,7 @@ function data_require_admin(string $requiredRole = 'operator'): void
         data_respond(401, ['error' => 'unauthorized', 'message' => 'Sign in to access this resource.']);
     }
     if ($_SESSION['admin_role'] === 'operator' && !($requiredRole === 'exit-impersonation' && !empty($_SESSION['is_impersonating']))) {
-        if ((bool) ($_SESSION['must_change_password'] ?? false) && empty($_SESSION['is_impersonating'])) {
-            data_respond(403, ['error' => 'password_change_required', 'message' => 'Change the temporary password before using the workspace.']);
-        }
-        $check = data_db()->prepare('SELECT id, is_active, must_change_password, permissions, session_version FROM staff_users WHERE email = ? AND role = ?');
+        $check = data_db()->prepare('SELECT id, is_active, permissions, session_version FROM staff_users WHERE email = ? AND role = ?');
         $check->execute([$_SESSION['admin_email'], 'operator']);
         $staff = $check->fetch();
         if (!is_array($staff) || (int) $staff['is_active'] !== 1) {
@@ -789,10 +786,7 @@ function data_require_admin(string $requiredRole = 'operator'): void
             session_destroy();
             data_respond(401, ['error' => 'session_revoked', 'message' => 'This account was updated. Sign in again.']);
         }
-        if ((int) $staff['must_change_password'] === 1 && empty($_SESSION['is_impersonating'])) {
-            $_SESSION['must_change_password'] = true;
-            data_respond(403, ['error' => 'password_change_required', 'message' => 'Change the temporary password before using the workspace.']);
-        }
+        $_SESSION['must_change_password'] = false;
         $_SESSION['staff_id'] = (int) $staff['id'];
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $_SESSION['admin_permissions'] = data_staff_permissions(json_decode((string) $staff['permissions'], true)) ?? [];
@@ -5594,7 +5588,7 @@ if ($method === 'POST' && $resource === 'staff') {
     }
     $db->beginTransaction();
     try {
-        $db->prepare('INSERT INTO staff_users (email, display_name, password_hash, role, permissions, is_active, created_by) VALUES (?, ?, ?, ?, ?, 1, ?)')
+        $db->prepare('INSERT INTO staff_users (email, display_name, password_hash, role, permissions, is_active, must_change_password, created_by) VALUES (?, ?, ?, ?, ?, 1, 0, ?)')
             ->execute([$email, $displayName, $hash, 'operator', $permissionsJson, $_SESSION['admin_email']]);
         $staffId = (string) $db->lastInsertId();
         data_audit($db, 'staff.created', 'staff', $staffId, ['email' => $email, 'role' => 'operator', 'permissions' => $permissions]);
@@ -5671,7 +5665,7 @@ if ($method === 'PATCH' && $resource === 'staff') {
         }
         $updates[] = 'password_hash = ?';
         $parameters[] = $hash;
-        $updates[] = 'must_change_password = 1';
+        $updates[] = 'must_change_password = 0';
         $auditDetails['passwordReset'] = true;
     }
     if ($updates === []) data_respond(400, ['error' => 'invalid_staff_update', 'message' => 'No account changes were provided.']);

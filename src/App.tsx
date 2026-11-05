@@ -28,7 +28,6 @@ import {
   StoreCategory,
 } from './types/pharmacy';
 import { ShieldCheck, Truck, Sparkles, Phone, Mail, MapPin } from 'lucide-react';
-import { RequiredPasswordChange } from './components/Admin/RequiredPasswordChange';
 import { ChatWidget } from './components/ChatWidget';
 import { VisitorSessionTracker } from './components/VisitorSessionTracker';
 import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayout';
@@ -75,7 +74,6 @@ export default function App() {
   const [adminPermissions, setAdminPermissions] = useState<string[]>([]);
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedBy, setImpersonatedBy] = useState('');
-  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   // Master application states
   const [orders, setOrders] = useState<OnlineOrder[]>([]);
@@ -155,7 +153,6 @@ export default function App() {
           email?: string;
           displayName?: string;
           role?: 'admin' | 'operator';
-          mustChangePassword?: boolean;
           permissions?: string[];
           impersonating?: boolean;
           impersonatedBy?: string | null;
@@ -169,14 +166,12 @@ export default function App() {
           setAdminPermissions(result.permissions || []);
           setIsImpersonating(Boolean(result.impersonating));
           setImpersonatedBy(result.impersonatedBy || '');
-          setMustChangePassword(Boolean(result.mustChangePassword));
           setAdminAuthStatus('authenticated');
           setAdminAuthSetupMessage(undefined);
           return;
         }
 
         setAdminAuthStatus('unauthenticated');
-        setMustChangePassword(false);
         setAdminPermissions([]);
         setIsImpersonating(false);
         setImpersonatedBy('');
@@ -191,7 +186,6 @@ export default function App() {
       .catch(() => {
         if (!isCurrent) return;
         setAdminAuthStatus('unauthenticated');
-        setMustChangePassword(false);
         setAdminPermissions([]);
         setIsImpersonating(false);
         setImpersonatedBy('');
@@ -204,7 +198,7 @@ export default function App() {
   }, [currentPath]);
 
   useEffect(() => {
-    if (currentPath !== '/admin' || adminAuthStatus !== 'authenticated' || mustChangePassword) return;
+    if (currentPath !== '/admin' || adminAuthStatus !== 'authenticated') return;
 
     let isCurrent = true;
     setAdminDataError('');
@@ -258,7 +252,7 @@ export default function App() {
     return () => {
       isCurrent = false;
     };
-  }, [currentPath, adminAuthStatus, mustChangePassword, adminRole, adminPermissions]);
+  }, [currentPath, adminAuthStatus, adminRole, adminPermissions]);
 
   const handleLoadOrders = useCallback(async (search: OrderSearch, options: { silent?: boolean } = {}) => {
     const requestId = ++orderRequestId.current;
@@ -308,7 +302,6 @@ export default function App() {
     } else {
       setAdminAuthStatus('unauthenticated');
       setAdminEmail('');
-      setMustChangePassword(false);
       setAdminPermissions([]);
       setIsImpersonating(false);
       setImpersonatedBy('');
@@ -331,7 +324,6 @@ export default function App() {
     setAdminEmail('');
     setAdminDisplayName('');
     setAdminPermissions([]);
-    setMustChangePassword(false);
     setIsImpersonating(false);
     setImpersonatedBy('');
     setAdminAuthSetupMessage(undefined);
@@ -354,7 +346,6 @@ export default function App() {
     setAdminPermissions(session.permissions);
     setIsImpersonating(true);
     setImpersonatedBy(session.impersonatedBy);
-    setMustChangePassword(false);
     setOrders([]);
     setOrdersLoading(false);
   };
@@ -383,7 +374,6 @@ export default function App() {
     setAdminPermissions(result.permissions || []);
     setIsImpersonating(false);
     setImpersonatedBy('');
-    setMustChangePassword(false);
     setOrders([]);
     setOrdersLoading(false);
   };
@@ -886,7 +876,7 @@ export default function App() {
     return (
       <AdminLogin
         setupMessage={adminAuthSetupMessage}
-        onAuthenticated={(role, shouldChangePassword, email, displayName, permissions) => {
+        onAuthenticated={(role, email, displayName, permissions) => {
           setAdminAuthSetupMessage(undefined);
           setAdminRole(role);
           setAdminEmail(email);
@@ -894,18 +884,8 @@ export default function App() {
           setAdminPermissions(permissions);
           setIsImpersonating(false);
           setImpersonatedBy('');
-          setMustChangePassword(shouldChangePassword);
           setAdminAuthStatus('authenticated');
         }}
-      />
-    );
-  }
-
-  if (currentPath === '/admin' && mustChangePassword) {
-    return (
-      <RequiredPasswordChange
-        onComplete={() => setMustChangePassword(false)}
-        onLogout={handleAdminLogout}
       />
     );
   }

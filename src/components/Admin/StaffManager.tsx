@@ -250,7 +250,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       setTemporaryPassword('');
       setPermissions(defaultPermissions);
       setCreateModalOpen(false);
-      setMessage('Agent account created. The agent must replace this temporary password at first sign-in.');
+      setMessage('Agent account created. The agent can sign in using the password you set.');
       await loadAccounts();
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'The agent account could not be created.');
@@ -354,7 +354,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       if (changes.resetPassword === true) {
         if (!result.temporaryPassword) throw new Error('The password was reset, but its one-time value was not returned. Reset it again before sharing credentials.');
         setResetPasswordReveal({ accountId: account.id, password: result.temporaryPassword });
-        setMessage('Temporary password generated. Copy it now and share it through a secure channel.');
+        setMessage('New password generated. Copy it now and share it through a secure channel.');
       } else {
         setResetPasswordReveal(null);
         setMessage(successMessage);
@@ -538,11 +538,11 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
 
               {resetPasswordReveal?.accountId === selectedProfile.id && (
                 <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-950">Temporary password — shown once</p>
+                  <p className="text-sm font-semibold text-amber-950">New password — shown once</p>
                   <p className="mt-1 text-xs text-amber-900">Copy and share this password through a secure channel. It will not be available after you leave this profile.</p>
                   <input
                     type="text"
-                    aria-label="One-time temporary password"
+                    aria-label="One-time generated password"
                     readOnly
                     value={resetPasswordReveal.password}
                     onFocus={(event) => event.currentTarget.select()}
@@ -824,9 +824,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <span className="mt-1 block text-xs font-normal text-slate-500">Enter a valid email address, for example agent@example.com.</span>
                 </label>
               </div>
-              <label className="block text-sm font-medium text-slate-700">Temporary password
+              <label className="block text-sm font-medium text-slate-700">Password
                 <input required name="temporaryPassword" type="password" minLength={12} maxLength={1024} autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
-                <span className="mt-1 block text-xs font-normal text-slate-500">Use at least 12 characters. The agent will be asked to change it at first sign-in.</span>
+                <span className="mt-1 block text-xs font-normal text-slate-500">Use at least 12 characters. Only a superadmin can change or reset this password.</span>
               </label>
               <fieldset>
                 <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
@@ -840,7 +840,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   ))}
                 </div>
               </fieldset>
-              <p className="text-xs leading-5 text-slate-500">The password is stored as a secure hash, and the agent will be required to change it at first sign-in. Share the temporary password out-of-band.</p>
+              <p className="text-xs leading-5 text-slate-500">The password is stored as a secure hash. Share the sign-in credentials securely; superadmins can change or reset them at any time.</p>
               <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" disabled={saving} onClick={() => setCreateModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
                 <button type="submit" disabled={saving} className="rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
