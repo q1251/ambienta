@@ -373,12 +373,6 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
         )}
       </header>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-950">
-        {view === 'inbox'
-          ? 'Chat is for general support only. Do not request or share health information, prescription details, or payment card data here.'
-          : 'Visitor sessions use a first-party random identifier and record page paths, page titles, visible product cards, referral domains, and browser language. IP addresses are not saved in visitor-session records. Country is shown only when the hosting edge provides it.'}
-      </div>
-
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
       {actionMessage && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{actionMessage}</p>}
 
