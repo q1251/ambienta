@@ -8,7 +8,6 @@ import {
   Mail,
   Tag,
   ShieldCheck,
-  Printer,
   Sparkles,
   ArrowRight,
   ChevronRight,
@@ -196,29 +195,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 font-sans">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+      <div className={`bg-white rounded-2xl shadow-2xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 ${completedOrder ? 'max-w-lg' : 'max-w-5xl'}`}>
         {/* Modal Top Bar */}
-        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
+        <div className={`px-6 py-4 flex items-center justify-between border-b ${completedOrder ? 'border-emerald-100 bg-emerald-50/70' : 'border-slate-800 bg-slate-900 text-white'}`}>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center font-bold text-white shadow-xs">
-              Rx
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shadow-xs ${completedOrder ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-600 text-white'}`}>
+              {completedOrder ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-bold">Rx</span>}
             </div>
             <div>
-              <h3 className="font-bold text-base text-white flex items-center gap-2">
-                <span>Wellness Store Checkout</span>
-                <span className="rounded border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-slate-200">
-                  Order checkout
-                </span>
+              <h3 className={`font-bold text-base ${completedOrder ? 'text-slate-900' : 'text-white'}`}>
+                {completedOrder ? 'Thank you for your order' : 'Wellness Store Checkout'}
               </h3>
-              <p className="text-xs text-slate-400">
-                Secure, straightforward checkout
+              <p className={`text-xs ${completedOrder ? 'text-emerald-800' : 'text-slate-400'}`}>
+                {completedOrder ? 'Your order has been received' : 'Secure, straightforward checkout'}
               </p>
             </div>
           </div>
 
           <button
             onClick={handleClose}
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
+            aria-label="Close checkout"
+            className={`p-1.5 rounded-lg cursor-pointer transition-colors ${completedOrder ? 'text-slate-500 hover:bg-emerald-100 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
           >
             <X className="w-5 h-5" />
           </button>
@@ -226,110 +223,51 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         {/* Modal Body: Either Receipt or Checkout Form */}
         {completedOrder ? (
-          <div className="p-6 sm:p-10 overflow-y-auto space-y-6 text-center">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
-              <CheckCircle2 className="w-10 h-10" />
+          <div className="overflow-y-auto p-5 sm:p-7">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <CheckCircle2 className="h-8 w-8" />
             </div>
-
-            <div className="space-y-1">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-                Order received
-              </span>
-              <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Your order has been received. Payment instructions will be sent to {completedOrder.email} after review.
+            <div className="mt-4 text-center">
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">Thank you!</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Your order has been received. Payment instructions will be sent to <span className="font-semibold text-slate-800">{completedOrder.email}</span> after review.
               </p>
             </div>
 
-            {/* Receipt Summary Card */}
-            <div className="max-w-xl mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5 text-left text-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Recipient</span>
-                  <span className="font-bold text-slate-900">{completedOrder.patientName}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-slate-400 block text-[11px]">Payment Mode</span>
-                  <span className="font-bold text-teal-800">{completedOrder.paymentMethod}</span>
-                </div>
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-3 text-xs">
+                <span className="text-slate-500">Order number</span>
+                <span className="font-mono font-semibold text-slate-800">{completedOrder.orderNumber}</span>
               </div>
-
-              {/* Items List */}
-              <div className="space-y-2">
-                <span className="font-semibold text-slate-700 block">Ordered Items:</span>
+              <div className="space-y-3">
                 {completedOrder.items?.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-slate-400 font-bold">{item.quantity}x</span>
-                      <span className="font-medium text-slate-900">{item.name}</span>
+                  <div key={idx} className="flex items-start justify-between gap-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-900">{item.name}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">Quantity: {item.quantity}</p>
                     </div>
-                    <span className="font-mono font-bold text-slate-800">
-                      ${(item.unitPrice * item.quantity).toFixed(2)}
-                    </span>
+                    <span className="shrink-0 font-mono font-semibold text-slate-800">${(item.unitPrice * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
-
-              {/* Delivery and Transaction Hash */}
-              <div className="grid grid-cols-2 gap-3 pt-2 text-[11px] border-t border-slate-200">
-                <div>
-                  <span className="text-slate-500 block">Delivery Method:</span>
-                  <span className="font-semibold text-slate-800">{completedOrder.deliveryMethod}</span>
-                  <span className="text-slate-500 block truncate">{completedOrder.deliveryAddress}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Payment status:</span>
-                  <span className="font-semibold text-amber-800">{completedOrder.paymentStatus}</span>
-                  {completedOrder.transactionId && (
-                    <span className="font-mono text-teal-800 break-all">{completedOrder.transactionId}</span>
-                  )}
-                  {completedOrder.trackingNumber && (
-                    <span className="text-slate-500 block">
-                      Tracking ID: <span className="font-mono text-slate-700">{completedOrder.trackingNumber}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Financial Totals */}
-              <div className="border-t border-slate-200 pt-3 space-y-1 text-slate-600">
+              <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-xs text-slate-600">
                 <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-mono font-semibold">${completedOrder.subtotal?.toFixed(2)}</span>
+                  <span>{completedOrder.deliveryMethod}</span>
+                  <span>{completedOrder.shippingFee === 0 ? 'Free' : `$${completedOrder.shippingFee?.toFixed(2)}`}</span>
                 </div>
-                {completedOrder.discountAmount ? (
-                  <div className="flex justify-between text-emerald-700">
-                    <span>Discount ({completedOrder.couponCode}):</span>
-                    <span className="font-mono font-semibold">-${completedOrder.discountAmount.toFixed(2)}</span>
-                  </div>
-                ) : null}
-                <div className="flex justify-between">
-                  <span>Shipping:</span>
-                  <span className="font-mono font-semibold">
-                    {completedOrder.shippingFee === 0 ? 'FREE' : `$${completedOrder.shippingFee?.toFixed(2)}`}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm font-bold text-slate-900 pt-2 border-t border-slate-200">
-                  <span>Total due:</span>
-                  <span className="text-base font-mono text-teal-900">${completedOrder.totalAmount.toFixed(2)}</span>
+                <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-sm font-bold text-slate-900">
+                  <span>Total</span>
+                  <span className="font-mono text-base text-emerald-800">${completedOrder.totalAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex items-center justify-center gap-3 pt-2">
-              <button
-                onClick={() => window.print()}
-                className="px-4 py-2.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer transition-colors"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Print Packing Slip</span>
-              </button>
+            <div className="mt-5">
               <button
                 onClick={handleClose}
-                className="px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-xs font-bold text-white shadow-xs cursor-pointer transition-colors"
+                className="w-full rounded-xl bg-[#174c80] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#123b68]"
               >
-                Return to Pharmacy Store
+                Continue shopping
               </button>
             </div>
           </div>
