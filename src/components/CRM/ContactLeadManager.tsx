@@ -96,6 +96,8 @@ const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; b
   { id: 'Inactive', label: 'Inactive', bg: 'bg-zinc-100', text: 'text-zinc-600', border: 'border-zinc-200' },
 ];
 
+const LEAD_PAGE_SIZE_OPTIONS = [25, 50, 100, 250] as const;
+
 const CONTACT_TYPE_LABELS: Record<LeadContactCompleteness, string> = {
   full_contact: 'Full details',
   email_phone: 'Email + phone',
@@ -173,6 +175,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [countryFilter, setCountryFilter] = useState('All');
   const [contactTypeFilter, setContactTypeFilter] = useState<'All' | LeadContactCompleteness>('All');
   const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
+  const [pageSize, setPageSize] = useState<number>(50);
   const [tableFilters, setTableFilters] = useState({
     name: '',
     email: '',
@@ -401,7 +404,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     return sortContactLeads(tableFilteredLeads, sortField, sortOrder);
   }, [tableFilteredLeads, sortField, sortOrder]);
 
-  const pageSize = 50;
   const pageCount = Math.max(1, Math.ceil(sortedLeads.length / pageSize));
   const currentPage = Math.min(leadPage, pageCount);
   const visibleLeads = sortedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -2400,7 +2402,23 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             Showing {sortedLeads.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, sortedLeads.length)} of{' '}
             {sortedLeads.length} contacts
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 font-medium text-slate-600">
+                Rows per page
+                <select
+                  aria-label="Leads per page"
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value));
+                    setLeadPage(1);
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+                >
+                  {LEAD_PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 disabled={currentPage <= 1}
