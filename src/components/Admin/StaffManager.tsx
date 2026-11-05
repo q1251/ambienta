@@ -820,7 +820,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <input required name="displayName" autoFocus maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
                 </label>
                 <label className="block text-sm font-medium text-slate-700">Sign-in email
-                  <input required name="email" type="email" autoComplete="off" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                  <input required name="email" type="email" autoComplete="off" maxLength={254} placeholder="agent@example.com" value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                  <span className="mt-1 block text-xs font-normal text-slate-500">Enter a valid email address, for example agent@example.com.</span>
                 </label>
               </div>
               <label className="block text-sm font-medium text-slate-700">Temporary password
