@@ -215,9 +215,11 @@ function data_ensure_schema(PDO $db): void
             unsubscribed_count INT UNSIGNED NOT NULL DEFAULT 0,
             audience_filter MEDIUMTEXT NULL,
             track_opens TINYINT(1) NOT NULL DEFAULT 0,
+            created_by_staff_id BIGINT UNSIGNED NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             completed_at DATETIME NULL,
+            KEY email_campaigns_staff_owner (created_by_staff_id, id),
             KEY email_campaigns_status_schedule (status, scheduled_at, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -350,6 +352,7 @@ function data_ensure_schema(PDO $db): void
         ['email_drafts', 'email_design', "VARCHAR(16) NOT NULL DEFAULT 'plain'"],
         ['email_campaigns', 'audience_filter', 'MEDIUMTEXT NULL'],
         ['email_campaigns', 'track_opens', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['email_campaigns', 'created_by_staff_id', 'BIGINT UNSIGNED NULL'],
         ['email_campaign_recipients', 'open_token_hash', 'CHAR(64) NULL'],
         ['email_campaign_recipients', 'open_token', 'MEDIUMTEXT NULL'],
         ['email_campaign_recipients', 'opened_at', 'DATETIME NULL'],
@@ -370,6 +373,7 @@ function data_ensure_schema(PDO $db): void
     foreach ([
         ['chat_conversations', 'chat_conversations_owner', 'owner_type, owner_staff_id, status, updated_at'],
         ['chat_conversations', 'chat_conversations_visitor', 'visitor_id_hash, updated_at'],
+        ['email_campaigns', 'email_campaigns_staff_owner', 'created_by_staff_id, id'],
         ['email_activity', 'email_activity_thread_root', 'thread_root_message_id(190), id'],
     ] as [$table, $index, $columns]) {
         $indexExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
@@ -1412,10 +1416,14 @@ function data_campaign_filters(mixed $value): array
     return $filters;
 }
 
-function data_campaign_recipient_snapshot(PDO $db, array $filters = []): array
+function data_campaign_recipient_snapshot(PDO $db, array $filters = [], ?int $assignedStaffId = null): array
 {
     $where = ['marketing_consent = 1', "TRIM(email) <> ''"];
     $parameters = [];
+    if ($assignedStaffId !== null) {
+        $where[] = 'assigned_staff_id = ?';
+        $parameters[] = $assignedStaffId;
+    }
     foreach (['country' => 'country', 'status' => 'status', 'source' => 'lead_source'] as $key => $column) {
         if (($filters[$key] ?? '') !== '') {
             $where[] = "{$column} = ?";
@@ -1438,19 +1446,31 @@ function data_campaign_recipient_snapshot(PDO $db, array $filters = []): array
     return $recipients;
 }
 
+function data_campaign_actor_staff_id(): ?int
+{
+    if (($_SESSION['admin_role'] ?? '') === 'admin') return null;
+    data_require_permission('integrations');
+    $staffId = (int) ($_SESSION['staff_id'] ?? 0);
+    if ($staffId < 1) {
+        data_respond(403, ['error' => 'campaign_access_denied', 'message' => 'A valid agent account is required to manage email campaigns.']);
+    }
+    return $staffId;
+}
+
 function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $scheduledAt): int
 {
     if (!in_array($status, ['sending', 'scheduled'], true)) {
         throw new RuntimeException('invalid_campaign_status');
     }
 
-    $campaign = $db->prepare('SELECT audience_filter, track_opens FROM email_campaigns WHERE id = ?');
+    $campaign = $db->prepare('SELECT audience_filter, track_opens, created_by_staff_id FROM email_campaigns WHERE id = ?');
     $campaign->execute([$campaignId]);
     $campaignSettings = $campaign->fetch();
     if (!is_array($campaignSettings)) throw new RuntimeException('campaign_not_found');
     $filters = data_campaign_filters(json_decode(data_mail_decrypt_content($campaignSettings['audience_filter']), true) ?: []);
     $trackOpens = (int) $campaignSettings['track_opens'] === 1;
-    $recipients = data_campaign_recipient_snapshot($db, $filters);
+    $assignedStaffId = $campaignSettings['created_by_staff_id'] === null ? null : (int) $campaignSettings['created_by_staff_id'];
+    $recipients = data_campaign_recipient_snapshot($db, $filters, $assignedStaffId);
     if ($recipients === []) {
         throw new RuntimeException('campaign_audience_empty');
     }
@@ -1539,7 +1559,7 @@ function data_mail_card_html(string $subject, string $message): string
         . '</div></body></html>';
 }
 
-function data_campaign_process_batch(array $settings, int $limit = 10): array
+function data_campaign_process_batch(array $settings, int $limit = 10, ?int $campaignId = null): array
 {
     $db = data_db();
     $db->exec(
@@ -1555,7 +1575,7 @@ function data_campaign_process_batch(array $settings, int $limit = 10): array
     for ($index = 0; $index < max(1, min($limit, 10)); $index++) {
         $db->beginTransaction();
         try {
-            $statement = $db->query(
+            $sql =
                 "SELECT r.id, r.campaign_id, r.lead_id, r.recipient_email, r.unsubscribe_token,
                         r.open_token, c.subject, c.body, c.track_opens,
                         l.first_name, l.last_name, l.country,
@@ -1565,10 +1585,12 @@ function data_campaign_process_batch(array $settings, int $limit = 10): array
                  LEFT JOIN leads l ON l.id = r.lead_id
                  WHERE r.status = 'queued'
                    AND (c.status = 'sending' OR (c.status = 'scheduled' AND c.scheduled_at <= UTC_TIMESTAMP()))
+                   " . ($campaignId === null ? '' : 'AND c.id = ? ') . "
                  ORDER BY COALESCE(c.scheduled_at, c.created_at), r.id
                  LIMIT 1
-                 FOR UPDATE"
-            );
+                 FOR UPDATE";
+            $statement = $campaignId === null ? $db->query($sql) : $db->prepare($sql);
+            if ($campaignId !== null) $statement->execute([$campaignId]);
             $recipient = $statement->fetch();
             if (!is_array($recipient)) {
                 $db->commit();
@@ -3797,7 +3819,7 @@ if (in_array($resource, [
     }
 
     if ($method === 'GET' && $resource === 'email-campaign-audience') {
-        data_require_admin('admin');
+        $campaignStaffId = data_campaign_actor_staff_id();
         $filters = [];
         foreach (['country', 'status', 'source'] as $filter) {
             $filters[$filter] = $_GET[$filter] ?? '';
@@ -3808,12 +3830,16 @@ if (in_array($resource, [
             data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'The campaign audience filter is invalid.']);
         }
         $db = data_db();
-        $recipients = data_campaign_recipient_snapshot($db, $filters);
-        $facets = $db->query(
-            "SELECT DISTINCT country, status, lead_source
-             FROM leads WHERE marketing_consent = 1 AND TRIM(email) <> ''
-             ORDER BY country, status, lead_source"
-        )->fetchAll();
+        $recipients = data_campaign_recipient_snapshot($db, $filters, $campaignStaffId);
+        $facetSql = "SELECT DISTINCT country, status, lead_source
+                     FROM leads WHERE marketing_consent = 1 AND TRIM(email) <> ''";
+        $facets = $campaignStaffId === null
+            ? $db->query($facetSql . ' ORDER BY country, status, lead_source')->fetchAll()
+            : (function () use ($db, $facetSql, $campaignStaffId): array {
+                $query = $db->prepare($facetSql . ' AND assigned_staff_id = ? ORDER BY country, status, lead_source');
+                $query->execute([$campaignStaffId]);
+                return $query->fetchAll();
+            })();
         data_respond(200, [
             'audienceCount' => count($recipients),
             'audienceLimit' => 5000,
@@ -3824,12 +3850,18 @@ if (in_array($resource, [
     }
 
     if ($method === 'GET' && $resource === 'email-campaigns') {
-        data_require_admin('admin');
-        $rows = data_db()->query(
-            'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, created_at, completed_at,
+        $campaignStaffId = data_campaign_actor_staff_id();
+        $db = data_db();
+        $campaignSql = 'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, created_at, completed_at,
                     (SELECT COUNT(*) FROM email_campaign_recipients r WHERE r.campaign_id = email_campaigns.id AND r.opened_at IS NOT NULL) AS open_count
-             FROM email_campaigns ORDER BY id DESC LIMIT 100'
-        )->fetchAll();
+             FROM email_campaigns';
+        if ($campaignStaffId === null) {
+            $rows = $db->query($campaignSql . ' ORDER BY id DESC LIMIT 100')->fetchAll();
+        } else {
+            $query = $db->prepare($campaignSql . ' WHERE created_by_staff_id = ? ORDER BY id DESC LIMIT 100');
+            $query->execute([$campaignStaffId]);
+            $rows = $query->fetchAll();
+        }
         data_respond(200, ['campaigns' => array_map(static fn (array $row): array => [
             'id' => (string) $row['id'],
             'name' => $row['name'],
@@ -3850,7 +3882,7 @@ if (in_array($resource, [
     }
 
     if ($method === 'POST' && $resource === 'email-campaign-save') {
-        data_require_admin('admin');
+        $campaignStaffId = data_campaign_actor_staff_id();
         $body = data_read_json(32768);
         $name = trim(data_string($body, 'name', 160));
         $subject = trim(data_string($body, 'subject', 180));
@@ -3860,6 +3892,12 @@ if (in_array($resource, [
         }
         if (preg_match('/[\r\n\x00]/', $name . $subject) === 1 || preg_match('/\x00/', $message) === 1) {
             data_respond(400, ['error' => 'invalid_campaign', 'message' => 'The campaign contains unsupported control characters.']);
+        }
+        if ($campaignStaffId !== null && (
+            data_contains_contact_details($subject . "\n" . $message)
+            || preg_match('/\{\{\s*email\s*\}\}/i', $subject . "\n" . $message) === 1
+        )) {
+            data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Agent campaigns cannot include email addresses or phone-number-like contact details in the subject or message.']);
         }
         try {
             $audienceFilter = data_campaign_filters($body['audienceFilter'] ?? []);
@@ -3871,13 +3909,14 @@ if (in_array($resource, [
         $db = data_db();
         $campaignId = $body['id'] ?? null;
         if ($campaignId === null) {
-            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens) VALUES (?, ?, ?, ?, ?, ?)')->execute([
+            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens, created_by_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?)')->execute([
                 $name,
                 $subject,
                 data_mail_encrypt_content($message),
                 'draft',
                 data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
                 $trackOpens ? 1 : 0,
+                $campaignStaffId,
             ]);
             $campaignId = (string) $db->lastInsertId();
         } else {
@@ -3885,16 +3924,23 @@ if (in_array($resource, [
             if ($campaignId === false || $campaignId < 1) {
                 data_respond(400, ['error' => 'invalid_campaign_id', 'message' => 'The selected campaign is invalid.']);
             }
-            $db->prepare("UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ? WHERE id = ? AND status = 'draft'")->execute([
+            $updateSql = "UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ? WHERE id = ? AND status = 'draft'";
+            if ($campaignStaffId !== null) $updateSql .= ' AND created_by_staff_id = ?';
+            $update = $db->prepare($updateSql);
+            $parameters = [
                 $name,
                 $subject,
                 data_mail_encrypt_content($message),
                 data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
                 $trackOpens ? 1 : 0,
                 $campaignId,
-            ]);
-            $exists = $db->prepare("SELECT COUNT(*) FROM email_campaigns WHERE id = ? AND status = 'draft'");
-            $exists->execute([$campaignId]);
+            ];
+            if ($campaignStaffId !== null) $parameters[] = $campaignStaffId;
+            $update->execute($parameters);
+            $existsSql = "SELECT COUNT(*) FROM email_campaigns WHERE id = ? AND status = 'draft'";
+            if ($campaignStaffId !== null) $existsSql .= ' AND created_by_staff_id = ?';
+            $exists = $db->prepare($existsSql);
+            $exists->execute($campaignStaffId === null ? [$campaignId] : [$campaignId, $campaignStaffId]);
             if ((int) $exists->fetchColumn() !== 1) {
                 data_respond(409, ['error' => 'campaign_not_editable', 'message' => 'Only draft campaigns can be edited.']);
             }
@@ -3940,7 +3986,7 @@ if (in_array($resource, [
     }
 
     if (in_array($resource, ['email-campaign-launch', 'email-campaign-schedule', 'email-campaign-cancel'], true) && $method === 'POST') {
-        data_require_admin('admin');
+        $campaignStaffId = data_campaign_actor_staff_id();
         $body = data_read_json(2048);
         $campaignId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
         if ($campaignId === false || $campaignId < 1) {
@@ -3951,9 +3997,13 @@ if (in_array($resource, [
         if ($resource === 'email-campaign-cancel') {
             $db->beginTransaction();
             try {
-                $find = $db->prepare('SELECT status FROM email_campaigns WHERE id = ? FOR UPDATE');
-                $find->execute([$campaignId]);
-                if ($find->fetchColumn() !== 'scheduled') {
+                $findSql = 'SELECT status, created_by_staff_id FROM email_campaigns WHERE id = ?';
+                if ($campaignStaffId !== null) $findSql .= ' AND created_by_staff_id = ?';
+                $findSql .= ' FOR UPDATE';
+                $find = $db->prepare($findSql);
+                $find->execute($campaignStaffId === null ? [$campaignId] : [$campaignId, $campaignStaffId]);
+                $campaign = $find->fetch();
+                if (!is_array($campaign) || $campaign['status'] !== 'scheduled') {
                     $db->rollBack();
                     data_respond(409, ['error' => 'campaign_not_scheduled', 'message' => 'Only scheduled campaigns can be cancelled.']);
                 }
@@ -3970,6 +4020,13 @@ if (in_array($resource, [
         $settings = data_mail_settings();
         if ($settings === [] || empty($settings['verified'])) {
             data_respond(409, ['error' => 'mail_not_verified', 'message' => 'Verify Hostinger SMTP and IMAP under Integrations before scheduling or sending a campaign.']);
+        }
+        $ownerSql = 'SELECT created_by_staff_id FROM email_campaigns WHERE id = ?';
+        if ($campaignStaffId !== null) $ownerSql .= ' AND created_by_staff_id = ?';
+        $owner = $db->prepare($ownerSql);
+        $owner->execute($campaignStaffId === null ? [$campaignId] : [$campaignId, $campaignStaffId]);
+        if ($owner->fetchColumn() === false) {
+            data_respond(404, ['error' => 'campaign_not_found', 'message' => 'The campaign was not found.']);
         }
         $status = 'sending';
         $scheduledAt = null;
@@ -4007,7 +4064,7 @@ if (in_array($resource, [
         if ($status === 'scheduled') {
             data_respond(200, ['scheduled' => true, 'recipientCount' => $recipientCount, 'scheduledAt' => $scheduledAt]);
         }
-        $batch = data_campaign_process_batch($settings, 5);
+        $batch = data_campaign_process_batch($settings, 5, $campaignStaffId === null ? null : $campaignId);
         data_respond(200, [
             'queued' => true,
             'recipientCount' => $recipientCount,

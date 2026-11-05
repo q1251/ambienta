@@ -338,21 +338,19 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         setActivitySentCount(activityResult.sentCount ?? activityResult.messages.filter((item) => item.status === 'Sent').length);
         setDrafts(draftResult.drafts);
         setTrash(trashResult.drafts);
-        if (role === 'admin') {
-          const [campaignResult, audienceResult] = await Promise.all([
-            requestMailApi('email-campaigns', 'GET'),
-            requestMailApi('email-campaign-audience', 'GET'),
-          ]);
-          if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
-            || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
-            throw new Error('Campaign data returned an invalid response.');
-          }
-          setCampaigns(campaignResult.campaigns);
-          setCampaignAudienceCount(audienceResult.audienceCount);
-          setCampaignCountries(audienceResult.countries);
-          setCampaignStatuses(audienceResult.statuses);
-          setCampaignSources(audienceResult.sources);
+        const [campaignResult, audienceResult] = await Promise.all([
+          requestMailApi('email-campaigns', 'GET'),
+          requestMailApi('email-campaign-audience', 'GET'),
+        ]);
+        if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
+          || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
+          throw new Error('Campaign data returned an invalid response.');
         }
+        setCampaigns(campaignResult.campaigns);
+        setCampaignAudienceCount(audienceResult.audienceCount);
+        setCampaignCountries(audienceResult.countries);
+        setCampaignStatuses(audienceResult.statuses);
+        setCampaignSources(audienceResult.sources);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Hostinger email settings could not be loaded.');
@@ -386,7 +384,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   }, [mode, activeFolder, sentSource, mailboxPage, mailboxSearch]);
 
   useEffect(() => {
-    if (mode !== 'mailbox' || role !== 'admin' || activeFolder !== 'campaigns') return;
+    if (mode !== 'mailbox' || activeFolder !== 'campaigns') return;
     const query = new URLSearchParams({
       country: campaignAudienceFilter.country,
       status: campaignAudienceFilter.status,
@@ -1007,6 +1005,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
 
   const totalCampaignOpens = campaigns.reduce((total, campaign) => total + campaign.openCount, 0);
   const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
+  const campaignMergeTags = role === 'admin'
+    ? ['{{first_name}}', '{{last_name}}', '{{email}}', '{{country}}']
+    : ['{{first_name}}', '{{last_name}}', '{{country}}'];
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
   const selectedSentActivity = messages.find((message) => message.id === selectedSentActivityId) || messages[0] || null;
   const selectedHostSentMessage = hostSentMessages.find((message) => message.id === selectedHostSentMessageId) || hostSentMessages[0] || null;
@@ -1169,7 +1170,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 {count && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{count}</span>}
               </button>
             ))}
-            {role === 'admin' && (
+            {(role === 'admin' || role === 'operator') && (
               <>
               <button
                 type="button"
@@ -1621,13 +1622,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <TrashFolder drafts={trash} onRestore={(draft) => void restoreDraft(draft)} onDelete={(draft) => void permanentlyDeleteDraft(draft)} />
             </div>
           )}
-          {activeFolder === 'campaigns' && role === 'admin' && (
+          {activeFolder === 'campaigns' && (role === 'admin' || role === 'operator') && (
             <div className="space-y-5">
               <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
-                    <p className="mt-1 text-sm text-slate-600">Send to leads with recorded marketing consent only.</p>
+                    <p className="mt-1 text-sm text-slate-600">{role === 'admin' ? 'Send to leads with recorded marketing consent only.' : 'Send to your assigned leads with recorded marketing consent only.'}</p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
                     campaignAudienceCount > 5000 ? 'bg-rose-50 text-rose-800' : 'bg-violet-50 text-violet-800'
@@ -1676,8 +1677,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     </select>
                   </div>
                   <fieldset className="rounded-xl border border-slate-200 p-4">
-                    <legend className="px-1 text-sm font-semibold text-slate-800">Audience segments</legend>
-                    <p className="mb-3 text-xs text-slate-500">All recipients must have recorded marketing consent. Filters narrow that opted-in audience.</p>
+                    <legend className="px-1 text-sm font-semibold text-slate-800">{role === 'admin' ? 'Audience segments' : 'Assigned lead segments'}</legend>
+                    <p className="mb-3 text-xs text-slate-500">{role === 'admin' ? 'All recipients must have recorded marketing consent. Filters narrow that opted-in audience.' : 'Only leads assigned to you with recorded marketing consent can receive these campaigns. Filters narrow that audience.'}</p>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <label className="text-xs font-medium text-slate-600">
                         Country
@@ -1721,7 +1722,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       <button type="button" onClick={() => wrapCampaignSelection('**')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Bold</button>
                       <button type="button" onClick={() => wrapCampaignSelection('*')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs italic text-slate-700">Italic</button>
                       <span className="text-xs text-slate-500">Personalize:</span>
-                      {(['{{first_name}}', '{{last_name}}', '{{email}}', '{{country}}'] as const).map((tag) => (
+                      {campaignMergeTags.map((tag) => (
                         <button key={tag} type="button" onClick={() => setCampaignBody((current) => `${current}${tag}`)} className="rounded-md bg-violet-50 px-2 py-1 font-mono text-[11px] text-violet-800">{tag}</button>
                       ))}
                     </div>
@@ -1741,15 +1742,17 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <button type="button" onClick={() => void launchCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
                       {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Send now
                     </button>
-                    <button type="button" onClick={() => void sendCampaignTest()} disabled={!settings.verified || !campaignSubject.trim() || !campaignBody.trim() || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                      Send test to mailbox
-                    </button>
+                    {role === 'admin' && (
+                      <button type="button" onClick={() => void sendCampaignTest()} disabled={!settings.verified || !campaignSubject.trim() || !campaignBody.trim() || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        Send test to mailbox
+                      </button>
+                    )}
                   </div>
                   {!editingCampaignId && <p className="text-xs text-slate-500">Save the campaign draft first to enable scheduling or sending.</p>}
                 </form>
               </section>
 
-              <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              {role === 'admin' && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="font-semibold text-amber-950">Scheduled campaign worker</h2>
@@ -1761,10 +1764,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   <pre className="mt-4 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-800">{campaignWorkerCommand}</pre>
                 )}
                 <p className="mt-3 text-xs text-amber-900">The command contains a private worker token. Keep it secret. Generating a new command immediately invalidates the previous one.</p>
-              </section>
+              </section>}
             </div>
           )}
-          {activeFolder === 'campaign-history' && role === 'admin' && (
+          {activeFolder === 'campaign-history' && (role === 'admin' || role === 'operator') && (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

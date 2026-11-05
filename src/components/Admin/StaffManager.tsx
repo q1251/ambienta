@@ -10,7 +10,7 @@ const availablePermissions = [
   { id: 'orders', label: 'Orders' },
   { id: 'print_orders', label: 'Print orders' },
   { id: 'products', label: 'Products & stock' },
-  { id: 'integrations', label: 'Integrations' },
+  { id: 'integrations', label: 'Email & campaigns' },
   { id: 'chat', label: 'Live chat' },
 ] as const;
 type StaffPermission = (typeof availablePermissions)[number]['id'];
