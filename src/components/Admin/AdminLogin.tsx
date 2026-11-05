@@ -114,13 +114,13 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} autoComplete="off" className="space-y-5">
               <div>
                 <label htmlFor="admin-email" className="mb-2 block text-sm font-medium text-slate-700">Email address</label>
                 <input
                   id="admin-email"
                   type="email"
-                  autoComplete="username"
+                  autoComplete="off"
                   required
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -135,7 +135,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
                   <input
                     id="admin-password"
                     type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
+                    autoComplete="off"
                     required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
