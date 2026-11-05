@@ -176,7 +176,7 @@ export interface OnlineOrder {
   discountAmount?: number;
   couponCode?: string;
   orderType: 'Medication Refill' | 'OTC Purchase' | 'New Order Transfer' | 'Store Purchase';
-  deliveryMethod: 'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail';
+  deliveryMethod: 'Regular Shipping' | 'Express Shipping' | 'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail';
   deliveryAddress?: string;
   paymentMethod?: PaymentMethod;
   paymentStatus?: PaymentStatus;

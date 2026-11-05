@@ -5314,20 +5314,19 @@ if ($method === 'POST' && $resource === 'orders') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         data_respond(400, ['error' => 'invalid_email', 'message' => 'Enter a valid email address.']);
     }
-    if (!in_array($deliveryMethod, ['Express Courier', 'Pharmacy Pickup', 'Discreet Mail'], true)) {
-        data_respond(400, ['error' => 'invalid_delivery', 'message' => 'Select a valid delivery method.']);
+    if (!in_array($deliveryMethod, ['Regular Shipping', 'Express Shipping'], true)) {
+        data_respond(400, ['error' => 'invalid_delivery', 'message' => 'Select regular or express shipping.']);
     }
     if (!is_array($body['items'] ?? null) || count($body['items']) < 1 || count($body['items']) > 30) {
         data_respond(400, ['error' => 'invalid_items', 'message' => 'The order items are invalid.']);
     }
-    $paymentMethod = $body['paymentMethod'] ?? 'Cash on Delivery / Pickup';
+    $paymentMethod = $body['paymentMethod'] ?? '';
     if (!is_string($paymentMethod) || !in_array($paymentMethod, [
         'Credit / Debit Card',
         'PayPal',
         'Cryptocurrency (USDC / BTC / ETH / SOL)',
-        'Cash on Delivery / Pickup',
     ], true)) {
-        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Select card, PayPal, cryptocurrency, or pay on delivery/pickup.']);
+        data_respond(400, ['error' => 'invalid_payment_method', 'message' => 'Select card, PayPal, or cryptocurrency.']);
     }
 
     $requestedItems = [];
@@ -5382,7 +5381,7 @@ if ($method === 'POST' && $resource === 'orders') {
             data_respond(400, ['error' => 'invalid_coupon', 'message' => 'The coupon code is invalid.']);
         }
         $discountAmount = round($subtotal * $discountRate, 2);
-        $shippingFee = $deliveryMethod === 'Express Courier' && $subtotal < 35 && $couponCode !== 'FREESHIP' ? 12.00 : 0.00;
+        $shippingFee = $deliveryMethod === 'Express Shipping' && $subtotal < 35 && $couponCode !== 'FREESHIP' ? 12.00 : 0.00;
         $totalAmount = max(0, round($subtotal - $discountAmount + $shippingFee, 2));
         $orderId = bin2hex(random_bytes(16));
         $orderNumber = 'ORD-' . gmdate('Ymd') . '-' . strtoupper(bin2hex(random_bytes(3)));
@@ -5396,7 +5395,7 @@ if ($method === 'POST' && $resource === 'orders') {
             $subtotal, $shippingFee, $discountAmount, $couponCode === '' ? null : $couponCode,
             $totalAmount,
             $paymentMethod,
-            $paymentMethod === 'Cash on Delivery / Pickup' ? 'Pending Verification' : 'Awaiting Payment',
+            'Awaiting Payment',
             'Pending',
             $placedAt,
         ]);

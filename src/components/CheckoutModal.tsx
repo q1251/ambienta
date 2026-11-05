@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Lock,
   Truck,
-  Building,
   Mail,
   Tag,
   ShieldCheck,
@@ -18,7 +17,9 @@ import {
 } from 'lucide-react';
 import { CartItem, OnlineOrder, PaymentMethod, OrderItem } from '../types/pharmacy';
 
-const PaymentBrandMark: React.FC<{ method: PaymentMethod }> = ({ method }) => {
+type StorePaymentMethod = Exclude<PaymentMethod, 'Cash on Delivery / Pickup'>;
+
+const PaymentBrandMark: React.FC<{ method: StorePaymentMethod }> = ({ method }) => {
   if (method === 'Credit / Debit Card') {
     return (
       <span aria-hidden="true" className="flex items-center gap-1">
@@ -52,7 +53,7 @@ const PaymentBrandMark: React.FC<{ method: PaymentMethod }> = ({ method }) => {
     );
   }
 
-  return <Building aria-hidden="true" className="h-5 w-5 text-slate-600" />;
+  return null;
 };
 
 interface CheckoutModalProps {
@@ -80,7 +81,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [zip, setZip] = useState('');
 
   // Delivery method
-  const [deliveryMethod, setDeliveryMethod] = useState<'Express Courier' | 'Pharmacy Pickup' | 'Discreet Mail'>('Express Courier');
+  const [deliveryMethod, setDeliveryMethod] = useState<'Regular Shipping' | 'Express Shipping'>('Regular Shipping');
 
   // Coupon code
   const [couponInput, setCouponInput] = useState('');
@@ -88,7 +89,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [couponError, setCouponError] = useState('');
 
   // Payment tab
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash on Delivery / Pickup');
+  const [paymentMethod, setPaymentMethod] = useState<StorePaymentMethod>('Credit / Debit Card');
   const [paymentError, setPaymentError] = useState('');
 
   // Order state
@@ -99,7 +100,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Pricing calculations
   const subtotal = cartItems.reduce((acc, ci) => acc + ci.item.price * ci.quantity, 0);
-  const rawShipping = deliveryMethod === 'Express Courier' && subtotal < 35 ? 12.0 : 0.0;
+  const rawShipping = deliveryMethod === 'Express Shipping' && subtotal < 35 ? 12.0 : 0.0;
   const shippingFee = appliedCoupon?.freeShipping ? 0.0 : rawShipping;
   const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0.0;
   const totalAmount = Math.max(0, subtotal - discountAmount + shippingFee);
@@ -138,10 +139,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     try {
       const orderNum = `ORD-${Date.now().toString().slice(-6)}`;
-      const fullDeliveryAddress =
-        deliveryMethod === 'Pharmacy Pickup'
-          ? 'Ambients Dispensary Desk - Counter 1 (Ready in 30 mins)'
-          : `${streetAddress}, ${city}, ${state} ${zip}`;
+      const fullDeliveryAddress = `${streetAddress}, ${city}, ${state} ${zip}`;
 
       const primaryItem = cartItems[0].item;
       const medicationSummary =
@@ -177,14 +175,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         deliveryMethod,
         deliveryAddress: fullDeliveryAddress,
         paymentMethod,
-        paymentStatus: paymentMethod === 'Cash on Delivery / Pickup' ? 'Pending Verification' : 'Awaiting Payment',
+        paymentStatus: 'Awaiting Payment',
         status: 'Pending',
         placedAt: new Date().toISOString().replace('T', ' ').slice(0, 19),
         internalNotes: [
           `Payment due via ${paymentMethod}`,
-          paymentMethod === 'Cash on Delivery / Pickup'
-            ? 'Order received for review.'
-            : 'Payment link to be sent by email after order review.',
+          'Payment link to be sent by email after order review.',
         ],
       };
 
@@ -237,15 +233,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-                {completedOrder.paymentMethod === 'Cash on Delivery / Pickup'
-                  ? 'Order received · payment on delivery or pickup'
-                  : 'Order received · payment instructions by email'}
+                Order received · payment instructions by email
               </span>
               <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been received. {completedOrder.paymentMethod === 'Cash on Delivery / Pickup'
-                  ? 'Payment is due when your order is delivered or collected.'
-                  : `We’ll review your order and email payment instructions and a secure ${completedOrder.paymentMethod === 'Credit / Debit Card' ? 'card' : completedOrder.paymentMethod} payment link to ${completedOrder.email}. Enter your payment details on the provider’s secure page.`}
+                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been received. We’ll review your order and email payment instructions and a secure {completedOrder.paymentMethod === 'Credit / Debit Card' ? 'card' : completedOrder.paymentMethod} payment link to {completedOrder.email}. Enter your payment details on the provider’s secure page.
               </p>
             </div>
 
@@ -401,32 +393,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span className="w-5 h-5 rounded-full bg-teal-800 text-white flex items-center justify-center text-xs font-bold">
                     2
                   </span>
-                  <h4 className="font-bold text-sm text-slate-900">Fulfillment Mode</h4>
+                  <h4 className="font-bold text-sm text-slate-900">Shipping Method</h4>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="grid grid-cols-2 gap-2 text-xs">
                   <button
                     type="button"
-                    onClick={() => setDeliveryMethod('Express Courier')}
+                    onClick={() => setDeliveryMethod('Regular Shipping')}
                     className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                      deliveryMethod === 'Express Courier'
-                        ? 'border-teal-700 bg-teal-50/80 text-teal-950 ring-1 ring-teal-700'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <Truck className="w-4 h-4 text-teal-700" />
-                      <span className="font-mono font-bold text-teal-800">$12</span>
-                    </div>
-                    <span className="font-bold block text-slate-900">Express Courier</span>
-                    <span className="text-[10px] text-slate-500">Same-day discreet</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setDeliveryMethod('Discreet Mail')}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                      deliveryMethod === 'Discreet Mail'
+                      deliveryMethod === 'Regular Shipping'
                         ? 'border-teal-700 bg-teal-50/80 text-teal-950 ring-1 ring-teal-700'
                         : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
@@ -435,30 +410,29 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <Mail className="w-4 h-4 text-teal-700" />
                       <span className="font-mono font-bold text-emerald-700">FREE</span>
                     </div>
-                    <span className="font-bold block text-slate-900">Discreet Mail</span>
-                    <span className="text-[10px] text-slate-500">2-3 business days</span>
+                    <span className="font-bold block text-slate-900">Regular Shipping</span>
+                    <span className="text-[10px] text-slate-500">Standard delivery</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setDeliveryMethod('Pharmacy Pickup')}
+                    onClick={() => setDeliveryMethod('Express Shipping')}
                     className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                      deliveryMethod === 'Pharmacy Pickup'
+                      deliveryMethod === 'Express Shipping'
                         ? 'border-teal-700 bg-teal-50/80 text-teal-950 ring-1 ring-teal-700'
                         : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <Building className="w-4 h-4 text-teal-700" />
-                      <span className="font-mono font-bold text-emerald-700">FREE</span>
+                      <Truck className="w-4 h-4 text-teal-700" />
+                      <span className="font-mono font-bold text-teal-800">{subtotal >= 35 || appliedCoupon?.freeShipping ? 'FREE' : '$12'}</span>
                     </div>
-                    <span className="font-bold block text-slate-900">Dispensary Desk</span>
-                    <span className="text-[10px] text-slate-500">Ready in 30 mins</span>
+                    <span className="font-bold block text-slate-900">Express Shipping</span>
+                    <span className="text-[10px] text-slate-500">Priority delivery</span>
                   </button>
                 </div>
 
-                {deliveryMethod !== 'Pharmacy Pickup' ? (
-                  <div className="space-y-2 text-xs pt-1">
+                <div className="space-y-2 text-xs pt-1">
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">
                         Street Address <span className="text-rose-500">*</span>
@@ -504,19 +478,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         />
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-teal-50/60 rounded-xl border border-teal-200 text-xs text-teal-900 flex items-start gap-2.5">
-                    <Building className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block">Counter Pickup Location:</span>
-                      <p className="text-[11px] text-teal-800">
-                        Ambients Clinical Dispensary, 400 Central Health Boulevard, Suite 100.
-                        Bring ID or order barcode confirmation upon arrival.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
               {/* Section 3: Payment Method (WooCommerce style tabs) */}
@@ -529,13 +491,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
 
                 {/* Tabs */}
-                <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <div className="grid grid-cols-3 gap-2 text-xs">
                   {([
-                    ['Credit / Debit Card', 'Card', CreditCard],
-                    ['PayPal', 'PayPal', CreditCard],
-                    ['Cryptocurrency (USDC / BTC / ETH / SOL)', 'Crypto', Sparkles],
-                    ['Cash on Delivery / Pickup', 'Pay on delivery/pickup', Building],
-                  ] as const).map(([method, label, Icon]) => (
+                    ['Credit / Debit Card', 'Card'],
+                    ['PayPal', 'PayPal'],
+                    ['Cryptocurrency (USDC / BTC / ETH / SOL)', 'Crypto'],
+                  ] as const).map(([method, label]) => (
                     <button
                       key={method}
                       type="button"
@@ -559,14 +520,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                 : 'border-slate-200 hover:border-slate-400 hover:bg-slate-50'
                       }`}
                     >
-                      {method === 'Cash on Delivery / Pickup'
-                        ? <Icon aria-hidden="true" className="h-5 w-5 text-slate-600" />
-                        : <PaymentBrandMark method={method} />}
+                      <PaymentBrandMark method={method} />
                       <span className={
                         method === 'Credit / Debit Card' ? 'text-[#1434CB]'
                           : method === 'PayPal' ? 'text-[#003087]'
-                            : method === 'Cryptocurrency (USDC / BTC / ETH / SOL)' ? 'text-[#334155]'
-                              : 'text-slate-700'
+                            : 'text-[#334155]'
                       }>{label}</span>
                       {method === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && (
                         <span className="text-[9px] font-medium tracking-wide text-slate-500">BTC · ETH · USDC · SOL</span>
@@ -575,28 +533,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   ))}
                 </div>
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-700">
-                  {paymentMethod === 'Cash on Delivery / Pickup'
-                    ? 'Pay in person when your order is delivered or collected.'
-                    : `We’ll email payment instructions and a secure ${paymentMethod === 'Credit / Debit Card' ? 'card' : paymentMethod} payment link to ${email || 'the email address above'}. Enter your payment details on the provider’s secure page.`}
+                  {`We’ll email payment instructions and a secure ${paymentMethod === 'Credit / Debit Card' ? 'card' : paymentMethod} payment link to ${email || 'the email address above'}. Enter your payment details on the provider’s secure page.`}
                 </p>
                 {paymentError && <p role="alert" className="text-xs font-medium text-rose-700">{paymentError}</p>}
 
-                {paymentMethod !== 'Cash on Delivery / Pickup' && (
-                  <div className="flex items-start gap-2 rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs text-teal-950">
-                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
-                    <p>Payment instructions and your secure payment link will arrive by email after your order is reviewed. You’ll enter your payment details directly on the provider’s secure page.</p>
-                  </div>
-                )}
-
-                {/* Pickup Panel */}
-                {paymentMethod === 'Cash on Delivery / Pickup' && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-950 space-y-2">
-                    <span className="font-bold block">Pay in Person at Counter or Upon Delivery</span>
-                    <p className="text-[11px] text-amber-800 leading-relaxed">
-                      Payment is due when your order is delivered or collected.
-                    </p>
-                  </div>
-                )}
+                <div className="flex items-start gap-2 rounded-xl border border-teal-200 bg-teal-50 p-4 text-xs text-teal-950">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
+                  <p>Payment instructions and your secure payment link will arrive by email after your order is reviewed. You’ll enter your payment details directly on the provider’s secure page.</p>
+                </div>
               </div>
             </div>
 
