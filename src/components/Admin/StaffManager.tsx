@@ -479,31 +479,6 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="font-semibold text-slate-900">Agent presence</h2>
-          <p className="mt-1 text-xs text-slate-500">Live status refreshes every 15 seconds. Agents are considered offline after 90 seconds without an authenticated CRM heartbeat.</p>
-        </div>
-        <div className="divide-y divide-slate-100">
-          {presence?.staff.map((agent) => (
-            <div key={agent.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-slate-900">{agent.displayName || agent.email}</p>
-                <p className="truncate text-xs text-slate-500">{agent.email}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-xs font-semibold ${agent.online ? 'text-blue-700' : 'text-slate-500'}`}>
-                  {agent.online ? `Online · ${formatDuration(agent.durationSeconds)}` : agent.active ? 'Offline' : 'Inactive'}
-                </p>
-                <p className="mt-0.5 text-xs capitalize text-slate-500">{agent.online ? agent.currentSection || 'overview' : 'No current activity'}</p>
-              </div>
-            </div>
-          ))}
-          {presence?.staff.length === 0 && <p className="px-5 py-6 text-sm text-slate-500">No agent accounts have been created.</p>}
-          {!presence && <p className="px-5 py-6 text-sm text-slate-500">Loading staff presence…</p>}
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-slate-500" />
