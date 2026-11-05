@@ -554,7 +554,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
       {/* Inventory & Price Adjustments Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="hidden overflow-x-auto xl:block">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px] text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
               <tr>
@@ -769,75 +769,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               })}
             </tbody>
           </table>
-        </div>
-
-        <div className="grid gap-3 p-3 xl:hidden sm:grid-cols-2 sm:p-4">
-          {filteredProducts.map((item) => {
-            const isLow = item.stockCount <= item.minStockThreshold && item.stockCount > 0;
-            const isOut = item.stockCount <= 0;
-            return (
-              <article key={item.id} className="min-w-0 rounded-xl border border-[#e5e8e1] bg-white p-4 transition hover:border-[#c8d4c8]">
-                <div className="flex items-start gap-3">
-                  {item.image
-                    ? <img src={item.image} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-slate-200 object-cover" referrerPolicy="no-referrer" />
-                    : <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-[#edf2ed] text-[#456953]"><Package className="h-6 w-6" /></span>}
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-sm font-bold leading-5 text-slate-900">{item.name}</p>
-                    <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{item.sku}{item.ndcCode ? ` · ${item.ndcCode}` : ''}</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="rounded-md bg-[#edf2ed] px-2 py-1 text-[10px] font-semibold text-[#456953]">{item.category}</span>
-                      {item.rxRequired && <span className="rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">Rx required</span>}
-                      {item.isFeatured && <span className="rounded-md bg-[#f7f1e4] px-2 py-1 text-[10px] font-semibold text-[#8a6c2d]">Featured</span>}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Retail</p>
-                    <p className="mt-1 text-sm font-bold text-slate-900">${item.price.toFixed(2)}</p>
-                    {item.copayPrice !== undefined && item.copayPrice > 0 && <p className="mt-0.5 text-[11px] text-slate-500">Copay ${item.copayPrice.toFixed(2)}</p>}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock</p>
-                    <p className={`mt-1 text-sm font-bold ${isOut ? 'text-rose-700' : isLow ? 'text-amber-700' : 'text-slate-900'}`}>{item.stockCount} <span className="text-[10px] font-medium text-slate-500">/ min {item.minStockThreshold}</span></p>
-                    <p className={`mt-0.5 text-[11px] font-medium ${isOut ? 'text-rose-700' : isLow ? 'text-amber-700' : 'text-emerald-700'}`}>{isOut ? 'Out of stock' : isLow ? 'Low stock' : 'In stock'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Listing</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-800">{item.isActive === false ? 'Hidden' : 'Published'}</p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">{item.dosage || 'Catalog item'}</p>
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                  <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-[#f7f8f6] p-1">
-                    {([-1, 1] as const).map((change) => (
-                      <button key={change} type="button" disabled={isSaving} onClick={() => handleStockAdjust(item, change)} aria-label={`${change < 0 ? 'Decrease' : 'Increase'} stock for ${item.name}`} className="rounded-md px-2.5 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-white hover:text-[#315649] disabled:opacity-40">{change < 0 ? '−1' : '+1'}</button>
-                    ))}
-                    <span className="mx-0.5 h-4 w-px bg-slate-200" />
-                    {([-10, 10] as const).map((change) => (
-                      <button key={change} type="button" disabled={isSaving} onClick={() => handleStockAdjust(item, change)} aria-label={`${change < 0 ? 'Decrease' : 'Increase'} stock by ten for ${item.name}`} className="rounded-md px-2 py-1.5 text-[11px] font-bold text-slate-500 transition hover:bg-white hover:text-[#315649] disabled:opacity-40">{change < 0 ? '−10' : '+10'}</button>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button type="button" disabled={isSaving} onClick={() => void handleToggleListing(item, 'isFeatured')} aria-label={item.isFeatured ? `Unfeature ${item.name}` : `Feature ${item.name}`} aria-pressed={item.isFeatured === true} className={`rounded-lg p-2 transition hover:bg-[#f7f1e4] ${item.isFeatured ? 'text-amber-600' : 'text-slate-400 hover:text-amber-600'}`}><Star className={`h-4 w-4 ${item.isFeatured ? 'fill-current' : ''}`} /></button>
-                    <button type="button" disabled={isSaving} onClick={() => void handleToggleListing(item, 'isActive')} aria-label={item.isActive === false ? `Show ${item.name} on storefront` : `Hide ${item.name} from storefront`} aria-pressed={item.isActive !== false} className={`rounded-lg p-2 transition hover:bg-[#edf2ed] ${item.isActive === false ? 'text-slate-400' : 'text-emerald-700'}`}>{item.isActive === false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
-                    <button type="button" disabled={isSaving} onClick={() => { setPreviewImageIndex(0); setPreviewItem(item); }} aria-label={`Preview ${item.name} storefront card`} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-[#315649]"><Eye className="h-4 w-4" /></button>
-                    <button type="button" disabled={isSaving} onClick={() => { clearPendingProductImages(editingProductImages, setEditingProductImages); setEditingItem({ ...item, images: getProductImages(item) }); }} aria-label={`Edit ${item.name}`} className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-[#315649]"><Edit2 className="h-4 w-4" /></button>
-                    <button type="button" disabled={isSaving} onClick={() => {
-                      if (window.confirm(`Archive "${item.name}"? It will disappear from the storefront, but old order records will remain.`)) {
-                        setActionError('');
-                        setIsSaving(true);
-                        void onDeleteProduct(item.id)
-                          .then(() => setNotification(`Archived ${item.name}.`))
-                          .catch((error: unknown) => setActionError(error instanceof Error ? error.message : 'The product could not be archived.'))
-                          .finally(() => setIsSaving(false));
-                      }
-                    }} aria-label={`Archive ${item.name}`} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
         </div>
 
         {filteredProducts.length === 0 && (
