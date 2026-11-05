@@ -327,10 +327,14 @@ export default function App() {
       throw new Error('The secure sign-out request failed. Please try again.');
     }
     setAdminAuthStatus('unauthenticated');
+    setAdminRole('admin');
+    setAdminEmail('');
+    setAdminDisplayName('');
     setAdminPermissions([]);
+    setMustChangePassword(false);
     setIsImpersonating(false);
     setImpersonatedBy('');
-    navigateTo('/');
+    navigateTo('/admin');
   };
 
   const handleEnterAgent = (session: {
