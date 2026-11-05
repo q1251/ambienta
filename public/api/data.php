@@ -5190,7 +5190,13 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     data_require_admin('admin');
     $body = data_read_json();
     $orderId = data_string($body, 'orderId', 64);
-    $paymentLink = data_string($body, 'paymentLinkUrl', 2048);
+    $previewOnly = $body['previewOnly'] ?? false;
+    if (!is_bool($previewOnly)) {
+        data_respond(400, ['error' => 'invalid_preview_mode', 'message' => 'The payment email mode is invalid.']);
+    }
+    $paymentLink = $previewOnly
+        ? 'https://example.invalid/demo-payment'
+        : data_string($body, 'paymentLinkUrl', 2048);
     $emailTemplate = data_string($body, 'emailTemplate', 40, false);
     if ($emailTemplate === '') {
         $emailTemplate = 'payment_request';
@@ -5200,14 +5206,14 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     }
     $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
     $linkParts = filter_var($paymentLink, FILTER_VALIDATE_URL) ? parse_url($paymentLink) : false;
-    if (
+    if (!$previewOnly && (
         !is_array($linkParts)
         || strtolower((string) ($linkParts['scheme'] ?? '')) !== 'https'
         || !isset($linkParts['host'])
         || isset($linkParts['user'])
         || isset($linkParts['pass'])
         || preg_match('/[\r\n\x00]/', $paymentLink) === 1
-    ) {
+    )) {
         data_respond(400, ['error' => 'invalid_payment_link', 'message' => 'Enter a valid external HTTPS payment link.']);
     }
 
@@ -5240,7 +5246,8 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         }
 
         $isReminder = $emailTemplate === 'payment_reminder';
-        $subject = ($isReminder ? 'Payment reminder for Ambienta order ' : 'Payment instructions for Ambienta order ')
+        $subject = ($previewOnly ? '[DEMO PREVIEW] ' : '')
+            . ($isReminder ? 'Payment reminder for Ambient order ' : 'Payment instructions for Ambient order ')
             . $order['order_number'];
         $paymentInstructions = match ($order['payment_method']) {
             'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
@@ -5248,9 +5255,11 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
             default => '',
         };
-        $intro = $isReminder
-            ? "This is a reminder that payment is still due for your reviewed order {$order['order_number']}."
-            : "Your order {$order['order_number']} has been received and reviewed. Payment instructions for your selected method are below.";
+        $intro = $previewOnly
+            ? 'DEMO PREVIEW ONLY. This is not a real payment request. The example.invalid link cannot accept payments.'
+            : ($isReminder
+                ? "This is a reminder that payment is still due for your reviewed order {$order['order_number']}."
+                : "Your order {$order['order_number']} has been received and reviewed. Payment instructions for your selected method are below.");
         $plainBody = "Hello {$order['customer_name']},\n\n"
             . $intro . "\n\n"
             . "Payment method: {$order['payment_method']}\n"
@@ -5261,6 +5270,18 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             $plainBody .= "\nMessage from Ambient:\n{$additionalMessage}\n";
         }
         $plainBody .= "\nIf you have questions, reply to this email.\n\nAmbient";
+        $recipient = (string) $order['email'];
+        if ($previewOnly) {
+            $adminEmail = strtolower((string) ($_SESSION['admin_email'] ?? ''));
+            if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'admin_email_unavailable', 'message' => 'The signed-in administrator email is unavailable for a demo preview.']);
+            }
+            $recipient = $adminEmail;
+            $plainBody = "DEMO PREVIEW ONLY — sent to the signed-in administrator, not the customer.\n"
+                . "This is not a payment request. Do not use the example.invalid link to pay.\n\n"
+                . $plainBody;
+        }
         $safeName = htmlspecialchars((string) $order['customer_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeOrderNumber = htmlspecialchars((string) $order['order_number'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeMethod = htmlspecialchars((string) $order['payment_method'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -5275,11 +5296,14 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             . '<p><a href="' . $safeLink . '">Pay for order ' . $safeOrderNumber . '</a></p>'
             . ($safeAdditionalMessage !== '' ? '<p>' . nl2br($safeAdditionalMessage, false) . '</p>' : '')
             . '<p>If you have questions, reply to this email.</p><p>Ambient</p>';
+        if ($previewOnly) {
+            $htmlBody = '<p><strong>DEMO PREVIEW ONLY</strong> — sent to the signed-in administrator, not the customer. This is not a payment request. Do not use the example.invalid link to pay.</p>' . $htmlBody;
+        }
 
         $db->prepare(
             'INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         )->execute([
-            $order['email'],
+            $recipient,
             $subject,
             data_mail_encrypt_content($plainBody),
             'Queued',
@@ -5290,7 +5314,7 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         ]);
         $activityId = $db->lastInsertId();
         try {
-            $messageId = data_mail_send($settings, $order['email'], $subject, $plainBody, null, [], [], [], [], $htmlBody);
+            $messageId = data_mail_send($settings, $recipient, $subject, $plainBody, null, [], [], [], [], $htmlBody);
         } catch (Throwable $error) {
             $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Failed', $activityId]);
             $db->commit();
@@ -5301,16 +5325,22 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
                 error_log('Ambients Hostinger connection state could not be updated after a payment-link send failure.');
             }
             error_log('Ambients Hostinger payment-link email send failed: ' . $error->getMessage());
-            data_respond(502, ['error' => 'mail_send_failed', 'message' => 'Hostinger did not accept the payment-link email. Verify the connection and try again.']);
+            data_respond(502, ['error' => 'mail_send_failed', 'message' => $previewOnly
+                ? 'Hostinger did not accept the demo preview. Verify the connection and try again.'
+                : 'Hostinger did not accept the payment-link email. Verify the connection and try again.']);
         }
 
-        $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
-            ->execute([$paymentLink, $orderId]);
+        if (!$previewOnly) {
+            $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
+                ->execute([$paymentLink, $orderId]);
+        }
         $db->prepare('UPDATE email_activity SET status = ?, message_id = ? WHERE id = ?')
             ->execute(['Sent', $messageId, $activityId]);
-        data_audit($db, 'order.payment_link_sent', 'order', $orderId, [
+        data_audit($db, $previewOnly ? 'order.payment_email_preview_sent' : 'order.payment_link_sent', 'order', $orderId, [
             'orderNumber' => $order['order_number'],
             'paymentMethod' => $order['payment_method'],
+            'previewOnly' => $previewOnly,
+            'recipient' => $recipient,
         ]);
         $db->commit();
 
@@ -5319,7 +5349,9 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         data_respond(201, [
             'sent' => true,
             'logged' => true,
-            'message' => 'Hostinger accepted the payment-link email.',
+            'message' => $previewOnly
+                ? 'Hostinger accepted the demo preview email for the signed-in administrator. No customer email or order payment link was changed.'
+                : 'Hostinger accepted the payment-link email.',
             'order' => data_order_row($db, $savedOrder->fetch()),
         ]);
     } catch (Throwable $error) {
