@@ -948,8 +948,9 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
             {/* Modal Body */}
             <div className={orderPageId ? 'grid grid-cols-1 items-start gap-5 text-xs lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.9fr)]' : 'p-6 overflow-y-auto space-y-6 text-xs'}>
+              <div className={orderPageId ? 'lg:col-start-2 lg:row-start-1' : 'contents'}>
               {/* Top Details Grid */}
-              <div className={orderPageId ? 'grid grid-cols-1 gap-4 lg:col-start-2 lg:row-start-1' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
+              <div className={orderPageId ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
                 {/* Customer Info */}
                 <div className={orderPageId ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-2' : 'bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5'}>
                   <span className="font-bold text-slate-800 text-xs block">Customer Information</span>
@@ -1032,9 +1033,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   )}
                 </div>
               </div>
+              </div>
 
+              <div className={orderPageId ? 'space-y-5 lg:col-start-1 lg:row-start-1' : 'contents'}>
               {/* Items List */}
-              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-1' : 'space-y-3'}>
+              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm' : 'space-y-3'}>
                 <span className="font-bold text-slate-800 text-xs block">Order Line Items</span>
                 <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
                   {selectedOrder.items && selectedOrder.items.length > 0 ? (
@@ -1103,7 +1106,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>
 
               {/* Fulfillment & Tracking Section */}
-              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-teal-200 bg-white p-5 shadow-sm lg:col-start-1 lg:row-start-2' : 'bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3'}>
+              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-teal-200 bg-white p-5 shadow-sm' : 'bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3'}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
                     <Truck className="w-4 h-4 text-teal-700" />
@@ -1147,6 +1150,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     Save Tracking
                   </button>
                 </div>
+              </div>
               </div>
 
               {/* Internal Notes Log */}
