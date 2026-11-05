@@ -879,7 +879,7 @@ function data_visitor_session_duration(string $firstSeen, string $lastSeen): int
     $start = strtotime($firstSeen . ' UTC');
     $end = strtotime($lastSeen . ' UTC');
     if ($start === false || $end === false) return 0;
-    if ($end >= time() - 90) $end = time();
+    if ($end >= time() - 120) $end = time();
     return max(0, $end - $start);
 }
 
@@ -4521,7 +4521,7 @@ if ($method === 'GET') {
                     'language' => $session['language'],
                     'firstSeen' => $session['first_seen'],
                     'lastSeen' => $session['last_seen'],
-                    'active' => strtotime((string) $session['last_seen'] . ' UTC') >= time() - 90,
+                    'active' => strtotime((string) $session['last_seen'] . ' UTC') >= time() - 120,
                     'durationSeconds' => data_visitor_session_duration((string) $session['first_seen'], (string) $session['last_seen']),
                     'chatId' => $session['chat_id'] === null ? null : (int) $session['chat_id'],
                     'chatStatus' => $session['chat_status'],
@@ -4538,11 +4538,11 @@ if ($method === 'GET') {
             data_respond(400, ['error' => 'invalid_visitor_filter', 'message' => 'Choose active or recent visitor sessions.']);
         }
         $where = $filter === 'active'
-            ? 'WHERE s.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)'
+            ? 'WHERE s.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 120 SECOND)'
             : 'WHERE s.last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)';
         $activeSummary = $db->query(
             'SELECT COUNT(*) AS sessions, COUNT(DISTINCT visitor_token_hash) AS visitors
-             FROM visitor_sessions WHERE last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND)'
+             FROM visitor_sessions WHERE last_seen >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 120 SECOND)'
         )->fetch();
         $recentSummary = $db->query(
             'SELECT COUNT(*) AS sessions, COUNT(DISTINCT visitor_token_hash) AS visitors
@@ -4577,7 +4577,7 @@ if ($method === 'GET') {
                 'language' => $row['language'],
                 'firstSeen' => $row['first_seen'],
                 'lastSeen' => $row['last_seen'],
-                'active' => strtotime((string) $row['last_seen'] . ' UTC') >= time() - 90,
+                'active' => strtotime((string) $row['last_seen'] . ' UTC') >= time() - 120,
                 'pageCount' => (int) $row['page_count'],
                 'durationSeconds' => data_visitor_session_duration((string) $row['first_seen'], (string) $row['last_seen']),
                 'chatId' => $row['chat_id'] === null ? null : (int) $row['chat_id'],

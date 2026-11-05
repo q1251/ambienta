@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDown, Headset, LoaderCircle, MessageCircle, Send, X } from 'lucide-react';
+import { getVisitorToken } from '../utils/visitorSession';
 
 interface ChatSession {
   conversationId: number;
@@ -22,16 +23,6 @@ interface ChatResponse {
 }
 
 const storageKey = 'ambienta-live-chat-session';
-const visitorStorageKey = 'ambienta-visitor-id';
-
-const getVisitorId = (): string => {
-  try {
-    const visitorId = window.localStorage.getItem(visitorStorageKey) || '';
-    return /^[a-f0-9]{64}$/.test(visitorId) ? visitorId : '';
-  } catch {
-    return '';
-  }
-};
 
 const readStoredSession = (): ChatSession | null => {
   try {
@@ -138,7 +129,7 @@ export const ChatWidget: React.FC = () => {
           email: visitorEmail,
           phone: visitorPhone,
           message: firstMessage,
-          visitorId: getVisitorId(),
+          visitorId: getVisitorToken(),
           website: '',
         }),
       });

@@ -1,45 +1,5 @@
 import React, { useEffect } from 'react';
-
-interface StoredSession {
-  token: string;
-  lastActivity: number;
-}
-
-const visitorStorageKey = 'ambienta-visitor-id';
-const sessionStorageKey = 'ambienta-visitor-session';
-const sessionTimeoutMs = 30 * 60 * 1000;
-
-const createToken = (): string => {
-  const bytes = window.crypto.getRandomValues(new Uint8Array(32));
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
-
-const getVisitorToken = (): string => {
-  const saved = window.localStorage.getItem(visitorStorageKey);
-  if (saved && /^[a-f0-9]{64}$/.test(saved)) return saved;
-  const token = createToken();
-  window.localStorage.setItem(visitorStorageKey, token);
-  return token;
-};
-
-const getSessionToken = (): string => {
-  let saved: StoredSession | null = null;
-  try {
-    const raw = window.sessionStorage.getItem(sessionStorageKey);
-    if (raw) saved = JSON.parse(raw) as StoredSession;
-  } catch {
-    saved = null;
-  }
-  if (saved && typeof saved.token === 'string' && /^[a-f0-9]{64}$/.test(saved.token)
-    && Number.isFinite(saved.lastActivity) && Date.now() - saved.lastActivity < sessionTimeoutMs) {
-    saved.lastActivity = Date.now();
-    window.sessionStorage.setItem(sessionStorageKey, JSON.stringify(saved));
-    return saved.token;
-  }
-  const session: StoredSession = { token: createToken(), lastActivity: Date.now() };
-  window.sessionStorage.setItem(sessionStorageKey, JSON.stringify(session));
-  return session.token;
-};
+import { getVisitorSessionToken, getVisitorToken } from '../utils/visitorSession';
 
 const getReferrerDomain = (): string => {
   if (!document.referrer) return '';
@@ -54,6 +14,8 @@ const getReferrerDomain = (): string => {
 export const VisitorSessionTracker: React.FC = () => {
   useEffect(() => {
     let failureReported = false;
+    let requestInProgress = false;
+    let heartbeatPending = false;
     let lastPath = '';
     let currentProductId = '';
     const visibleProducts = new Map<Element, { id: string; ratio: number }>();
@@ -78,13 +40,18 @@ export const VisitorSessionTracker: React.FC = () => {
     }, { threshold: [0.3, 0.6, 0.9] });
 
     const heartbeat = async () => {
+      if (requestInProgress) {
+        heartbeatPending = true;
+        return;
+      }
+      requestInProgress = true;
       try {
         const path = window.location.pathname.slice(0, 500) || '/';
         const response = await fetch('/api/data.php?resource=visitor-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({
-            sessionToken: getSessionToken(),
+            sessionToken: getVisitorSessionToken(),
             visitorToken: getVisitorToken(),
             path,
             title: document.title.slice(0, 180),
@@ -104,6 +71,12 @@ export const VisitorSessionTracker: React.FC = () => {
         if (!failureReported) {
           console.error('Ambients visitor session could not be updated.', error);
           failureReported = true;
+        }
+      } finally {
+        requestInProgress = false;
+        if (heartbeatPending) {
+          heartbeatPending = false;
+          void heartbeat();
         }
       }
     };
@@ -129,14 +102,17 @@ export const VisitorSessionTracker: React.FC = () => {
     const handleVisibility = () => {
       if (!document.hidden) void heartbeat();
     };
+    const handlePageShow = () => void heartbeat();
 
     observeProducts();
     const mutationObserver = new MutationObserver(observeProducts);
     mutationObserver.observe(document.body, { childList: true, subtree: true });
     void heartbeat();
-    const timer = window.setInterval(() => void heartbeat(), 30_000);
+    const timer = window.setInterval(() => void heartbeat(), 20_000);
     window.addEventListener('popstate', handlePageChange);
     window.addEventListener('hashchange', handlePageChange);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handlePageShow);
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
@@ -145,6 +121,8 @@ export const VisitorSessionTracker: React.FC = () => {
       productObserver?.disconnect();
       window.removeEventListener('popstate', handlePageChange);
       window.removeEventListener('hashchange', handlePageChange);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handlePageShow);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
