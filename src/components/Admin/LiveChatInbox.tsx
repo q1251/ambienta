@@ -351,7 +351,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
   const unreadCount = conversations.reduce((total, conversation) => total + conversation.unreadCount, 0);
 
   return (
-    <div className="mx-auto flex h-full min-h-0 max-w-[1500px] flex-col gap-3">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-3">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Customer support</p>
