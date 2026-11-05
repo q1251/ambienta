@@ -193,7 +193,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     if (props.role !== 'admin' && (
       tab === 'staff'
       || tab === 'audit'
-      || tab === 'email'
       || (neededPermission !== null && !props.permissions.includes(neededPermission))
     )) return;
     const url = new URL(window.location.href);
@@ -212,7 +211,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   const visibleNavigation = useMemo(() => navigation.filter((item) => {
     const requiredPermission = permissionForTab[item.id];
     return props.role === 'admin'
-      || (item.id !== 'staff' && item.id !== 'audit' && item.id !== 'email' && (!requiredPermission || permissionsKey.split(',').includes(requiredPermission)));
+      || (item.id !== 'staff' && item.id !== 'audit' && (!requiredPermission || permissionsKey.split(',').includes(requiredPermission)));
   }), [props.role, permissionsKey]);
   useEffect(() => {
     if (visibleNavigation.some((item) => item.id === activeTab)) return;

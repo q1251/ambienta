@@ -194,6 +194,9 @@ function data_ensure_schema(PDO $db): void
             bcc MEDIUMTEXT NULL,
             thread_headers MEDIUMTEXT NULL,
             attachments MEDIUMTEXT NULL,
+            recipient_lead_id BIGINT UNSIGNED NULL,
+            reply_uid VARCHAR(32) NULL,
+            reply_folder VARCHAR(16) NULL,
             email_design VARCHAR(16) NOT NULL DEFAULT 'plain',
             KEY email_drafts_folder (deleted_at, updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
@@ -341,6 +344,9 @@ function data_ensure_schema(PDO $db): void
         ['email_drafts', 'bcc', 'MEDIUMTEXT NULL'],
         ['email_drafts', 'thread_headers', 'MEDIUMTEXT NULL'],
         ['email_drafts', 'attachments', 'MEDIUMTEXT NULL'],
+        ['email_drafts', 'recipient_lead_id', 'BIGINT UNSIGNED NULL'],
+        ['email_drafts', 'reply_uid', 'VARCHAR(32) NULL'],
+        ['email_drafts', 'reply_folder', 'VARCHAR(16) NULL'],
         ['email_drafts', 'email_design', "VARCHAR(16) NOT NULL DEFAULT 'plain'"],
         ['email_campaigns', 'audience_filter', 'MEDIUMTEXT NULL'],
         ['email_campaigns', 'track_opens', 'TINYINT(1) NOT NULL DEFAULT 0'],
@@ -1856,7 +1862,7 @@ function data_imap_resolve_folder(array $folders, string $kind): ?string
     return null;
 }
 
-function data_imap_folder_messages(array $settings, string $folder, int $page = 1, string $searchTerm = '', int $limit = 20): array
+function data_imap_folder_messages(array $settings, string $folder, int $page = 1, string $searchTerm = '', int $limit = 20, bool $subjectOnly = false): array
 {
     [$socket, $commandNumber] = data_imap_connect($settings);
     try {
@@ -1865,7 +1871,9 @@ function data_imap_folder_messages(array $settings, string $folder, int $page = 
         $search = data_imap_command(
             $socket,
             $commandNumber,
-            $searchTerm === '' ? 'UID SEARCH ALL' : 'UID SEARCH TEXT ' . data_imap_quote($searchTerm)
+            $searchTerm === ''
+                ? 'UID SEARCH ALL'
+                : 'UID SEARCH ' . ($subjectOnly ? 'SUBJECT ' : 'TEXT ') . data_imap_quote($searchTerm)
         );
         $uidLine = '';
         foreach ($search['lines'] as $line) {
@@ -2041,6 +2049,87 @@ function data_imap_message_details(array $settings, string $uid, string $folderK
     }
 }
 
+function data_imap_reply_metadata(array $settings, string $uid): array
+{
+    if (!ctype_digit($uid)) throw new RuntimeException('imap_invalid_message_operation');
+    $folder = data_imap_resolve_folder(data_imap_folders($settings), 'inbox');
+    if ($folder === null) throw new RuntimeException('imap_mailbox_folder_unavailable');
+    [$socket, $commandNumber] = data_imap_connect($settings);
+    try {
+        data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($folder));
+        $fetch = data_imap_command(
+            $socket,
+            $commandNumber,
+            'UID FETCH ' . $uid . ' (BODY.PEEK[HEADER.FIELDS (FROM REPLY-TO MESSAGE-ID REFERENCES IN-REPLY-TO)])'
+        );
+        $headers = [];
+        $currentHeader = '';
+        foreach (preg_split('/\r?\n/', $fetch['literals'][0] ?? '') ?: [] as $line) {
+            if (preg_match('/^[ \t]/', $line) === 1 && $currentHeader !== '') {
+                $headers[$currentHeader] .= ' ' . trim($line);
+            } elseif (preg_match('/^([A-Za-z0-9-]+):\s*(.*)$/', $line, $match) === 1) {
+                $currentHeader = strtolower($match[1]);
+                $headers[$currentHeader] = trim($match[2]);
+            }
+        }
+        $addressHeader = $headers['reply-to'] ?? $headers['from'] ?? '';
+        if (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $addressHeader, $match) !== 1) {
+            throw new RuntimeException('imap_reply_address_unavailable');
+        }
+        $messageId = trim($headers['message-id'] ?? '');
+        $references = trim(($headers['references'] ?? '') . ' ' . ($headers['message-id'] ?? ''));
+        return [
+            'recipient' => strtolower($match[0]),
+            'threadHeaders' => [
+                'In-Reply-To' => $messageId !== '' ? $messageId : null,
+                'References' => $references !== '' ? $references : null,
+            ],
+        ];
+    } finally {
+        if (is_resource($socket)) fclose($socket);
+    }
+}
+
+function data_agent_mail_recipient(PDO $db, array $body, array $settings): array
+{
+    $leadIdValue = $body['leadId'] ?? null;
+    if ($leadIdValue !== null) {
+        $leadId = filter_var($leadIdValue, FILTER_VALIDATE_INT);
+        if ($leadId === false || $leadId < 1) {
+            data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'Choose a valid lead recipient.']);
+        }
+        data_require_lead_access($db, (int) $leadId, true);
+        $query = $db->prepare('SELECT email FROM leads WHERE id = ?');
+        $query->execute([$leadId]);
+        $recipient = strtolower((string) $query->fetchColumn());
+        if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            data_respond(400, ['error' => 'invalid_recipient', 'message' => 'The selected lead does not have a valid email address.']);
+        }
+        return ['recipient' => $recipient, 'leadId' => (int) $leadId, 'replyUid' => null, 'replyFolder' => null, 'threadHeaders' => []];
+    }
+
+    $replyMailbox = $body['replyMailbox'] ?? null;
+    if (!is_array($replyMailbox)
+        || !is_string($replyMailbox['id'] ?? null)
+        || !ctype_digit($replyMailbox['id'])
+        || ($replyMailbox['folder'] ?? null) !== 'inbox') {
+        data_respond(403, ['error' => 'lead_recipient_required', 'message' => 'Select an assigned lead or reply to a message in the inbox.']);
+    }
+    try {
+        $metadata = data_imap_reply_metadata($settings, $replyMailbox['id']);
+    } catch (Throwable $error) {
+        error_log('Ambients Hostinger reply recipient resolution failed: ' . $error->getMessage());
+        data_respond(400, ['error' => 'reply_recipient_unavailable', 'message' => 'The inbox message no longer has a usable reply address. Refresh the inbox and try again.']);
+    }
+    return [
+        'recipient' => $metadata['recipient'],
+        'leadId' => null,
+        'replyUid' => $replyMailbox['id'],
+        'replyFolder' => 'inbox',
+        'threadHeaders' => $metadata['threadHeaders'],
+    ];
+}
+
 function data_imap_move_message(array $settings, string $uid, string $sourceKind, string $targetKind): void
 {
     if (!ctype_digit($uid) || !in_array($sourceKind, ['inbox', 'trash'], true) || !in_array($targetKind, ['inbox', 'trash'], true)) {
@@ -2094,6 +2183,21 @@ function data_mask_contact_phone(string $phone): string
 
     $prefix = str_starts_with($phone, '+') ? '+' : '';
     return $prefix . substr($digits, 0, 2) . str_repeat('*', max(5, strlen($digits) - 4)) . substr($digits, -2);
+}
+
+function data_mask_mail_text(string $text): string
+{
+    $text = preg_replace_callback(
+        '/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',
+        static fn (array $match): string => data_mask_contact_email($match[0]),
+        $text
+    ) ?? $text;
+
+    return preg_replace_callback(
+        '/(?<![A-Za-z0-9])\+?\d(?:[\s().-]*\d){6,}(?![A-Za-z0-9])/',
+        static fn (array $match): string => data_mask_contact_phone($match[0]),
+        $text
+    ) ?? $text;
 }
 
 function data_contains_contact_details(string $text): bool
@@ -3030,7 +3134,7 @@ if ($resource === 'email-campaign-process') {
 }
 
 if (in_array($resource, [
-    'email-settings', 'email-test', 'email-send', 'email-activity', 'email-activity-details', 'email-thread', 'email-inbox',
+    'email-settings', 'email-test', 'email-send', 'email-activity', 'email-activity-details', 'email-thread', 'email-inbox', 'email-recipient-leads',
     'email-message-trash', 'email-message-restore', 'email-message-purge', 'email-message-seen', 'email-message-details',
     'email-drafts', 'email-draft', 'email-draft-trash', 'email-draft-restore',
     'email-draft-purge', 'email-draft-remove', 'email-campaigns',
@@ -3105,6 +3209,27 @@ if (in_array($resource, [
         data_respond(200, ['connected' => true, 'message' => 'Hostinger SMTP and IMAP authentication succeeded.']);
     }
 
+    if ($method === 'GET' && $resource === 'email-recipient-leads') {
+        data_require_permission('integrations');
+        if (($_SESSION['admin_role'] ?? '') === 'admin') {
+            data_respond(200, ['recipients' => []]);
+        }
+        $db = data_db();
+        $includeUnassignedNew = in_array('new_leads', $_SESSION['admin_permissions'] ?? [], true);
+        $query = $db->prepare(
+            'SELECT id, first_name, last_name, email FROM leads
+             WHERE assigned_staff_id = ?' . ($includeUnassignedNew ? " OR (assigned_staff_id IS NULL AND status = 'New')" : '') . '
+             ORDER BY first_name, last_name, id'
+        );
+        $query->execute([(int) ($_SESSION['staff_id'] ?? 0)]);
+        $recipients = array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
+            'name' => trim((string) $row['first_name'] . ' ' . (string) $row['last_name']),
+            'email' => data_mask_contact_email((string) $row['email']),
+        ], $query->fetchAll());
+        data_respond(200, ['recipients' => $recipients]);
+    }
+
     if ($method === 'GET' && $resource === 'email-inbox') {
         data_require_permission('integrations');
         $settings = data_mail_settings();
@@ -3120,12 +3245,28 @@ if (in_array($resource, [
         if ($page === false || $page < 1 || $page > 100000 || !is_string($searchTerm) || strlen($searchTerm) > 128 || preg_match('/[\r\n\x00]/', $searchTerm) === 1) {
             data_respond(400, ['error' => 'invalid_mail_query', 'message' => 'The mailbox search or page number is invalid.']);
         }
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
+        if ($isOperator && data_contains_contact_details($searchTerm)) {
+            data_respond(400, ['error' => 'invalid_mail_search', 'message' => 'Search by subject text, not by email addresses or phone numbers.']);
+        }
         try {
             $folders = data_imap_folders($settings);
             $folder = data_imap_resolve_folder($folders, $folderKind);
-            $result = $folder === null ? ['messages' => [], 'total' => 0] : data_imap_folder_messages($settings, $folder, $page, $searchTerm);
+            $result = $folder === null ? ['messages' => [], 'total' => 0] : data_imap_folder_messages($settings, $folder, $page, $searchTerm, 20, $isOperator);
+            $messages = $result['messages'];
+            if ($isOperator) {
+                foreach ($messages as &$mailMessage) {
+                    $mailMessage['from'] = data_mask_mail_text((string) $mailMessage['from']);
+                    $mailMessage['subject'] = data_mask_mail_text((string) $mailMessage['subject']);
+                    $mailMessage['body'] = data_mask_mail_text((string) $mailMessage['body']);
+                    $mailMessage['messageId'] = '';
+                    $mailMessage['inReplyTo'] = '';
+                    $mailMessage['references'] = '';
+                }
+                unset($mailMessage);
+            }
             data_respond(200, [
-                'mailboxMessages' => $result['messages'],
+                'mailboxMessages' => $messages,
                 'total' => $result['total'],
                 'page' => $page,
                 'pageSize' => 20,
@@ -3179,6 +3320,10 @@ if (in_array($resource, [
             };
             data_respond(502, ['error' => 'mail_message_details_failed', 'message' => $message]);
         }
+        if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+            $details['body'] = data_mask_mail_text((string) $details['body']);
+            $details['attachments'] = [];
+        }
         data_respond(200, $details);
     }
 
@@ -3212,30 +3357,57 @@ if (in_array($resource, [
 
     if ($method === 'GET' && in_array($resource, ['email-drafts', 'email-draft-trash'], true)) {
         data_require_permission('integrations');
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
         $deleted = $resource === 'email-draft-trash';
         $statement = data_db()->prepare(
-            'SELECT id, recipient_email, subject, body, cc, bcc, thread_headers, attachments, email_design, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
+            'SELECT id, recipient_email, recipient_lead_id, reply_uid, reply_folder, subject, body, cc, bcc, thread_headers, attachments, email_design, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
         );
         $statement->execute();
         $rows = $statement->fetchAll();
-        data_respond(200, ['drafts' => array_map(static fn (array $row): array => [
+        data_respond(200, ['drafts' => array_map(static function (array $row) use ($isOperator): array {
+            $recipient = (string) $row['recipient_email'];
+            $draftBody = data_mail_decrypt_content($row['body']);
+            if ($isOperator) {
+                $recipient = $recipient === '' ? '' : data_mask_contact_email($recipient);
+                $draftBody = data_mask_mail_text($draftBody);
+            }
+            return [
             'id' => (string) $row['id'],
-            'recipientEmail' => $row['recipient_email'],
-            'subject' => $row['subject'],
-            'body' => data_mail_decrypt_content($row['body']),
-            'cc' => data_mail_decrypt_content($row['cc']),
-            'bcc' => data_mail_decrypt_content($row['bcc']),
-            'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
-            'attachments' => json_decode(data_mail_decrypt_content($row['attachments']), true) ?: [],
+            'recipientEmail' => $recipient,
+            'recipientLeadId' => $row['recipient_lead_id'] === null ? null : (int) $row['recipient_lead_id'],
+            'replyMailbox' => $row['reply_uid'] === null ? null : ['id' => (string) $row['reply_uid'], 'folder' => $row['reply_folder']],
+            'subject' => $isOperator ? data_mask_mail_text((string) $row['subject']) : $row['subject'],
+            'body' => $draftBody,
+            'cc' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['cc']), true) ?: []),
+            'bcc' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['bcc']), true) ?: []),
+            'threadHeaders' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: []),
+            'attachments' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['attachments']), true) ?: []),
             'emailDesign' => in_array($row['email_design'], ['plain', 'card'], true) ? $row['email_design'] : 'plain',
             'updatedAt' => $row['updated_at'],
-        ], $rows)]);
+            ];
+        }, $rows)]);
     }
 
     if ($method === 'POST' && $resource === 'email-draft') {
         data_require_permission('integrations');
         $body = data_read_json(6 * 1024 * 1024);
-        $recipient = strtolower(data_string($body, 'recipientEmail', 254, false));
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
+        $db = data_db();
+        $recipientLeadId = null;
+        $replyUid = null;
+        $replyFolder = null;
+        $replyThreadHeaders = null;
+        if ($isOperator) {
+            $settings = data_mail_settings();
+            $recipientDetails = data_agent_mail_recipient($db, $body, $settings);
+            $recipient = $recipientDetails['recipient'];
+            $recipientLeadId = $recipientDetails['leadId'];
+            $replyUid = $recipientDetails['replyUid'];
+            $replyFolder = $recipientDetails['replyFolder'];
+            $replyThreadHeaders = $recipientDetails['threadHeaders'];
+        } else {
+            $recipient = strtolower(data_string($body, 'recipientEmail', 254, false));
+        }
         $subject = data_string($body, 'subject', 180, false);
         $emailDesign = data_string($body, 'emailDesign', 16, false);
         if ($emailDesign === '') {
@@ -3255,7 +3427,9 @@ if (in_array($resource, [
             $cc = data_mail_address_list($body['cc'] ?? '', 'cc');
             $bcc = data_mail_address_list($body['bcc'] ?? '', 'bcc');
             $attachments = data_mail_attachments($body['attachments'] ?? []);
-            $threadHeaders = data_mail_thread_headers($body['threadHeaders'] ?? []);
+            $threadHeaders = $isOperator
+                ? ($replyThreadHeaders ?? [])
+                : data_mail_thread_headers($body['threadHeaders'] ?? []);
         } catch (Throwable $error) {
             $message = match ($error->getMessage()) {
                 'attachments_too_large' => 'Attachments must total 4 MB or less.',
@@ -3266,10 +3440,12 @@ if (in_array($resource, [
             };
             data_respond(400, ['error' => 'invalid_draft', 'message' => $message]);
         }
+        if ($isOperator && ($cc !== [] || $bcc !== [] || $attachments !== [])) {
+            data_respond(403, ['error' => 'agent_email_restrictions', 'message' => 'Agent drafts cannot include additional recipients or attachments.']);
+        }
         if (count($cc) + count($bcc) > 20) {
             data_respond(400, ['error' => 'too_many_recipients', 'message' => 'Use no more than 20 total CC and BCC addresses.']);
         }
-        $db = data_db();
         $draftId = filter_var($body['id'] ?? null, FILTER_VALIDATE_INT);
         $encryptedBody = data_mail_encrypt_content($draftBody);
         $encryptedCc = data_mail_encrypt_content(json_encode($cc, JSON_UNESCAPED_SLASHES) ?: '[]');
@@ -3277,8 +3453,8 @@ if (in_array($resource, [
         $encryptedThread = data_mail_encrypt_content(json_encode($threadHeaders, JSON_UNESCAPED_SLASHES) ?: '{}');
         $encryptedAttachments = data_mail_encrypt_content(json_encode($attachments, JSON_UNESCAPED_SLASHES) ?: '[]');
         if ($draftId !== false && $draftId !== null && $draftId > 0) {
-            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, subject = ?, body = ?, cc = ?, bcc = ?, thread_headers = ?, attachments = ?, email_design = ? WHERE id = ? AND deleted_at IS NULL');
-            $update->execute([$recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $emailDesign, $draftId]);
+            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, recipient_lead_id = ?, reply_uid = ?, reply_folder = ?, subject = ?, body = ?, cc = ?, bcc = ?, thread_headers = ?, attachments = ?, email_design = ? WHERE id = ? AND deleted_at IS NULL');
+            $update->execute([$recipient, $recipientLeadId, $replyUid, $replyFolder, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $emailDesign, $draftId]);
             if ($update->rowCount() === 0) {
                 $exists = $db->prepare('SELECT id FROM email_drafts WHERE id = ? AND deleted_at IS NULL');
                 $exists->execute([$draftId]);
@@ -3287,14 +3463,19 @@ if (in_array($resource, [
                 }
             }
         } else {
-            $db->prepare('INSERT INTO email_drafts (recipient_email, subject, body, cc, bcc, thread_headers, attachments, email_design) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
-                $recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $emailDesign,
+            $db->prepare('INSERT INTO email_drafts (recipient_email, recipient_lead_id, reply_uid, reply_folder, subject, body, cc, bcc, thread_headers, attachments, email_design) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute([
+                $recipient, $recipientLeadId, $replyUid, $replyFolder, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $emailDesign,
             ]);
             $draftId = (int) $db->lastInsertId();
         }
+        $responseRecipient = $isOperator && $recipient !== '' ? data_mask_contact_email($recipient) : $recipient;
         data_respond(200, ['saved' => true, 'draft' => [
-            'id' => (string) $draftId, 'recipientEmail' => $recipient, 'subject' => $subject, 'body' => $draftBody,
-            'cc' => $cc, 'bcc' => $bcc, 'threadHeaders' => $threadHeaders, 'attachments' => $attachments, 'emailDesign' => $emailDesign,
+            'id' => (string) $draftId, 'recipientEmail' => $responseRecipient, 'recipientLeadId' => $recipientLeadId,
+            'replyMailbox' => $replyUid === null ? null : ['id' => $replyUid, 'folder' => $replyFolder],
+            'subject' => $isOperator ? data_mask_mail_text($subject) : $subject,
+            'body' => $isOperator ? data_mask_mail_text($draftBody) : $draftBody,
+            'cc' => $isOperator ? [] : $cc, 'bcc' => $isOperator ? [] : $bcc, 'threadHeaders' => $isOperator ? [] : $threadHeaders,
+            'attachments' => $isOperator ? [] : $attachments, 'emailDesign' => $emailDesign,
         ]]);
     }
 
@@ -3329,20 +3510,14 @@ if (in_array($resource, [
         $body = data_read_json(6 * 1024 * 1024);
         $db = data_db();
         $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
-        $leadIdValue = $body['leadId'] ?? null;
-        if ($isOperator && $leadIdValue === null) {
-            data_respond(403, ['error' => 'lead_recipient_required', 'message' => 'Agents can only email an assigned lead from that lead’s profile.']);
+        $settings = data_mail_settings();
+        if ($settings === [] || empty($settings['verified'])) {
+            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
         }
-        if ($leadIdValue !== null) {
-            $leadId = filter_var($leadIdValue, FILTER_VALIDATE_INT);
-            if ($leadId === false || $leadId < 1) {
-                data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
-            }
-            data_require_permission('leads');
-            data_require_lead_access($db, (int) $leadId, true);
-            $leadRecipient = $db->prepare('SELECT email FROM leads WHERE id = ?');
-            $leadRecipient->execute([$leadId]);
-            $recipient = strtolower((string) $leadRecipient->fetchColumn());
+        $recipientDetails = null;
+        if ($isOperator || isset($body['leadId']) || isset($body['replyMailbox'])) {
+            $recipientDetails = data_agent_mail_recipient($db, $body, $settings);
+            $recipient = $recipientDetails['recipient'];
         } else {
             $recipient = strtolower(data_string($body, 'recipientEmail', 254));
         }
@@ -3381,7 +3556,11 @@ if (in_array($resource, [
             $cc = data_mail_address_list($body['cc'] ?? '', 'cc');
             $bcc = data_mail_address_list($body['bcc'] ?? '', 'bcc');
             $attachments = data_mail_attachments($body['attachments'] ?? []);
-            $threadHeaders = data_mail_thread_headers($body['threadHeaders'] ?? []);
+            $threadHeaders = $isOperator
+                ? ($recipientDetails['replyUid'] !== null ? $recipientDetails['threadHeaders'] : [])
+                : ($recipientDetails !== null && $recipientDetails['replyUid'] !== null
+                    ? $recipientDetails['threadHeaders']
+                    : data_mail_thread_headers($body['threadHeaders'] ?? []));
         } catch (Throwable $error) {
             $message = match ($error->getMessage()) {
                 'attachments_too_large' => 'Attachments must total 4 MB or less.',
@@ -3394,10 +3573,6 @@ if (in_array($resource, [
         }
         if (count($cc) + count($bcc) > 20) {
             data_respond(400, ['error' => 'too_many_recipients', 'message' => 'Use no more than 20 total CC and BCC addresses.']);
-        }
-        $settings = data_mail_settings();
-        if ($settings === [] || empty($settings['verified'])) {
-            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
         }
         $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
             $recipient,
@@ -3470,17 +3645,35 @@ if (in_array($resource, [
         if (!is_array($row)) {
             data_respond(404, ['error' => 'activity_not_found', 'message' => 'The selected email activity was not found.']);
         }
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
         data_respond(200, [
-            'attachments' => json_decode(data_mail_decrypt_content($row['attachments']), true) ?: [],
-            'messageId' => $row['message_id'],
+            'attachments' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['attachments']), true) ?: []),
+            'messageId' => $isOperator ? null : $row['message_id'],
         ]);
     }
 
     if ($method === 'GET' && $resource === 'email-thread') {
         data_require_permission('integrations');
-        $messageId = $_GET['messageId'] ?? '';
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
+        if ($isOperator) {
+            $replyId = $_GET['replyId'] ?? '';
+            if (!is_string($replyId) || !ctype_digit($replyId)) {
+                data_respond(400, ['error' => 'invalid_thread_id', 'message' => 'The selected inbox message is invalid.']);
+            }
+            try {
+                $replyMetadata = data_imap_reply_metadata(data_mail_settings(), $replyId);
+            } catch (Throwable $error) {
+                error_log('Ambients Hostinger thread metadata lookup failed: ' . $error->getMessage());
+                data_respond(502, ['error' => 'mail_thread_unavailable', 'message' => 'The inbox conversation could not be loaded. Refresh the inbox and try again.']);
+            }
+            $threadReferences = preg_split('/\s+/', trim((string) ($replyMetadata['threadHeaders']['References'] ?? '')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $messageId = $threadReferences[0] ?? '';
+        } else {
+            $messageId = $_GET['messageId'] ?? '';
+        }
         if (!is_string($messageId) || strlen($messageId) > 998
             || preg_match('/^<[^<>\r\n]{1,990}>$/', $messageId) !== 1) {
+            if ($isOperator) data_respond(200, ['messages' => []]);
             data_respond(400, ['error' => 'invalid_thread_id', 'message' => 'The email conversation reference is invalid.']);
         }
         $statement = data_db()->prepare(
@@ -3489,18 +3682,26 @@ if (in_array($resource, [
         );
         $statement->execute([$messageId]);
         $rows = $statement->fetchAll();
-        data_respond(200, ['messages' => array_map(static fn (array $row): array => [
+        data_respond(200, ['messages' => array_map(static function (array $row) use ($isOperator): array {
+            $recipient = (string) $row['recipient_email'];
+            $body = data_mail_decrypt_content($row['body']);
+            if ($isOperator) {
+                $recipient = data_mask_contact_email($recipient);
+                $body = data_mask_mail_text($body);
+            }
+            return [
             'id' => (string) $row['id'],
-            'recipientEmail' => $row['recipient_email'],
-            'subject' => $row['subject'],
-            'body' => data_mail_decrypt_content($row['body']),
-            'cc' => json_decode(data_mail_decrypt_content($row['cc']), true) ?: [],
-            'bcc' => json_decode(data_mail_decrypt_content($row['bcc']), true) ?: [],
-            'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
-            'messageId' => $row['message_id'],
+            'recipientEmail' => $recipient,
+            'subject' => $isOperator ? data_mask_mail_text((string) $row['subject']) : $row['subject'],
+            'body' => $body,
+            'cc' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['cc']), true) ?: []),
+            'bcc' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['bcc']), true) ?: []),
+            'threadHeaders' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: []),
+            'messageId' => $isOperator ? null : $row['message_id'],
             'status' => $row['status'],
             'sentAt' => $row['sent_at'],
-        ], $rows)]);
+            ];
+        }, $rows)]);
     }
 
     if ($method === 'GET' && $resource === 'email-activity') {
@@ -3512,12 +3713,16 @@ if (in_array($resource, [
             data_respond(400, ['error' => 'invalid_activity_query', 'message' => 'The sent email search or page number is invalid.']);
         }
         $db = data_db();
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
+        if ($isOperator && data_contains_contact_details($search)) {
+            data_respond(400, ['error' => 'invalid_activity_search', 'message' => 'Search sent messages by subject text, not by email addresses or phone numbers.']);
+        }
         $where = '';
         $parameters = [];
         if (trim($search) !== '') {
-            $where = ' WHERE recipient_email LIKE ? OR subject LIKE ?';
+            $where = $isOperator ? ' WHERE subject LIKE ?' : ' WHERE recipient_email LIKE ? OR subject LIKE ?';
             $term = '%' . trim($search) . '%';
-            $parameters = [$term, $term];
+            $parameters = $isOperator ? [$term] : [$term, $term];
         }
         $count = $db->prepare('SELECT COUNT(*) FROM email_activity' . $where);
         $count->execute($parameters);
@@ -3538,18 +3743,26 @@ if (in_array($resource, [
         );
         $query->execute($parameters);
         $rows = $query->fetchAll();
-        data_respond(200, ['messages' => array_map(static fn (array $row): array => [
+        data_respond(200, ['messages' => array_map(static function (array $row) use ($isOperator): array {
+            $recipient = (string) $row['recipient_email'];
+            $body = data_mail_decrypt_content($row['body']);
+            if ($isOperator) {
+                $recipient = data_mask_contact_email($recipient);
+                $body = data_mask_mail_text($body);
+            }
+            return [
             'id' => (string) $row['id'],
-            'recipientEmail' => $row['recipient_email'],
-            'subject' => $row['subject'],
-            'body' => data_mail_decrypt_content($row['body']),
-            'cc' => json_decode(data_mail_decrypt_content($row['cc']), true) ?: [],
-            'bcc' => json_decode(data_mail_decrypt_content($row['bcc']), true) ?: [],
-            'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
-            'messageId' => $row['message_id'],
+            'recipientEmail' => $recipient,
+            'subject' => $isOperator ? data_mask_mail_text((string) $row['subject']) : $row['subject'],
+            'body' => $body,
+            'cc' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['cc']), true) ?: []),
+            'bcc' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['bcc']), true) ?: []),
+            'threadHeaders' => $isOperator ? [] : (json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: []),
+            'messageId' => $isOperator ? null : $row['message_id'],
             'status' => $row['status'],
             'sentAt' => $row['sent_at'],
-        ], $rows), 'total' => $total, 'page' => $page, 'pageSize' => 20,
+            ];
+        }, $rows), 'total' => $total, 'page' => $page, 'pageSize' => 20,
             'sentCount' => (int) ($counts['sent_count'] ?? 0),
             'failedCount' => (int) ($counts['failed_count'] ?? 0),
             'queuedCount' => (int) ($counts['queued_count'] ?? 0)]);
