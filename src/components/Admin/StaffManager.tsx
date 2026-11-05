@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Activity, ArrowLeft, CalendarDays, Clock3, KeyRound, LogIn, Mail, ShoppingBag, UserPlus, Users, UserX } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, Clock3, KeyRound, LogIn, Mail, ShoppingBag, Trash2, UserPlus, Users, UserX } from 'lucide-react';
 
 const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
@@ -103,6 +103,14 @@ interface StaffManagerProps {
 }
 
 const defaultPermissions: StaffPermission[] = ['leads'];
+const demoAgentNames = new Set([
+  'Agent One',
+  'Agent Two',
+  'Agent Three',
+  'Agent Four',
+  'Agent Five',
+  'CRM QA Test Agent',
+]);
 
 const formatTimestamp = (value: string) => {
   const timestamp = new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
@@ -149,6 +157,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [presence, setPresence] = useState<PresenceResponse | null>(null);
   const [agentsMayClaimWhenAdminOnline, setAgentsMayClaimWhenAdminOnline] = useState(false);
   const [routingSaving, setRoutingSaving] = useState(false);
+  const demoAccounts = accounts.filter((account) => demoAgentNames.has(account.display_name));
 
   const loadAccounts = useCallback(async () => {
     setLoading(true);
@@ -267,6 +276,45 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       setError(saveError instanceof Error ? saveError.message : 'The chat routing setting could not be saved.');
     } finally {
       setRoutingSaving(false);
+    }
+  };
+
+  const removeDemoAccounts = async () => {
+    if (demoAccounts.length === 0) return;
+    const assignedLeadCount = demoAccounts.reduce((total, account) => total + account.assigned_lead_count, 0);
+    const names = demoAccounts.map((account) => account.display_name).join(', ');
+    if (!window.confirm(
+      `Permanently remove ${demoAccounts.length} demo agent accounts (${names})? Their ${assignedLeadCount} assigned leads will be unassigned. Lead records, email activity, and audit history will be kept; their open chats will return to the shared queue.`
+    )) return;
+
+    setError('');
+    setMessage('');
+    setSaving(true);
+    try {
+      const response = await fetch('/api/data.php?resource=staff', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ ids: demoAccounts.map((account) => account.id) }),
+      });
+      const result = await response.json() as {
+        message?: string;
+        deleted?: number;
+        unassignedLeads?: number;
+        returnedChats?: number;
+      };
+      if (!response.ok || typeof result.deleted !== 'number'
+        || typeof result.unassignedLeads !== 'number' || typeof result.returnedChats !== 'number') {
+        throw new Error(result.message || 'The demo agent accounts could not be removed.');
+      }
+      setMessage(
+        `Removed ${result.deleted} demo agent accounts. ${result.unassignedLeads} leads are unassigned, and ${result.returnedChats} open chats were returned to the queue. Historical records were retained.`
+      );
+      await Promise.all([loadAccounts(), loadPresenceAndRouting()]);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'The demo agent accounts could not be removed.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -702,9 +750,16 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
             <Users className="h-5 w-5 text-slate-500" />
             <h2 className="font-semibold text-slate-900">Agents ({accounts.length})</h2>
           </div>
-          <button type="button" onClick={() => { setError(''); setCreateModalOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-900">
-            <UserPlus className="h-4 w-4" />Create agent
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {demoAccounts.length > 0 && (
+              <button type="button" disabled={saving} onClick={() => void removeDemoAccounts()} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-800 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
+                <Trash2 className="h-4 w-4" />Remove demo accounts ({demoAccounts.length})
+              </button>
+            )}
+            <button type="button" onClick={() => { setError(''); setCreateModalOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-900">
+              <UserPlus className="h-4 w-4" />Create agent
+            </button>
+          </div>
         </div>
         <div className="divide-y divide-slate-100">
           {accounts.map((account) => (

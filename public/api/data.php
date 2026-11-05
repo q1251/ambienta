@@ -4216,6 +4216,101 @@ if ($method === 'GET' && $resource === 'catalog') {
     data_respond(200, ['products' => array_map('data_product_row', $rows), 'categories' => $categories]);
 }
 
+if ($method === 'DELETE' && $resource === 'staff') {
+    data_require_admin('admin');
+    $body = data_read_json();
+    $rawIds = $body['ids'] ?? null;
+    if (!is_array($rawIds) || $rawIds === [] || count($rawIds) > 100) {
+        data_respond(400, ['error' => 'invalid_staff_ids', 'message' => 'Select one or more valid agent accounts to remove.']);
+    }
+    $staffIds = [];
+    foreach ($rawIds as $rawId) {
+        $staffId = filter_var($rawId, FILTER_VALIDATE_INT);
+        if ($staffId === false || $staffId < 1) {
+            data_respond(400, ['error' => 'invalid_staff_ids', 'message' => 'The selected agent accounts are invalid.']);
+        }
+        $staffIds[] = (int) $staffId;
+    }
+    $staffIds = array_values(array_unique($staffIds));
+    sort($staffIds);
+    $placeholders = implode(', ', array_fill(0, count($staffIds), '?'));
+    $db = data_db();
+
+    try {
+        $db->beginTransaction();
+        $findStaff = $db->prepare(
+            "SELECT id, email, display_name, role FROM staff_users WHERE id IN ($placeholders) ORDER BY id FOR UPDATE"
+        );
+        $findStaff->execute($staffIds);
+        $staffRows = $findStaff->fetchAll();
+        if (count($staffRows) !== count($staffIds)) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'staff_not_found', 'message' => 'One or more selected agent accounts no longer exist. Refresh the agent list and try again.']);
+        }
+        foreach ($staffRows as $staffRow) {
+            if ($staffRow['role'] !== 'operator' || strcasecmp((string) $staffRow['email'], (string) $_SESSION['admin_email']) === 0
+                || (int) $staffRow['id'] === (int) ($_SESSION['staff_id'] ?? 0)) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'staff_account_protected', 'message' => 'A selected account is protected and cannot be removed.']);
+            }
+        }
+
+        $unassignedLeads = 0;
+        $unassignLeads = $db->prepare('UPDATE leads SET assigned_staff_id = NULL WHERE assigned_staff_id = ?');
+        $findChats = $db->prepare(
+            "SELECT id, owner_staff_id FROM chat_conversations WHERE owner_type = 'agent' AND owner_staff_id IN ($placeholders) AND status = 'open' FOR UPDATE"
+        );
+        $findChats->execute($staffIds);
+        $openChats = $findChats->fetchAll();
+        $returnChats = $db->prepare(
+            "UPDATE chat_conversations SET owner_type = 'queue', owner_staff_id = NULL WHERE owner_type = 'agent' AND owner_staff_id IN ($placeholders) AND status = 'open'"
+        );
+        $returnChats->execute($staffIds);
+        $insertNotice = $db->prepare(
+            "INSERT INTO chat_messages (conversation_id, sender_type, sender_name, body)
+             VALUES (?, 'system', 'Ambienta support', ?)"
+        );
+        $staffNames = [];
+        foreach ($staffRows as $staffRow) {
+            $staffId = (int) $staffRow['id'];
+            $staffNames[$staffId] = trim((string) $staffRow['display_name']) ?: 'the assigned agent';
+            $unassignLeads->execute([$staffId]);
+            $unassignedLeads += $unassignLeads->rowCount();
+            $db->prepare('DELETE FROM staff_presence WHERE staff_id = ?')->execute([$staffId]);
+        }
+        foreach ($openChats as $chat) {
+            $name = $staffNames[(int) $chat['owner_staff_id']] ?? 'the assigned agent';
+            $insertNotice->execute([
+                (int) $chat['id'],
+                'This conversation was returned to the shared queue because ' . $name . '\'s account was removed.',
+            ]);
+        }
+        $returnedChats = count($openChats);
+
+        foreach ($staffRows as $staffRow) {
+            data_audit($db, 'staff.deleted', 'staff', (string) $staffRow['id'], [
+                'email' => $staffRow['email'],
+                'displayName' => $staffRow['display_name'],
+            ]);
+        }
+        $deleteStaff = $db->prepare("DELETE FROM staff_users WHERE id IN ($placeholders)");
+        $deleteStaff->execute($staffIds);
+        if ($deleteStaff->rowCount() !== count($staffIds)) {
+            throw new RuntimeException('staff_delete_incomplete');
+        }
+        $db->commit();
+        data_respond(200, [
+            'deleted' => count($staffIds),
+            'unassignedLeads' => $unassignedLeads,
+            'returnedChats' => $returnedChats,
+        ]);
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients staff account removal failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'staff_delete_failed', 'message' => 'The selected agent accounts could not be removed.']);
+    }
+}
+
 if ($method === 'GET') {
     data_require_admin();
     $db = data_db();
