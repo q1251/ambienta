@@ -1354,26 +1354,31 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   ))}
                 </select>
               </label>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Email body preview</p>
-                <div className="space-y-3 rounded-lg bg-white p-4 text-xs leading-5 text-slate-700 shadow-sm">
-                  <p>Hello {selectedOrder.patientName},</p>
-                  <p>{paymentEmailTemplates[paymentEmailTemplate].intro(selectedOrder.orderNumber)}</p>
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="font-semibold text-slate-900">Order summary</p>
-                    <p>Order: {selectedOrder.orderNumber}</p>
-                    <p>Payment method: {selectedOrder.paymentMethod}</p>
-                    <p>Total due: ${selectedOrder.totalAmount.toFixed(2)}</p>
+              <details className="rounded-xl border border-slate-200 bg-slate-50">
+                <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-700">
+                  Preview selected template
+                </summary>
+                <div className="border-t border-slate-200 p-4">
+                  <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Email body preview</p>
+                  <div className="space-y-3 rounded-lg bg-white p-4 text-xs leading-5 text-slate-700 shadow-sm">
+                    <p>Hello {selectedOrder.patientName},</p>
+                    <p>{paymentEmailTemplates[paymentEmailTemplate].intro(selectedOrder.orderNumber)}</p>
+                    <div className="rounded-lg border border-slate-200 p-3">
+                      <p className="font-semibold text-slate-900">Order summary</p>
+                      <p>Order: {selectedOrder.orderNumber}</p>
+                      <p>Payment method: {selectedOrder.paymentMethod}</p>
+                      <p>Total due: ${selectedOrder.totalAmount.toFixed(2)}</p>
+                    </div>
+                    <p>{paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
+                    <p className="font-semibold text-teal-800">
+                      {paymentLinkInput.trim() || '[Secure payment link appears here]'}
+                    </p>
+                    {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}
+                    <p>{paymentEmailTemplates[paymentEmailTemplate].closing}</p>
+                    <p>Warm regards,<br />Ambient</p>
                   </div>
-                  <p>{paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
-                  <p className="font-semibold text-teal-800">
-                    {paymentLinkInput.trim() || '[Secure payment link appears here]'}
-                  </p>
-                  {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}
-                  <p>{paymentEmailTemplates[paymentEmailTemplate].closing}</p>
-                  <p>Warm regards,<br />Ambient</p>
                 </div>
-              </div>
+              </details>
               <label htmlFor="order-payment-email-note" className="block text-xs font-semibold text-slate-800">
                 Additional message <span className="font-normal text-slate-500">(optional)</span>
                 <textarea
