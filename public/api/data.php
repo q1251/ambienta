@@ -1511,7 +1511,7 @@ function data_mail_card_html(string $subject, string $message): string
     $bodyContent = substr($formattedBody, strlen('<!doctype html><html><body>'), -strlen('</body></html>'));
     $safeSubject = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     return '<!doctype html><html><body style="margin:0;padding:28px 12px;background:#f1f5f4;font-family:Arial,Helvetica,sans-serif;color:#173b35">'
-        . '<div style="max-width:600px;margin:0 auto;overflow:hidden;border:1px solid #dce8e4;border-radius:16px;background:#ffffff">'
+        . '<div style="width:100%;max-width:720px;box-sizing:border-box;margin:0 auto;overflow:hidden;border:1px solid #dce8e4;border-radius:16px;background:#ffffff">'
         . '<div style="padding:20px 26px;background:#123b36;color:#ffffff">'
         . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#c4ddd4">AMBIENTA · CUSTOMER SUPPORT</p>'
         . '<h1 style="margin:10px 0 0;font-size:20px;line-height:1.35;color:#ffffff">' . $safeSubject . '</h1>'
