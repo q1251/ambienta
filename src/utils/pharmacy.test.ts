@@ -14,7 +14,7 @@ import {
   sortOrders,
   generateTrackingNumber,
 } from './pharmacyLogic';
-import { countryOptions, getLeadCountryCode, phoneInputParts } from './countryOptions';
+import { countryOptions, getLeadCountryCode, getLeadCountryLabel, phoneInputParts } from './countryOptions';
 import { Patient, ReminderRule } from '../types/pharmacy';
 
 test('calculateDaysRemaining computes correct difference', () => {
@@ -91,9 +91,13 @@ test('country selectors include the full supported calling-code list and split i
     nationalNumber: '5550120',
   });
   assert.equal(getLeadCountryCode('Canada', '+44 20 7946 0958'), 'CA');
+  assert.equal(getLeadCountryCode('US', '+44 20 7946 0958'), 'US');
+  assert.equal(getLeadCountryCode('usa', ''), 'US');
   assert.equal(getLeadCountryCode('', '+44 20 7946 0958'), 'GB');
   assert.equal(getLeadCountryCode('Not specified', '+44 20 7946 0958'), 'GB');
   assert.equal(getLeadCountryCode('Somewhere else', '+44 20 7946 0958'), '');
+  assert.equal(getLeadCountryLabel('US', '+44 20 7946 0958'), 'United States');
+  assert.equal(getLeadCountryLabel('', '+1 213 373 4253'), 'United States');
 });
 
 test('parseLeadsCsv keeps explicit country values and infers one from phone when absent', () => {
@@ -101,11 +105,13 @@ test('parseLeadsCsv keeps explicit country values and infers one from phone when
     'first_name,last_name,email,phone,country',
     'Ava,Stone,ava@example.com,555-0101,Canada',
     'Noah,Reed,noah@example.com,+44 20 7946 0958,',
+    'Mia,Lin,mia@example.com,+44 20 7946 0958,US',
   ].join('\n'));
 
   assert.equal(parsed.errors.length, 0);
   assert.equal(parsed.leads[0].country, 'Canada');
   assert.equal(parsed.leads[1].country, 'United Kingdom');
+  assert.equal(parsed.leads[2].country, 'United States');
 });
 
 test('contact classification distinguishes completeness without inferring marketing consent', () => {

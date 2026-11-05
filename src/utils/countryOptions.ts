@@ -22,6 +22,32 @@ export const countryOptions: CountryOption[] = getCountries()
   }))
   .sort((left, right) => left.name.localeCompare(right.name));
 
+const countryAliases: Record<string, CountryCode> = {
+  usa: 'US',
+  'u.s.': 'US',
+  'u.s.a.': 'US',
+  'united states of america': 'US',
+  uk: 'GB',
+  'u.k.': 'GB',
+  'great britain': 'GB',
+};
+
+function findCountry(countryName: string): CountryOption | undefined {
+  const label = countryName.trim();
+  if (!label || label.toLowerCase() === 'not specified') return undefined;
+  const normalized = label.toLowerCase();
+  const aliasCode = countryAliases[normalized];
+  return countryOptions.find((country) => country.code.toLowerCase() === normalized || country.code === aliasCode)
+    ?? countryOptions.find((country) => country.name.toLowerCase() === normalized);
+}
+
+export function getLeadCountryLabel(countryName: string, phone: string): string {
+  return findCountry(countryName)?.name
+    ?? (countryName.trim() && countryName.trim().toLowerCase() !== 'not specified'
+      ? countryName.trim()
+      : getLeadCountry(phone));
+}
+
 export function getLeadCountry(phone: string): string {
   const internationalPhone = phone.trim().startsWith('+') || phone.trim().startsWith('00');
   if (!internationalPhone) return 'Not specified';
@@ -46,10 +72,9 @@ export function getLeadCountry(phone: string): string {
 }
 
 export function getLeadCountryCode(countryName: string, phone: string): CountryCode | '' {
-  const countryLabel = countryName.trim();
-  if (countryLabel && countryLabel !== 'Not specified') {
-    return countryOptions.find((country) => country.name.toLowerCase() === countryLabel.toLowerCase())?.code ?? '';
-  }
+  const country = findCountry(countryName);
+  if (country) return country.code;
+  if (countryName.trim() && countryName.trim().toLowerCase() !== 'not specified') return '';
 
   const inferredCountry = countryOptions.find((country) => country.name === getLeadCountry(phone));
   if (inferredCountry) return inferredCountry.code;

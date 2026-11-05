@@ -49,14 +49,13 @@ import {
 import {
   generateSampleCsv,
   classifyLeadContact,
-  getLeadCountry,
   isValidLeadEmail,
   parseLeadsCsv,
   sortContactLeads,
   LeadSortField,
 } from '../../utils/pharmacyLogic';
 import { CountryFlag, CountrySelect, PhoneCountryInput } from './PhoneCountryInput';
-import { getLeadCountryCode } from '../../utils/countryOptions';
+import { getLeadCountryCode, getLeadCountryLabel } from '../../utils/countryOptions';
 
 type NewLead = ContactLeadInput;
 
@@ -308,7 +307,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const availableCountries = useMemo(() => {
     const set = new Set<string>();
     leads.forEach((l) => {
-      const c = l.country || getLeadCountry(l.phone);
+      const c = getLeadCountryLabel(l.country || '', l.phone);
       if (c && c !== 'Not specified') set.add(c);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -317,7 +316,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      const leadCountry = lead.country || getLeadCountry(lead.phone);
+      const leadCountry = getLeadCountryLabel(lead.country || '', lead.phone);
       const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
       const matchesCountry = countryFilter === 'All' || leadCountry === countryFilter;
       const matchesContactType = contactTypeFilter === 'All' || leadContactType(lead) === contactTypeFilter;
@@ -481,7 +480,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         lead.phone,
         lead.address || '',
         lead.postalCode || '',
-        lead.country || getLeadCountry(lead.phone),
+        getLeadCountryLabel(lead.country || '', lead.phone),
         lead.leadSource,
         lead.status,
         lead.marketingConsent ? 'yes' : 'no',
@@ -514,7 +513,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         lastName: lastName.trim(),
         email: emailValue,
         phone: phoneValue,
-        country: country.trim() || getLeadCountry(phoneValue),
+        country: getLeadCountryLabel(country, phoneValue),
         leadSource: 'Manual Entry',
         status: 'Cold',
         marketingConsent: Boolean(emailValue && marketingConsent),
@@ -549,7 +548,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         setProfileLastName(loadedProfile.lead.lastName);
         setProfileEmail(loadedProfile.lead.email);
         setProfilePhone(loadedProfile.lead.phone);
-        setProfileCountry(loadedProfile.lead.country || getLeadCountry(loadedProfile.lead.phone));
+        setProfileCountry(getLeadCountryLabel(loadedProfile.lead.country || '', loadedProfile.lead.phone));
         setProfileAddress(loadedProfile.lead.address || '');
         setProfilePostalCode(loadedProfile.lead.postalCode || '');
       }
@@ -600,7 +599,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       if (update.lastName !== undefined) setProfileLastName(lead.lastName);
       if (update.email !== undefined) setProfileEmail(lead.email);
       if (update.phone !== undefined) setProfilePhone(lead.phone);
-      if (update.country !== undefined) setProfileCountry(lead.country || '');
+      if (update.country !== undefined) setProfileCountry(getLeadCountryLabel(lead.country || '', lead.phone));
       if (update.address !== undefined) setProfileAddress(lead.address || '');
       if (update.postalCode !== undefined) setProfilePostalCode(lead.postalCode || '');
 
@@ -628,7 +627,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileLastName(profile.lead.lastName);
     setProfileEmail(profile.lead.email);
     setProfilePhone(profile.lead.phone);
-    setProfileCountry(profile.lead.country || getLeadCountry(profile.lead.phone));
+    setProfileCountry(getLeadCountryLabel(profile.lead.country || '', profile.lead.phone));
     setProfileAddress(profile.lead.address || '');
     setProfilePostalCode(profile.lead.postalCode || '');
     setContactDetailsEditing(false);
@@ -655,7 +654,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileLastName(lead.lastName);
     setProfileEmail(lead.email);
     setProfilePhone(lead.phone);
-    setProfileCountry(lead.country || getLeadCountry(lead.phone));
+    setProfileCountry(getLeadCountryLabel(lead.country || '', lead.phone));
     setProfileAddress(lead.address || '');
     setProfilePostalCode(lead.postalCode || '');
     setEditLeadError('');
@@ -898,7 +897,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     <span className="font-mono text-slate-700">{profile?.lead.email || selectedLead?.email}</span>
                   )}
                   {profile?.lead.phone && <span>· {profile.lead.phone}</span>}
-                  <span>· {profile?.lead.country || getLeadCountry(profile?.lead.phone || '')}</span>
+                  <span>· {getLeadCountryLabel(profile?.lead.country || '', profile?.lead.phone || '')}</span>
                   <span>· Source: {profile?.lead.leadSource || selectedLead?.leadSource}</span>
                 </div>
               </div>
@@ -1039,7 +1038,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Country / Region</p>
                           <div className="mt-1 flex items-center gap-2">
                             <CountryFlag countryCode={getLeadCountryCode(profile.lead.country ?? '', profile.lead.phone)} />
-                            <span className="text-sm font-semibold text-slate-900">{profile.lead.country || getLeadCountry(profile.lead.phone)}</span>
+                            <span className="text-sm font-semibold text-slate-900">{getLeadCountryLabel(profile.lead.country || '', profile.lead.phone)}</span>
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
@@ -2016,6 +2015,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     </button>
                   </th>
                   <th className="px-4 py-3.5">Phone</th>
+                  <th className="px-4 py-3.5">Address</th>
                   <th className="px-4 py-3.5">
                     <button
                       type="button"
@@ -2036,7 +2036,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       onClick={() => handleToggleSort('stage')}
                       className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
                     >
-                      <span>Stage</span>
+                      <span>Status</span>
                       {sortField === 'stage' ? (
                         sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
@@ -2044,6 +2044,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       )}
                     </button>
                   </th>
+                  <th className="px-4 py-3.5">Marketing Consent</th>
                   <th className="px-4 py-3.5">
                     <button
                       type="button"
@@ -2058,20 +2059,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-3.5">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSort('createdAt')}
-                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
-                    >
-                      <span>Source / Added</span>
-                      {sortField === 'createdAt' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
-                      ) : (
-                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
-                      )}
-                    </button>
-                  </th>
+                  <th className="px-4 py-3.5">Last Order</th>
                   {isSuperadmin && <th className="px-4 py-3.5">Assigned Agent</th>}
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
@@ -2130,10 +2118,15 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         )}
                       </td>
 
+                      <td className="max-w-[240px] px-4 py-3 text-slate-600" title={lead.address || ''}>
+                        <span className="block truncate">{lead.address || '—'}</span>
+                        {lead.postalCode && <span className="block text-xs text-slate-400">{lead.postalCode}</span>}
+                      </td>
+
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-1.5">
                           <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
-                          <span>{lead.country && lead.country !== 'Not specified' ? lead.country : getLeadCountry(lead.phone)}</span>
+                          <span>{getLeadCountryLabel(lead.country || '', lead.phone)}</span>
                         </span>
                       </td>
 
@@ -2145,11 +2138,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </span>
                       </td>
 
+                      <td className="px-4 py-3">
+                        <span className={lead.marketingConsent ? 'font-medium text-emerald-700' : 'text-slate-500'}>
+                          {lead.marketingConsent ? 'Opted in' : 'No consent'}
+                        </span>
+                      </td>
+
                       <td className="px-4 py-3 font-semibold text-slate-900">
                         {leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}
                       </td>
 
-                      <td className="px-4 py-3 text-slate-500">{lead.leadSource}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {lead.lastOrderAt ? new Date(lead.lastOrderAt).toLocaleDateString() : '—'}
+                      </td>
 
                       {isSuperadmin && (
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -2186,7 +2187,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                 {!visibleLeads.length && (
                   <tr>
-                    <td colSpan={isSuperadmin ? 10 : 9} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={isSuperadmin ? 12 : 11} className="px-6 py-12 text-center text-slate-400">
                       No contacts match the current filters or search query.
                     </td>
                   </tr>

@@ -11,7 +11,7 @@ import {
   RefillStatus,
 } from '../types/pharmacy';
 import { parseCsvRows } from './csv';
-import { getLeadCountry } from './countryOptions';
+import { getLeadCountry, getLeadCountryLabel } from './countryOptions';
 export { getLeadCountry } from './countryOptions';
 
 /**
@@ -226,7 +226,8 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
         .map((candidate) => candidate.trim())
         .filter((candidate) => candidate.replace(/\D/g, '').length >= 7 && !/^\d{5}(?:-\d{4})?$/.test(candidate));
     })));
-    const country = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
+    const countryInput = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
+    const country = getLeadCountryLabel(countryInput, phoneValues[0] || '');
     const address = addressIdx !== -1 ? cols[addressIdx]?.trim() || '' : '';
     const postalCode = (postalCodeIdx !== -1 ? cols[postalCodeIdx]?.trim() : '')
       || rawPhoneValues.find((value) => /^\d{5}(?:-\d{4})?$/.test(value))
@@ -257,7 +258,7 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
         leadSource: 'CSV Upload',
         email,
         phone,
-        country: country || getLeadCountry(phone),
+        country: country !== 'Not specified' ? country : getLeadCountry(phone),
         address: address || undefined,
         postalCode: postalCode || undefined,
         status: 'Cold',
