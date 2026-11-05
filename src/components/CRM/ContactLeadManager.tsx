@@ -6,7 +6,6 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
-  Bell,
   Calendar,
   Check,
   CheckSquare,
@@ -90,16 +89,6 @@ interface AgentOption {
   is_active: boolean;
   permissions: string[];
   assigned_lead_count?: number;
-}
-
-interface LeadAssignmentNotification {
-  id: number;
-  leadId: number;
-  firstName: string;
-  lastName: string;
-  status: LeadStatus;
-  assignedByName: string;
-  assignedAt: string;
 }
 
 const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; border: string }> = [
@@ -252,7 +241,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
-  const [assignmentNotifications, setAssignmentNotifications] = useState<LeadAssignmentNotification[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [contactDetailsEditing, setContactDetailsEditing] = useState(false);
   const [profileActiveTab, setProfileActiveTab] = useState<'overview' | 'orders' | 'timeline' | 'source'>('overview');
@@ -308,34 +296,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       active = false;
     };
   }, [isSuperadmin]);
-
-  useEffect(() => {
-    if (role !== 'operator') return;
-    let active = true;
-    const loadNotifications = async () => {
-      try {
-        const response = await fetch('/api/data.php?resource=lead-assignment-notifications', {
-          credentials: 'same-origin',
-          headers: { Accept: 'application/json' },
-        });
-        const result = await response.json() as { notifications?: LeadAssignmentNotification[]; message?: string };
-        if (!response.ok || !Array.isArray(result.notifications)) {
-          throw new Error(result.message || 'Lead assignment notifications could not be loaded.');
-        }
-        if (active) setAssignmentNotifications(result.notifications);
-      } catch (error) {
-        if (active) {
-          setRequestError(error instanceof Error ? error.message : 'Lead assignment notifications could not be loaded.');
-        }
-      }
-    };
-    void loadNotifications();
-    const timer = window.setInterval(() => void loadNotifications(), 30000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [role]);
 
   // Keyboard handlers for modals
   useEffect(() => {
@@ -763,39 +723,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileLoading(false);
     setProfileSaving(false);
     setActivitySaving(false);
-  };
-
-  const acknowledgeAssignmentNotification = async (notificationId: number) => {
-    try {
-      const response = await fetch('/api/data.php?resource=lead-assignment-notifications', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ ids: [notificationId] }),
-      });
-      const result = await response.json() as { message?: string };
-      if (!response.ok) {
-        throw new Error(result.message || 'The assignment notification could not be acknowledged.');
-      }
-      setAssignmentNotifications((current) => current.filter((notification) => notification.id !== notificationId));
-    } catch (error) {
-      setRequestError(error instanceof Error ? error.message : 'The assignment notification could not be acknowledged.');
-    }
-  };
-
-  const openAssignmentNotification = async (notification: LeadAssignmentNotification) => {
-    await acknowledgeAssignmentNotification(notification.id);
-    await openProfile({
-      id: notification.leadId,
-      firstName: notification.firstName,
-      lastName: notification.lastName,
-      email: '',
-      phone: '',
-      leadSource: 'Manual Entry',
-      createdAt: notification.assignedAt,
-      status: notification.status,
-      marketingConsent: false,
-    });
   };
 
   const updateProfile = async (update: ContactLeadUpdate): Promise<boolean> => {
@@ -1912,32 +1839,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       {dataError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
       {requestError && <p role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
       {success && <p role="status" className="rounded-xl border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">{success}</p>}
-      {role === 'operator' && assignmentNotifications.length > 0 && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 shadow-sm" role="status">
-          <div className="flex items-center gap-2 text-sm font-bold text-blue-950">
-            <Bell className="h-4 w-4" />
-            <span>{assignmentNotifications.length} new lead assignment{assignmentNotifications.length === 1 ? '' : 's'}</span>
-          </div>
-          <ul className="mt-3 space-y-2">
-            {assignmentNotifications.slice(0, 5).map((notification) => (
-              <li key={notification.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2">
-                <span className="text-xs text-slate-700">
-                  <strong>{`${notification.firstName} ${notification.lastName}`.trim() || 'A lead'}</strong>
-                  {' '}was assigned by {notification.assignedByName} · {notification.status}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void openAssignmentNotification(notification)}
-                  className="rounded-lg bg-blue-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-900"
-                >
-                  Open lead
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* TOP KPI COMMAND CENTER */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
