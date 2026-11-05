@@ -5191,6 +5191,14 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     $body = data_read_json();
     $orderId = data_string($body, 'orderId', 64);
     $paymentLink = data_string($body, 'paymentLinkUrl', 2048);
+    $emailTemplate = data_string($body, 'emailTemplate', 40, false);
+    if ($emailTemplate === '') {
+        $emailTemplate = 'payment_request';
+    }
+    if (!in_array($emailTemplate, ['payment_request', 'payment_reminder'], true)) {
+        data_respond(400, ['error' => 'invalid_email_template', 'message' => 'Choose a supported payment email template.']);
+    }
+    $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
     $linkParts = filter_var($paymentLink, FILTER_VALIDATE_URL) ? parse_url($paymentLink) : false;
     if (
         !is_array($linkParts)
@@ -5231,21 +5239,42 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             data_respond(409, ['error' => 'order_not_payable', 'message' => 'A payment link cannot be sent for a paid or cancelled order.']);
         }
 
-        $subject = 'Payment link for Ambienta order ' . $order['order_number'];
+        $isReminder = $emailTemplate === 'payment_reminder';
+        $subject = ($isReminder ? 'Payment reminder for Ambienta order ' : 'Payment instructions for Ambienta order ')
+            . $order['order_number'];
+        $paymentInstructions = match ($order['payment_method']) {
+            'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
+            'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
+            'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
+            default => '',
+        };
+        $intro = $isReminder
+            ? "This is a reminder that payment is still due for your reviewed order {$order['order_number']}."
+            : "Your order {$order['order_number']} has been received and reviewed. Payment instructions for your selected method are below.";
         $plainBody = "Hello {$order['customer_name']},\n\n"
-            . "Your order {$order['order_number']} has been reviewed. Use the secure payment link below to pay by {$order['payment_method']}:\n\n"
-            . "{$paymentLink}\n\n"
-            . 'Order total: $' . number_format((float) $order['total_amount'], 2) . "\n\n"
-            . "If you have questions, reply to this email.\n\nAmbienta";
+            . $intro . "\n\n"
+            . "Payment method: {$order['payment_method']}\n"
+            . "Order total: $" . number_format((float) $order['total_amount'], 2) . "\n\n"
+            . $paymentInstructions . "\n\n"
+            . "Secure payment link:\n{$paymentLink}\n";
+        if ($additionalMessage !== '') {
+            $plainBody .= "\nMessage from Ambient:\n{$additionalMessage}\n";
+        }
+        $plainBody .= "\nIf you have questions, reply to this email.\n\nAmbient";
         $safeName = htmlspecialchars((string) $order['customer_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeOrderNumber = htmlspecialchars((string) $order['order_number'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeMethod = htmlspecialchars((string) $order['payment_method'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeIntro = htmlspecialchars($intro, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeInstructions = htmlspecialchars($paymentInstructions, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeLink = htmlspecialchars($paymentLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $htmlBody = '<p>Hello ' . $safeName . ',</p><p>Your order <strong>' . $safeOrderNumber
-            . '</strong> has been reviewed. Use the secure payment link below to pay by ' . $safeMethod . ':</p>'
+        $safeAdditionalMessage = htmlspecialchars($additionalMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $htmlBody = '<p>Hello ' . $safeName . ',</p><p>' . $safeIntro . '</p>'
+            . '<p>Payment method: <strong>' . $safeMethod . '</strong><br>Order total: <strong>$'
+            . number_format((float) $order['total_amount'], 2) . '</strong></p>'
+            . '<p>' . $safeInstructions . '</p>'
             . '<p><a href="' . $safeLink . '">Pay for order ' . $safeOrderNumber . '</a></p>'
-            . '<p>Order total: $' . number_format((float) $order['total_amount'], 2)
-            . '</p><p>If you have questions, reply to this email.</p><p>Ambienta</p>';
+            . ($safeAdditionalMessage !== '' ? '<p>' . nl2br($safeAdditionalMessage, false) . '</p>' : '')
+            . '<p>If you have questions, reply to this email.</p><p>Ambient</p>';
 
         $db->prepare(
             'INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'

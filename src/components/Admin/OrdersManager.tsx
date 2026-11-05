@@ -121,6 +121,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [paymentLinkInput, setPaymentLinkInput] = useState('');
+  const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<'payment_request' | 'payment_reminder'>('payment_request');
+  const [paymentEmailNote, setPaymentEmailNote] = useState('');
   const [isSendingPaymentLink, setIsSendingPaymentLink] = useState(false);
   const [isMarkingPaymentPaid, setIsMarkingPaymentPaid] = useState(false);
   const [paymentLinkSuccess, setPaymentLinkSuccess] = useState('');
@@ -191,6 +193,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   useEffect(() => {
     setPaymentLinkInput(selectedOrder?.paymentLinkUrl || '');
+    setPaymentEmailTemplate(selectedOrder?.paymentLinkSentAt ? 'payment_reminder' : 'payment_request');
+    setPaymentEmailNote('');
   }, [selectedOrder?.id, selectedOrder?.paymentLinkUrl]);
 
   useEffect(() => {
@@ -328,7 +332,12 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ orderId: selectedOrder.id, paymentLinkUrl: paymentLinkInput.trim() }),
+        body: JSON.stringify({
+          orderId: selectedOrder.id,
+          paymentLinkUrl: paymentLinkInput.trim(),
+          emailTemplate: paymentEmailTemplate,
+          additionalMessage: paymentEmailNote.trim(),
+        }),
       });
       const result = await response.json() as { order?: OnlineOrder; message?: string; sent?: boolean };
       if (!response.ok || !result.order || result.sent !== true) {
@@ -985,7 +994,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   ].includes(selectedOrder.paymentMethod || '') && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
                     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
                       <label htmlFor="order-payment-link" className="block font-semibold text-slate-800">
-                        Payment link · email via Hostinger
+                        Payment link · send with Hostinger email
                       </label>
                       <input
                         id="order-payment-link"
@@ -996,6 +1005,33 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         autoComplete="url"
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
                       />
+                      <label htmlFor="order-payment-email-template" className="block font-semibold text-slate-800">
+                        Email template
+                      </label>
+                      <select
+                        id="order-payment-email-template"
+                        value={paymentEmailTemplate}
+                        onChange={(event) => setPaymentEmailTemplate(event.target.value as 'payment_request' | 'payment_reminder')}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                      >
+                        <option value="payment_request">Payment request with order instructions</option>
+                        <option value="payment_reminder">Payment reminder with order instructions</option>
+                      </select>
+                      <label htmlFor="order-payment-email-note" className="block font-semibold text-slate-800">
+                        Additional message <span className="font-normal text-slate-500">(optional)</span>
+                      </label>
+                      <textarea
+                        id="order-payment-email-note"
+                        value={paymentEmailNote}
+                        onChange={(event) => setPaymentEmailNote(event.target.value)}
+                        maxLength={1000}
+                        rows={3}
+                        placeholder="Add a short note for the customer"
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                      />
+                      <p className="text-[11px] leading-5 text-slate-500">
+                        The email includes the order number, total, payment method, and secure provider link. Never request card numbers, security codes, or wallet credentials by email.
+                      </p>
                       {selectedOrder.paymentLinkSentAt && (
                         <p className="text-[11px] text-slate-500">
                           Last sent {new Date(`${selectedOrder.paymentLinkSentAt.replace(' ', 'T')}Z`).toLocaleString()}
@@ -1012,7 +1048,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
                       >
                         <Mail className="h-3.5 w-3.5" />
-                        {isSendingPaymentLink ? 'Sending payment link…' : selectedOrder.paymentLinkSentAt ? 'Resend payment link' : 'Send payment link'}
+                        {isSendingPaymentLink ? 'Sending payment instructions…' : selectedOrder.paymentLinkSentAt ? 'Resend payment email' : 'Send payment instructions'}
                       </button>
                     </div>
                   )}
