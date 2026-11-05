@@ -18,6 +18,7 @@ interface HostingerMailIntegrationProps {
   role: 'admin' | 'operator';
   mode: 'settings' | 'mailbox';
   initialFolder?: 'inbox' | 'campaigns';
+  canManageCampaigns?: boolean;
 }
 
 interface MailSettings {
@@ -219,7 +220,8 @@ const requestMailApi = async (resource: string, method: 'GET' | 'POST' | 'DELETE
   return result;
 };
 
-export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> = ({ role, mode, initialFolder = 'inbox' }) => {
+export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> = ({ role, mode, initialFolder = 'inbox', canManageCampaigns = false }) => {
+  const campaignAccess = role === 'admin' || canManageCampaigns;
   const [settings, setSettings] = useState<MailSettings>({
     configured: false,
     verified: false,
@@ -261,7 +263,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [inboxFolderAvailable, setInboxFolderAvailable] = useState(true);
   const [sentFolderAvailable, setSentFolderAvailable] = useState(false);
   const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
-  const [activeFolder, setActiveFolder] = useState<MailboxFolder>(initialFolder);
+  const [activeFolder, setActiveFolder] = useState<MailboxFolder>(initialFolder === 'campaigns' && !campaignAccess ? 'inbox' : initialFolder);
   const [selectedMailboxMessageId, setSelectedMailboxMessageId] = useState<string | null>(null);
   const [sentSource, setSentSource] = useState<'crm' | 'hostinger'>('crm');
   const [selectedSentActivityId, setSelectedSentActivityId] = useState<string | null>(null);
@@ -338,19 +340,21 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         setActivitySentCount(activityResult.sentCount ?? activityResult.messages.filter((item) => item.status === 'Sent').length);
         setDrafts(draftResult.drafts);
         setTrash(trashResult.drafts);
-        const [campaignResult, audienceResult] = await Promise.all([
-          requestMailApi('email-campaigns', 'GET'),
-          requestMailApi('email-campaign-audience', 'GET'),
-        ]);
-        if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
-          || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
-          throw new Error('Campaign data returned an invalid response.');
+        if (campaignAccess) {
+          const [campaignResult, audienceResult] = await Promise.all([
+            requestMailApi('email-campaigns', 'GET'),
+            requestMailApi('email-campaign-audience', 'GET'),
+          ]);
+          if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
+            || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
+            throw new Error('Campaign data returned an invalid response.');
+          }
+          setCampaigns(campaignResult.campaigns);
+          setCampaignAudienceCount(audienceResult.audienceCount);
+          setCampaignCountries(audienceResult.countries);
+          setCampaignStatuses(audienceResult.statuses);
+          setCampaignSources(audienceResult.sources);
         }
-        setCampaigns(campaignResult.campaigns);
-        setCampaignAudienceCount(audienceResult.audienceCount);
-        setCampaignCountries(audienceResult.countries);
-        setCampaignStatuses(audienceResult.statuses);
-        setCampaignSources(audienceResult.sources);
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Hostinger email settings could not be loaded.');
@@ -384,7 +388,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   }, [mode, activeFolder, sentSource, mailboxPage, mailboxSearch]);
 
   useEffect(() => {
-    if (mode !== 'mailbox' || activeFolder !== 'campaigns') return;
+    if (mode !== 'mailbox' || !campaignAccess || activeFolder !== 'campaigns') return;
     const query = new URLSearchParams({
       country: campaignAudienceFilter.country,
       status: campaignAudienceFilter.status,
@@ -404,7 +408,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [campaignAudienceFilter, mode, role, activeFolder]);
+  }, [campaignAudienceFilter, mode, campaignAccess, activeFolder]);
 
   useEffect(() => {
     if (mode !== 'mailbox' || activeFolder !== 'campaign-history') return;
@@ -1170,7 +1174,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 {count && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{count}</span>}
               </button>
             ))}
-            {(role === 'admin' || role === 'operator') && (
+            {campaignAccess && (
               <>
               <button
                 type="button"
@@ -1622,7 +1626,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <TrashFolder drafts={trash} onRestore={(draft) => void restoreDraft(draft)} onDelete={(draft) => void permanentlyDeleteDraft(draft)} />
             </div>
           )}
-          {activeFolder === 'campaigns' && (role === 'admin' || role === 'operator') && (
+          {activeFolder === 'campaigns' && campaignAccess && (
             <div className="space-y-5">
               <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1769,7 +1773,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               </section>}
             </div>
           )}
-          {activeFolder === 'campaign-history' && (role === 'admin' || role === 'operator') && (
+          {activeFolder === 'campaign-history' && campaignAccess && (
             <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>

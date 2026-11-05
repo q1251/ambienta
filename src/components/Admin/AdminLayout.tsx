@@ -54,7 +54,7 @@ interface AdminLayoutProps {
     role: 'operator';
     email: string;
     displayName: string;
-    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'orders' | 'print_orders' | 'products' | 'integrations' | 'chat'>;
+    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'orders' | 'print_orders' | 'products' | 'integrations' | 'email_campaigns' | 'chat'>;
     impersonating: true;
     impersonatedBy: string;
   }) => void;
@@ -387,7 +387,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
                   canExportContacts={props.permissions.includes('export_leads')}
                   leads={props.leads}
                   dataError={props.leadDataError}
-                  onOpenEmailCampaigns={props.role === 'admin' ? openEmailCampaigns : undefined}
+                  onOpenEmailCampaigns={props.role === 'admin' || props.permissions.includes('email_campaigns') ? openEmailCampaigns : undefined}
                   onSaveLeads={props.onSaveLeads}
                   onLoadLeadProfile={props.onLoadLeadProfile}
                   onUpdateLead={props.onUpdateLead}
@@ -396,7 +396,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
               </Suspense>
             )}
             {activeTab === 'chat' && <LiveChatInbox role={props.role} />}
-            {activeTab === 'email' && <HostingerMailIntegration role={props.role} mode="mailbox" initialFolder={emailInitialFolder} />}
+            {activeTab === 'email' && <HostingerMailIntegration role={props.role} mode="mailbox" initialFolder={emailInitialFolder} canManageCampaigns={props.permissions.includes('email_campaigns')} />}
             {activeTab === 'integrations' && <IntegrationStatus role={props.role} />}
             {activeTab === 'profile' && <ProfileManager role={props.role} email={props.email} displayName={props.displayName} onProfileUpdated={props.onProfileUpdated} />}
             {activeTab === 'staff' && props.role === 'admin' && <StaffManager onEnterAccount={props.onEnterAccount} />}

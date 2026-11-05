@@ -780,7 +780,7 @@ function data_require_lead_access(PDO $db, int $leadId, bool $allowUnassignedNew
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'print_orders', 'products', 'integrations', 'chat'];
+    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'print_orders', 'products', 'integrations', 'email_campaigns', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
@@ -790,6 +790,7 @@ function data_staff_permissions($permissions): ?array
         || in_array('add_leads', $permissions, true) || in_array('import_leads', $permissions, true)
         || in_array('export_leads', $permissions, true)) && !in_array('leads', $permissions, true)) return null;
     if (in_array('print_orders', $permissions, true) && !in_array('orders', $permissions, true)) return null;
+    if (in_array('email_campaigns', $permissions, true) && !in_array('integrations', $permissions, true)) return null;
     if (in_array('create_leads', $permissions, true)) {
         $permissions = array_values(array_diff($permissions, ['create_leads']));
         $permissions = array_merge($permissions, ['add_leads', 'import_leads', 'export_leads']);
@@ -1450,6 +1451,7 @@ function data_campaign_actor_staff_id(): ?int
 {
     if (($_SESSION['admin_role'] ?? '') === 'admin') return null;
     data_require_permission('integrations');
+    data_require_permission('email_campaigns');
     $staffId = (int) ($_SESSION['staff_id'] ?? 0);
     if ($staffId < 1) {
         data_respond(403, ['error' => 'campaign_access_denied', 'message' => 'A valid agent account is required to manage email campaigns.']);

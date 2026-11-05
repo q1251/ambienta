@@ -169,7 +169,7 @@ function auth_staff_permissions(string $encodedPermissions): array
     $permissions = json_decode($encodedPermissions, true);
     if (!is_array($permissions)) return [];
 
-    $allowed = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'print_orders', 'products', 'integrations', 'chat'];
+    $allowed = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'print_orders', 'products', 'integrations', 'email_campaigns', 'chat'];
     $permissions = array_values(array_unique(array_filter(
         $permissions,
         static fn ($permission): bool => is_string($permission) && in_array($permission, $allowed, true)
@@ -180,6 +180,9 @@ function auth_staff_permissions(string $encodedPermissions): array
     }
     if (in_array('print_orders', $permissions, true) && !in_array('orders', $permissions, true)) {
         $permissions = array_values(array_diff($permissions, ['print_orders']));
+    }
+    if (in_array('email_campaigns', $permissions, true) && !in_array('integrations', $permissions, true)) {
+        $permissions = array_values(array_diff($permissions, ['email_campaigns']));
     }
 
     return array_values(array_unique($permissions));
