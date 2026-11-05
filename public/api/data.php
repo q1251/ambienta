@@ -657,35 +657,6 @@ function data_ensure_schema(PDO $db): void
         }
     }
     $db->exec('INSERT IGNORE INTO product_categories (name) SELECT DISTINCT category FROM products WHERE category <> \'\'');
-    $demoLeads = [
-        ['Avery', 'Morgan', 'avery.morgan@example.com', '555-0101'],
-        ['Jordan', 'Reed', 'jordan.reed@example.com', '555-0102'],
-        ['Taylor', 'Brooks', 'taylor.brooks@example.com', '555-0103'],
-        ['Casey', 'Parker', 'casey.parker@example.com', '555-0104'],
-        ['Riley', 'Hayes', 'riley.hayes@example.com', '555-0105'],
-        ['Morgan', 'Blake', 'morgan.blake@example.com', '555-0106'],
-        ['Jamie', 'Quinn', 'jamie.quinn@example.com', '555-0107'],
-        ['Cameron', 'Foster', 'cameron.foster@example.com', '555-0108'],
-        ['Drew', 'Ellis', 'drew.ellis@example.com', '555-0109'],
-        ['Reese', 'Bennett', 'reese.bennett@example.com', '555-0110'],
-        ['Alex', 'Rivera', 'alex.rivera@example.com', '555-0111'],
-        ['Skyler', 'Price', 'skyler.price@example.com', '555-0112'],
-        ['Peyton', 'Murphy', 'peyton.murphy@example.com', '555-0113'],
-        ['Rowan', 'Cole', 'rowan.cole@example.com', '555-0114'],
-        ['Emerson', 'Gray', 'emerson.gray@example.com', '555-0115'],
-        ['Finley', 'Ward', 'finley.ward@example.com', '555-0116'],
-        ['Harper', 'Lane', 'harper.lane@example.com', '555-0117'],
-        ['Sage', 'Turner', 'sage.turner@example.com', '555-0118'],
-        ['Dakota', 'James', 'dakota.james@example.com', '555-0119'],
-        ['Kendall', 'Ross', 'kendall.ross@example.com', '555-0120'],
-    ];
-    $insertDemoLead = $db->prepare(
-        "INSERT IGNORE INTO leads (first_name, last_name, email, phone, lead_source, status, marketing_consent)
-         VALUES (?, ?, ?, ?, 'Synthetic Demo', 'Cold', 0)"
-    );
-    foreach ($demoLeads as $demoLead) {
-        $insertDemoLead->execute($demoLead);
-    }
 }
 
 function data_require_admin(string $requiredRole = 'operator'): void
