@@ -94,6 +94,8 @@ type PaymentEmailTemplate =
   | 'payment_reminder_final'
   | 'payment_link_updated';
 
+type PaymentLinkType = 'provider' | 'crypto_wallet' | 'custom';
+
 const paymentEmailTemplates: Record<PaymentEmailTemplate, { label: string; intro: (orderNumber: string) => string; closing: string }> = {
   payment_request: {
     label: 'Payment instructions — friendly',
@@ -169,6 +171,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [paymentLinkInput, setPaymentLinkInput] = useState('');
+  const [paymentLinkType, setPaymentLinkType] = useState<PaymentLinkType>('provider');
+  const [paymentLinkName, setPaymentLinkName] = useState('');
   const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<PaymentEmailTemplate>('payment_request');
   const [paymentEmailNote, setPaymentEmailNote] = useState('');
   const [isPaymentEmailModalOpen, setIsPaymentEmailModalOpen] = useState(false);
@@ -399,6 +403,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         body: JSON.stringify({
           orderId: selectedOrder.id,
           paymentLinkUrl: paymentLinkInput.trim(),
+          paymentLinkType,
+          paymentLinkName: paymentLinkName.trim(),
           emailTemplate: paymentEmailTemplate,
           additionalMessage: paymentEmailNote.trim(),
           previewOnly,
@@ -1331,14 +1337,48 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </button>
             </header>
             <div className="space-y-4 p-5">
+              <label htmlFor="order-payment-link-type" className="block text-xs font-semibold text-slate-800">
+                Payment link type
+                <select
+                  id="order-payment-link-type"
+                  value={paymentLinkType}
+                  onChange={(event) => {
+                    setPaymentLinkType(event.target.value as PaymentLinkType);
+                    setPaymentEmailError('');
+                  }}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                >
+                  <option value="provider">
+                    {selectedOrder.paymentMethod === 'PayPal' ? 'PayPal link' : 'Payment provider link'}
+                  </option>
+                  {selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && (
+                    <option value="crypto_wallet">Crypto wallet address / URI</option>
+                  )}
+                  <option value="custom">Custom link</option>
+                </select>
+              </label>
+              {paymentLinkType === 'custom' && (
+                <label htmlFor="order-payment-link-name" className="block text-xs font-semibold text-slate-800">
+                  Custom link name
+                  <input
+                    id="order-payment-link-name"
+                    type="text"
+                    value={paymentLinkName}
+                    onChange={(event) => setPaymentLinkName(event.target.value)}
+                    maxLength={80}
+                    placeholder="e.g. PayPal invoice, Coinbase Commerce"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                  />
+                </label>
+              )}
               <label htmlFor="order-payment-link" className="block text-xs font-semibold text-slate-800">
-                Payment link or wallet address
+                {paymentLinkType === 'crypto_wallet' ? 'Crypto wallet address or URI' : 'Payment link'}
                 <input
                   id="order-payment-link"
                   type="text"
                   value={paymentLinkInput}
                   onChange={(event) => setPaymentLinkInput(event.target.value)}
-                  placeholder={selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                  placeholder={paymentLinkType === 'crypto_wallet'
                     ? 'https://… or crypto wallet address'
                     : 'https://…'}
                   autoComplete="url"
@@ -1347,9 +1387,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 />
               </label>
               <p className="-mt-2 text-[11px] leading-5 text-slate-500">
-                {selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
-                  ? 'Use an HTTPS provider/custom link, Bitcoin/Ethereum/Solana payment URI, or supported wallet address.'
-                  : 'Use a PayPal, payment-provider, or custom HTTPS link.'}
+                {paymentLinkType === 'crypto_wallet'
+                  ? 'Enter a Bitcoin, Ethereum, or Solana payment URI or supported wallet address.'
+                  : paymentLinkType === 'custom'
+                    ? 'Enter a custom HTTPS URL and the name customers should see in the email.'
+                    : 'Enter a PayPal or payment-provider HTTPS link.'}
               </p>
               <label htmlFor="order-payment-email-template" className="block text-xs font-semibold text-slate-800">
                 Email body template
@@ -1381,16 +1423,17 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     </div>
                     <p>{paymentInstructionsForMethod(
                       selectedOrder.paymentMethod || '',
-                      selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                      paymentLinkType === 'crypto_wallet'
                         && Boolean(paymentLinkInput.trim())
                         && !/^https:\/\//i.test(paymentLinkInput.trim()),
                     )}</p>
                     <p className="font-semibold text-teal-800">
                       {paymentLinkInput.trim()
-                        ? selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
-                          && !/^https:\/\//i.test(paymentLinkInput.trim())
-                          ? `Wallet address / payment URI: ${paymentLinkInput.trim()}`
-                          : paymentLinkInput.trim()
+                        ? paymentLinkType === 'crypto_wallet' && !/^https:\/\//i.test(paymentLinkInput.trim())
+                          ? `Crypto wallet address / URI: ${paymentLinkInput.trim()}`
+                          : paymentLinkType === 'custom'
+                            ? `${paymentLinkName.trim() || '[Custom link name]'}: ${paymentLinkInput.trim()}`
+                            : `${selectedOrder.paymentMethod === 'PayPal' ? 'PayPal link' : 'Payment provider link'}: ${paymentLinkInput.trim()}`
                         : '[Payment link or wallet address appears here]'}
                     </p>
                     {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}
@@ -1420,7 +1463,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => void handleSendPaymentLink(true)}
-                  disabled={isSendingPaymentLink}
+                  disabled={isSendingPaymentLink || (paymentLinkType === 'custom' && !paymentLinkName.trim())}
                   className="rounded-lg border border-slate-300 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
                 >
                   {isSendingPaymentLink ? 'Sending…' : 'Send demo preview to me'}
@@ -1437,7 +1480,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => void handleSendPaymentLink(false)}
-                    disabled={isSendingPaymentLink || !paymentLinkInput.trim()}
+                    disabled={isSendingPaymentLink || !paymentLinkInput.trim() || (paymentLinkType === 'custom' && !paymentLinkName.trim())}
                     className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
                   >
                     <Mail className="h-3.5 w-3.5" />

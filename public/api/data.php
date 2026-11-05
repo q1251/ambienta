@@ -5197,6 +5197,20 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     $paymentLink = $previewOnly
         ? 'https://example.invalid/demo-payment'
         : data_string($body, 'paymentLinkUrl', 2048);
+    $paymentLinkType = data_string($body, 'paymentLinkType', 32, false);
+    if ($paymentLinkType === '') {
+        $paymentLinkType = 'provider';
+    }
+    if (!in_array($paymentLinkType, ['provider', 'crypto_wallet', 'custom'], true)) {
+        data_respond(400, ['error' => 'invalid_payment_link_type', 'message' => 'Choose a supported payment link type.']);
+    }
+    $paymentLinkName = data_string($body, 'paymentLinkName', 80, false);
+    if ($paymentLinkType === 'custom' && trim($paymentLinkName) === '') {
+        data_respond(400, ['error' => 'payment_link_name_required', 'message' => 'Enter a name for the custom payment link.']);
+    }
+    if (preg_match('/[\r\n\x00-\x1F\x7F]/', $paymentLinkName) === 1) {
+        data_respond(400, ['error' => 'invalid_payment_link_name', 'message' => 'The custom payment link name cannot contain line breaks or control characters.']);
+    }
     $emailTemplate = data_string($body, 'emailTemplate', 40, false);
     if ($emailTemplate === '') {
         $emailTemplate = 'payment_request';
@@ -5272,16 +5286,23 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             || (strlen($paymentLink) >= 32 && strlen($paymentLink) <= 44
                 && preg_match('/^[1-9A-HJ-NP-Za-km-z]+$/', $paymentLink) === 1)
         );
+        $isValidPaymentLink = match ($paymentLinkType) {
+            'provider', 'custom' => $isHttpsPaymentLink,
+            'crypto_wallet' => $isCryptoOrder && ($isCryptoWalletUri || $isCryptoWalletAddress),
+            default => false,
+        };
         if (!$previewOnly && (
             preg_match('/[\r\n\x00]/', $paymentLink) === 1
-            || (!$isHttpsPaymentLink && !$isCryptoWalletUri && !$isCryptoWalletAddress)
+            || !$isValidPaymentLink
         )) {
             $db->rollBack();
             data_respond(400, [
                 'error' => 'invalid_payment_link',
-                'message' => $isCryptoOrder
-                    ? 'Enter an HTTPS payment link, a Bitcoin/Ethereum/Solana wallet URI, or a supported wallet address.'
-                    : 'Enter a valid external HTTPS payment link.',
+                'message' => match ($paymentLinkType) {
+                    'crypto_wallet' => 'Enter a Bitcoin, Ethereum, or Solana payment URI or supported wallet address for this cryptocurrency order.',
+                    'custom' => 'Enter a valid external HTTPS URL for the custom payment link.',
+                    default => 'Enter a valid PayPal or payment-provider HTTPS link.',
+                },
             ]);
         }
         if ($order['payment_status'] === 'Paid' || $order['status'] === 'Cancelled') {
@@ -5290,6 +5311,11 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         }
 
         $template = $paymentEmailTemplates[$emailTemplate];
+        $paymentLinkLabel = $paymentLinkType === 'custom'
+            ? trim($paymentLinkName)
+            : ($paymentLinkType === 'crypto_wallet'
+                ? 'Crypto wallet address / payment URI'
+                : ($order['payment_method'] === 'PayPal' ? 'PayPal payment link' : 'Payment provider link'));
         $subject = ($previewOnly ? '[DEMO PREVIEW] ' : '')
             . $template['subject'] . ' for Ambient order ' . $order['order_number'];
         $paymentInstructions = match ($order['payment_method']) {
@@ -5309,7 +5335,7 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             . "Payment method: {$order['payment_method']}\n"
             . "Total due: $" . number_format((float) $order['total_amount'], 2) . "\n\n"
             . $paymentInstructions . "\n\n"
-            . "Complete secure payment:\n{$paymentLink}\n";
+            . "{$paymentLinkLabel}:\n{$paymentLink}\n";
         if ($additionalMessage !== '') {
             $plainBody .= "\nMessage from Ambient:\n{$additionalMessage}\n";
         }
@@ -5333,10 +5359,11 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $safeClosing = htmlspecialchars($closing, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeInstructions = htmlspecialchars($paymentInstructions, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeLink = htmlspecialchars($paymentLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safePaymentLinkLabel = htmlspecialchars($paymentLinkLabel, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeAdditionalMessage = htmlspecialchars($additionalMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $htmlPaymentLink = $isHttpsPaymentLink
-            ? '<a href="' . $safeLink . '">Complete secure payment</a>'
-            : '<strong>Crypto wallet address / payment URI:</strong><br><code style="overflow-wrap:anywhere">' . $safeLink . '</code>';
+            ? '<a href="' . $safeLink . '">' . $safePaymentLinkLabel . '</a>'
+            : '<strong>' . $safePaymentLinkLabel . ':</strong><br><code style="overflow-wrap:anywhere">' . $safeLink . '</code>';
         $htmlBody = '<p>Hello ' . $safeName . ',</p><p>' . $safeIntro . '</p>'
             . '<div style="padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">'
             . '<strong>Order summary</strong><br>Order: ' . $safeOrderNumber
