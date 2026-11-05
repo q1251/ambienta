@@ -1643,7 +1643,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 )}
                 {campaignAudienceCount === 0 && (
                   <p role="status" className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                    No eligible recipients match these filters. Campaigns only include leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.
+                    {role === 'admin'
+                      ? 'No eligible recipients match these filters. Campaigns only include leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.'
+                      : 'No eligible assigned leads match these filters. Campaigns only include your assigned leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.'}
                   </p>
                 )}
                 {campaignAudienceCount > 5000 && (
