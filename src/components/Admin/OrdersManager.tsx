@@ -1361,7 +1361,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           }}
         >
           <section
-            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/60 bg-white shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="order-payment-email-title"
@@ -1386,7 +1386,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <X className="h-5 w-5" />
               </button>
             </header>
-            <div className="space-y-4 bg-slate-50/70 p-5">
+            <div className="payment-modal-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain bg-slate-50/70 p-5">
               <label htmlFor="order-payment-link-type" className="block text-xs font-semibold text-slate-800">
                 Payment link type
                 <select
@@ -1573,7 +1573,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </p>
               {paymentEmailError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{paymentEmailError}</p>}
               {paymentLinkSuccess && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{paymentLinkSuccess}</p>}
-              <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-between">
+            </div>
+            <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:justify-between">
                 <button
                   type="button"
                   onClick={() => void handleSendPaymentLink(true)}
@@ -1601,8 +1602,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     {isSendingPaymentLink ? 'Sending…' : selectedOrder.paymentLinkSentAt ? 'Resend email' : 'Send email'}
                   </button>
                 </div>
-              </footer>
-            </div>
+            </footer>
           </section>
         </div>
       )}

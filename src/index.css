@@ -2,6 +2,31 @@
 @import "flag-icons/css/flag-icons.min.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
+.payment-modal-scrollbar {
+  scrollbar-color: #9ab8ad transparent;
+  scrollbar-width: thin;
+}
+
+.payment-modal-scrollbar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.payment-modal-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.payment-modal-scrollbar::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #9ab8ad;
+  background-clip: padding-box;
+}
+
+.payment-modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #668f81;
+  background-clip: padding-box;
+}
+
 @layer base {
   :root {
     color-scheme: light;
