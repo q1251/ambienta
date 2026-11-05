@@ -512,7 +512,7 @@ function data_ensure_schema(PDO $db): void
             display_name VARCHAR(120) NOT NULL DEFAULT '',
             password_hash VARCHAR(255) NOT NULL,
             role VARCHAR(24) NOT NULL DEFAULT 'operator',
-            permissions TEXT NOT NULL DEFAULT '[\"leads\",\"orders\",\"products\",\"integrations\"]',
+            permissions TEXT NOT NULL DEFAULT '[\"leads\"]',
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             must_change_password TINYINT(1) NOT NULL DEFAULT 1,
             session_version INT UNSIGNED NOT NULL DEFAULT 1,
@@ -534,13 +534,18 @@ function data_ensure_schema(PDO $db): void
         $db->exec("ALTER TABLE staff_users ADD COLUMN display_name VARCHAR(120) NOT NULL DEFAULT '' AFTER email");
     }
     foreach ([
-        'permissions' => "TEXT NOT NULL DEFAULT '[\"leads\",\"orders\",\"products\",\"integrations\"]'",
+        'permissions' => "TEXT NOT NULL DEFAULT '[\"leads\"]'",
         'session_version' => 'INT UNSIGNED NOT NULL DEFAULT 1',
     ] as $column => $definition) {
         $staffPasswordChangeColumn->execute([$databaseName, 'staff_users', $column]);
         if ((int) $staffPasswordChangeColumn->fetchColumn() === 0) {
             $db->exec("ALTER TABLE staff_users ADD COLUMN `$column` $definition");
         }
+    }
+    $staffPermissionDefault = $db->prepare('SELECT COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+    $staffPermissionDefault->execute([$databaseName, 'staff_users', 'permissions']);
+    if ($staffPermissionDefault->fetchColumn() !== '["leads"]') {
+        $db->exec("ALTER TABLE staff_users ALTER COLUMN permissions SET DEFAULT '[\"leads\"]'");
     }
     $assignedLeadColumn = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
     $assignedLeadColumn->execute([$databaseName, 'leads', 'assigned_staff_id']);

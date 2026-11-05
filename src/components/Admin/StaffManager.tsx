@@ -5,7 +5,7 @@ const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
   { id: 'new_leads', label: 'View unassigned new leads' },
   { id: 'orders', label: 'Orders' },
-  { id: 'products', label: 'Products' },
+  { id: 'products', label: 'Products & stock' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'chat', label: 'Live chat' },
 ] as const;
