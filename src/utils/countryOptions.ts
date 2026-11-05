@@ -42,10 +42,14 @@ function findCountry(countryName: string): CountryOption | undefined {
 }
 
 export function getLeadCountryLabel(countryName: string, phone: string): string {
-  return findCountry(countryName)?.name
-    ?? (countryName.trim() && countryName.trim().toLowerCase() !== 'not specified'
-      ? countryName.trim()
-      : getLeadCountry(phone));
+  const country = findCountry(countryName);
+  if (country) return country.name;
+
+  const explicitLabel = countryName.trim();
+  if (explicitLabel && explicitLabel.toLowerCase() !== 'not specified' && !/\d/.test(explicitLabel)) {
+    return explicitLabel;
+  }
+  return getLeadCountry(phone);
 }
 
 export function getLeadCountry(phone: string): string {
@@ -74,7 +78,9 @@ export function getLeadCountry(phone: string): string {
 export function getLeadCountryCode(countryName: string, phone: string): CountryCode | '' {
   const country = findCountry(countryName);
   if (country) return country.code;
-  if (countryName.trim() && countryName.trim().toLowerCase() !== 'not specified') return '';
+
+  const explicitLabel = countryName.trim();
+  if (explicitLabel && explicitLabel.toLowerCase() !== 'not specified' && !/\d/.test(explicitLabel)) return '';
 
   const inferredCountry = countryOptions.find((country) => country.name === getLeadCountry(phone));
   if (inferredCountry) return inferredCountry.code;

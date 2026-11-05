@@ -93,11 +93,14 @@ test('country selectors include the full supported calling-code list and split i
   assert.equal(getLeadCountryCode('Canada', '+44 20 7946 0958'), 'CA');
   assert.equal(getLeadCountryCode('US', '+44 20 7946 0958'), 'US');
   assert.equal(getLeadCountryCode('usa', ''), 'US');
+  assert.equal(getLeadCountryCode('90210', '+44 20 7946 0958'), 'GB');
   assert.equal(getLeadCountryCode('', '+44 20 7946 0958'), 'GB');
   assert.equal(getLeadCountryCode('Not specified', '+44 20 7946 0958'), 'GB');
   assert.equal(getLeadCountryCode('Somewhere else', '+44 20 7946 0958'), '');
   assert.equal(getLeadCountryLabel('US', '+44 20 7946 0958'), 'United States');
   assert.equal(getLeadCountryLabel('', '+1 213 373 4253'), 'United States');
+  assert.equal(getLeadCountryLabel('90210', ''), 'Not specified');
+  assert.equal(getLeadCountryLabel('90210', '+44 20 7946 0958'), 'United Kingdom');
 });
 
 test('parseLeadsCsv keeps explicit country values and infers one from phone when absent', () => {
