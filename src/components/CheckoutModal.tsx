@@ -233,11 +233,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
             <div className="space-y-1">
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-                Order received · payment instructions by email
+                Order received
               </span>
               <h2 className="text-2xl font-bold text-slate-900">Thank You for Your Order!</h2>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Order <span className="font-mono font-bold text-slate-800">{completedOrder.orderNumber}</span> has been received. We’ll review your order and email payment instructions and a secure {completedOrder.paymentMethod === 'Credit / Debit Card' ? 'card' : completedOrder.paymentMethod} payment link to {completedOrder.email}. Enter your payment details on the provider’s secure page.
+                Your order has been received. Payment instructions will be sent to {completedOrder.email} after review.
               </p>
             </div>
 
