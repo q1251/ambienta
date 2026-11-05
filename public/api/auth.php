@@ -336,7 +336,7 @@ if ($action === 'session' && $method === 'GET') {
             $_SESSION['staff_session_version'] = (int) $staff['session_version'];
             $permissions = json_decode((string) $staff['permissions'], true);
             $_SESSION['admin_permissions'] = is_array($permissions)
-                ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'], true)))
+                ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'], true)))
                 : [];
             $_SESSION['must_change_password'] = !empty($_SESSION['is_impersonating']) ? false : (bool) $staff['must_change_password'];
         }
@@ -435,7 +435,7 @@ if ($action === 'login' && $method === 'POST') {
         $_SESSION['staff_session_version'] = (int) $staffSession['session_version'];
         $permissions = json_decode((string) $staffSession['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
     } else {
         unset($_SESSION['staff_id'], $_SESSION['staff_session_version'], $_SESSION['is_impersonating'], $_SESSION['impersonated_by'], $_SESSION['original_admin']);

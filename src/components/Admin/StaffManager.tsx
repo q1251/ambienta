@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarDays, KeyRound, LogIn, UserPlus, Users, UserX } from
 const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
   { id: 'new_leads', label: 'View unassigned new leads' },
+  { id: 'create_leads', label: 'Add/import contacts' },
   { id: 'orders', label: 'Orders' },
   { id: 'products', label: 'Products & stock' },
   { id: 'integrations', label: 'Integrations' },
@@ -128,9 +129,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   }, []);
 
   const togglePermission = (current: StaffPermission[], permission: StaffPermission, update: (next: StaffPermission[]) => void) => {
-    if (permission === 'new_leads' && !current.includes('leads')) return;
+    if ((permission === 'new_leads' || permission === 'create_leads') && !current.includes('leads')) return;
     if (permission === 'leads' && current.includes('leads')) {
-      update(current.filter((value) => value !== 'leads' && value !== 'new_leads'));
+      update(current.filter((value) => value !== 'leads' && value !== 'new_leads' && value !== 'create_leads'));
       return;
     }
     update(current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
@@ -550,7 +551,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-blue-800" />
+                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={(permission.id === 'new_leads' || permission.id === 'create_leads') && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-blue-800" />
                       {permission.label}
                     </label>
                   ))}
@@ -610,7 +611,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-blue-800" />
+                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={(permission.id === 'new_leads' || permission.id === 'create_leads') && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-blue-800" />
                       {permission.label}
                     </label>
                   ))}

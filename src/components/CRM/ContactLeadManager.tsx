@@ -58,6 +58,7 @@ type NewLead = ContactLeadInput;
 interface ContactLeadManagerProps {
   role?: 'admin' | 'operator';
   canSendEmail?: boolean;
+  canCreateLeads?: boolean;
   leads: ContactLead[];
   dataError?: string;
   onOpenEmailCampaigns?: () => void;
@@ -87,6 +88,7 @@ const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; b
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   role,
   canSendEmail = false,
+  canCreateLeads = false,
   leads,
   dataError,
   onOpenEmailCampaigns,
@@ -175,6 +177,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const isSuperadmin = role === 'admin';
+  const canAddContacts = isSuperadmin || canCreateLeads;
   const canEditSelectedLead = isSuperadmin || profile?.lead.assignedStaffId != null;
 
   // Load staff agents for assignment
@@ -326,6 +329,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   };
 
   const save = async (rows: NewLead[]) => {
+    if (!canAddContacts) {
+      setRequestError('You do not have permission to add or import contacts.');
+      return;
+    }
     setSaving(true);
     setRequestError('');
     setSuccess('');
@@ -1512,7 +1519,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
           {/* Action Buttons: Add, Import, Export, View Toggle */}
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            {canAddContacts && <button
               type="button"
               onClick={() => {
                 setRequestError('');
@@ -1521,8 +1528,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#1d4ed8] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1e40af]"
             >
               <UserPlus className="h-4 w-4" /> Add contact
-            </button>
-            <button
+            </button>}
+            {canAddContacts && <button
               type="button"
               onClick={() => {
                 setRequestError('');
@@ -1531,7 +1538,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               <Upload className="h-4 w-4" /> Import CSV
-            </button>
+            </button>}
             <button
               type="button"
               onClick={() => downloadContacts(filteredLeads)}
@@ -2052,7 +2059,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       )}
 
       {/* CSV & MANUAL ADD MODAL */}
-      {mode && (
+      {mode && canAddContacts && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
           onMouseDown={(e) => {

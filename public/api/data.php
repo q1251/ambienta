@@ -736,7 +736,7 @@ function data_require_admin(string $requiredRole = 'operator'): void
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $permissions = json_decode((string) $staff['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
     }
     if ($requiredRole === 'admin' && $_SESSION['admin_role'] !== 'admin') {
@@ -775,13 +775,14 @@ function data_require_lead_access(PDO $db, int $leadId, bool $allowUnassignedNew
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'];
+    $validPermissions = ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
     }
     $permissions = array_values(array_unique($permissions));
-    if (in_array('new_leads', $permissions, true) && !in_array('leads', $permissions, true)) return null;
+    if ((in_array('new_leads', $permissions, true) || in_array('create_leads', $permissions, true))
+        && !in_array('leads', $permissions, true)) return null;
     return $permissions;
 }
 
@@ -4061,7 +4062,7 @@ if ($method === 'POST' && $resource === 'staff-session') {
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
         $permissions = json_decode((string) $staff['permissions'], true);
         $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'orders', 'products', 'integrations', 'chat'], true)))
+            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'], true)))
             : [];
         $_SESSION['last_activity'] = time();
         data_respond(200, [
@@ -6010,7 +6011,7 @@ if ($method === 'POST' && $resource === 'orders') {
 }
 
 if ($method === 'POST' && $resource === 'leads') {
-    data_require_permission('leads');
+    data_require_permission('create_leads');
     $body = data_read_json();
     $leads = $body['leads'] ?? null;
     if (!is_array($leads) || count($leads) < 1 || count($leads) > 500) {
