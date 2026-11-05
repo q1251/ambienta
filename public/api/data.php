@@ -222,6 +222,21 @@ function data_ensure_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
+        "CREATE TABLE IF NOT EXISTS lead_source_records (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            source_key CHAR(64) NOT NULL,
+            source_file VARCHAR(255) NOT NULL,
+            source_sheet VARCHAR(128) NOT NULL,
+            source_row INT UNSIGNED NOT NULL,
+            data JSON NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY lead_source_records_identity (lead_id, source_key),
+            KEY lead_source_records_contact (lead_id, id),
+            CONSTRAINT lead_source_records_lead_fk FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
         "CREATE TABLE IF NOT EXISTS email_activity (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             recipient_email VARCHAR(254) NOT NULL,
@@ -2343,6 +2358,54 @@ function data_lead_row(array $row): array
     if (array_key_exists('assigned_staff_id', $row)) $lead['assignedStaffId'] = $row['assigned_staff_id'] === null ? null : (int) $row['assigned_staff_id'];
     if (array_key_exists('assigned_staff_name', $row)) $lead['assignedStaffName'] = $row['assigned_staff_name'];
     return $lead;
+}
+
+function data_has_possible_payment_card_number(string $value, string $fieldName = ''): bool
+{
+    if (preg_match('/(?:email|e-mail|mail|tracking|order|invoice|date|time)/i', $fieldName) === 1) return false;
+    preg_match_all('/(?<!\d)(?:\d[\s-]?){13,19}(?!\d)/', $value, $matches);
+    foreach ($matches[0] ?? [] as $candidate) {
+        $digits = preg_replace('/\D/', '', $candidate) ?? '';
+        $length = strlen($digits);
+        if ($length < 13 || $length > 19) continue;
+        $sum = 0;
+        $doubleDigit = false;
+        for ($index = $length - 1; $index >= 0; $index--) {
+            $digit = (int) $digits[$index];
+            if ($doubleDigit) {
+                $digit *= 2;
+                if ($digit > 9) $digit -= 9;
+            }
+            $sum += $digit;
+            $doubleDigit = !$doubleDigit;
+        }
+        if ($sum % 10 === 0) return true;
+    }
+    return false;
+}
+
+function data_lead_source_record_row(array $row): array
+{
+    $data = json_decode((string) $row['data'], true);
+    if (!is_array($data)) {
+        error_log('Ambients lead source record contains invalid stored JSON.');
+        data_respond(500, ['error' => 'lead_source_data_invalid', 'message' => 'Imported source details could not be loaded.']);
+    }
+    foreach (array_keys($data) as $key) {
+        if (!is_string($key)
+            || preg_match('/(?:payment|credit|debit|card|(?:^|[^a-z])cc(?:[^a-z]|$)|cvv|cvc|ccv|security.?code|expir(?:y|ation)|medical|medication|prescription|diagnos|symptom|patient)/i', $key) === 1
+            || !is_string($data[$key])
+            || data_has_possible_payment_card_number($data[$key], $key)) {
+            unset($data[$key]);
+        }
+    }
+    return [
+        'id' => (int) $row['id'],
+        'sourceFile' => (string) $row['source_file'],
+        'sourceSheet' => (string) $row['source_sheet'],
+        'sourceRow' => (int) $row['source_row'],
+        'data' => $data,
+    ];
 }
 
 function data_lead_activities(PDO $db, int $leadId): array
@@ -4619,6 +4682,7 @@ if ($method === 'GET') {
                 || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
             $orders = [];
             $historicalOrders = [];
+            $sourceRecords = [];
             if ($canViewOrders) {
                 $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
                 $orderQuery->execute([$lead['email']]);
@@ -4639,10 +4703,19 @@ if ($method === 'GET') {
                     'sourceSheet' => $row['source_sheet'],
                 ], $historyQuery->fetchAll());
             }
+            if (($_SESSION['admin_role'] ?? '') === 'admin') {
+                $sourceQuery = $db->prepare(
+                    'SELECT id, source_file, source_sheet, source_row, data
+                     FROM lead_source_records WHERE lead_id = ? ORDER BY source_file, source_sheet, source_row, id LIMIT 500'
+                );
+                $sourceQuery->execute([$id]);
+                $sourceRecords = array_map('data_lead_source_record_row', $sourceQuery->fetchAll());
+            }
             data_respond(200, [
                 'lead' => data_lead_row($lead),
                 'orders' => $orders,
                 'historicalOrders' => $historicalOrders,
+                'sourceRecords' => $sourceRecords,
                 'activities' => data_lead_activities($db, (int) $id),
             ]);
         }
@@ -6717,6 +6790,153 @@ if ($method === 'POST' && $resource === 'lead-history') {
         data_respond(500, ['error' => 'history_import_failed', 'message' => 'Historical order records could not be saved.']);
     }
     data_audit($db, 'lead.history_imported', 'lead', 'bulk', ['recordCount' => count($normalizedRecords)]);
+    data_respond(201, ['imported' => count($normalizedRecords)]);
+}
+
+if ($method === 'POST' && $resource === 'lead-source-records') {
+    data_require_permission('import_leads');
+    if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+        data_respond(403, ['error' => 'admin_required', 'message' => 'Only a superadmin can retain source workbook details.']);
+    }
+    $body = data_read_json(2097152);
+    $records = $body['records'] ?? null;
+    if (!is_array($records) || count($records) < 1 || count($records) > 100) {
+        data_respond(400, ['error' => 'invalid_source_records', 'message' => 'Provide between 1 and 100 source detail records.']);
+    }
+
+    $db = data_db();
+    $findByEmail = $db->prepare('SELECT id FROM leads WHERE email = ? LIMIT 1 FOR UPDATE');
+    $findByImportKey = $db->prepare('SELECT id FROM leads WHERE import_key = ? LIMIT 1 FOR UPDATE');
+    $findByPhoneAndName = $db->prepare(
+        'SELECT id FROM leads WHERE phone = ? AND LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?) LIMIT 1 FOR UPDATE'
+    );
+    $saveSourceRecord = $db->prepare(
+        'INSERT INTO lead_source_records (lead_id, source_key, source_file, source_sheet, source_row, data)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           source_file = VALUES(source_file),
+           source_sheet = VALUES(source_sheet),
+           source_row = VALUES(source_row),
+           data = VALUES(data)'
+    );
+    $normalizedRecords = [];
+    foreach ($records as $index => $record) {
+        if (!is_array($record)) {
+            data_respond(400, ['error' => 'invalid_source_record', 'message' => 'A submitted source detail record is invalid.']);
+        }
+        $email = strtolower(data_string($record, 'email', 254, false));
+        $phone = data_string($record, 'phone', 40, false);
+        $firstName = data_string($record, 'firstName', 100, false);
+        $lastName = data_string($record, 'lastName', 100, false);
+        $address = data_string($record, 'address', 500, false);
+        $postalCode = data_string($record, 'postalCode', 24, false);
+        $sourceKey = data_string($record, 'sourceKey', 255);
+        $sourceFile = data_string($record, 'sourceFile', 255);
+        $sourceSheet = data_string($record, 'sourceSheet', 128);
+        $sourceRow = filter_var($record['sourceRow'] ?? null, FILTER_VALIDATE_INT);
+        $data = $record['data'] ?? null;
+        if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))
+            || ($email === '' && strlen(preg_replace('/\D/', '', $phone) ?? '') < 7 && $address === '' && $postalCode === '')
+            || $sourceRow === false || $sourceRow < 1 || !is_array($data) || count($data) > 100) {
+            data_respond(400, ['error' => 'invalid_source_record', 'message' => 'Source detail data or contact provenance is invalid.']);
+        }
+
+        $safeData = [];
+        foreach ($data as $key => $value) {
+            if (!is_string($key) || strlen($key) > 255 || !is_string($value) || strlen($value) > 8000) {
+                data_respond(400, ['error' => 'invalid_source_field', 'message' => 'A source detail field is invalid or too large.']);
+            }
+            if (preg_match('/(?:payment|credit|debit|card|(?:^|[^a-z])cc(?:[^a-z]|$)|cvv|cvc|ccv|security.?code|expir(?:y|ation)|medical|medication|prescription|diagnos|symptom|patient)/i', $key) === 1
+                || data_has_possible_payment_card_number($value, $key)) {
+                continue;
+            }
+            $safeData[$key] = $value;
+        }
+        $encodedData = json_encode($safeData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($encodedData) || strlen($encodedData) > 16000) {
+            data_respond(400, ['error' => 'source_record_too_large', 'message' => 'A source detail record exceeds the allowed size.']);
+        }
+        $normalizedRecords[] = [
+            'row' => $index + 1,
+            'email' => $email,
+            'phone' => $phone,
+            'firstName' => $firstName,
+            'lastName' => $lastName,
+            'address' => $address,
+            'postalCode' => $postalCode,
+            'sourceKey' => $sourceKey,
+            'sourceFile' => $sourceFile,
+            'sourceSheet' => $sourceSheet,
+            'sourceRow' => $sourceRow,
+            'data' => $encodedData,
+        ];
+    }
+
+    $db->beginTransaction();
+    try {
+        foreach ($normalizedRecords as $record) {
+            $lead = false;
+            if ($record['email'] !== '') {
+                $findByEmail->execute([$record['email']]);
+                $lead = $findByEmail->fetch();
+            }
+            $phoneDigits = preg_replace('/\D/', '', $record['phone']) ?? '';
+            if (!$lead && strlen($phoneDigits) >= 7) {
+                $importKey = hash(
+                    'sha256',
+                    strtolower(trim($record['firstName'])) . '|'
+                        . strtolower(trim($record['lastName'])) . '|' . $phoneDigits
+                );
+                $findByImportKey->execute([$importKey]);
+                $lead = $findByImportKey->fetch();
+                if (!$lead && $record['firstName'] !== '' && $record['lastName'] !== '') {
+                    $findByPhoneAndName->execute([$record['phone'], $record['firstName'], $record['lastName']]);
+                    $lead = $findByPhoneAndName->fetch();
+                }
+            }
+            if (!$lead && $record['email'] === '' && strlen($phoneDigits) < 7) {
+                $identitySuffix = preg_match('/^\d{5}(?:-\d{4})?$/', $record['postalCode']) === 1
+                    ? (preg_replace('/\D/', '', $record['postalCode']) ?? '')
+                    : 'address:' . strtolower(trim($record['address'] !== '' ? $record['address'] : $record['postalCode']));
+                $importKey = hash(
+                    'sha256',
+                    strtolower(trim($record['firstName'])) . '|'
+                        . strtolower(trim($record['lastName'])) . '|' . $identitySuffix
+                );
+                $findByImportKey->execute([$importKey]);
+                $lead = $findByImportKey->fetch();
+            }
+            if (!$lead) {
+                $db->rollBack();
+                data_respond(404, [
+                    'error' => 'source_contact_not_found',
+                    'message' => 'A source detail record could not be matched to an imported contact; no records in this batch were saved.',
+                    'row' => $record['row'],
+                ]);
+            }
+            $identity = implode('|', [
+                $record['sourceKey'],
+                $record['sourceFile'],
+                $record['sourceSheet'],
+                (string) $record['sourceRow'],
+                (string) $lead['id'],
+            ]);
+            $saveSourceRecord->execute([
+                (int) $lead['id'],
+                hash('sha256', $identity),
+                $record['sourceFile'],
+                $record['sourceSheet'],
+                $record['sourceRow'],
+                $record['data'],
+            ]);
+        }
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients lead source detail import failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'source_import_failed', 'message' => 'Source detail records could not be saved.']);
+    }
+    data_audit($db, 'lead.source_records_imported', 'lead', 'bulk', ['recordCount' => count($normalizedRecords)]);
     data_respond(201, ['imported' => count($normalizedRecords)]);
 }
 

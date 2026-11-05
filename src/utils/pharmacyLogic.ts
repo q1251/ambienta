@@ -1,4 +1,15 @@
-import { ContactLead, HealthCategory, LeadContactCompleteness, LeadHistoryImportInput, OnlineOrder, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
+import {
+  ContactLead,
+  HealthCategory,
+  LeadContactCompleteness,
+  LeadHistoryImportInput,
+  LeadSourceRecordImportInput,
+  OnlineOrder,
+  Patient,
+  RefillRecord,
+  ReminderRule,
+  RefillStatus,
+} from '../types/pharmacy';
 import { parseCsvRows } from './csv';
 import { getLeadCountry } from './countryOptions';
 export { getLeadCountry } from './countryOptions';
@@ -73,6 +84,7 @@ export function filterPatientsByHealthCategory(
 export interface CsvParseResult {
   leads: Omit<ContactLead, 'id' | 'createdAt'>[];
   historicalOrders: LeadHistoryImportInput[];
+  sourceRecords: LeadSourceRecordImportInput[];
   errors: string[];
   totalParsed: number;
 }
@@ -85,6 +97,27 @@ export function isValidLeadEmail(email: string): boolean {
   }
   if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local)) return false;
   return /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/.test(domain);
+}
+
+function containsPossiblePaymentCardNumber(value: string, fieldName = ''): boolean {
+  if (/(?:email|e-mail|mail|tracking|order|invoice|date|time)/i.test(fieldName)) return false;
+  const candidates = value.match(/(?:^|[^\d])(?:\d[\s-]?){13,19}(?:[^\d]|$)/g) || [];
+  return candidates.some((candidate) => {
+    const digits = candidate.replace(/\D/g, '');
+    if (digits.length < 13 || digits.length > 19) return false;
+    let sum = 0;
+    let doubleDigit = false;
+    for (let index = digits.length - 1; index >= 0; index -= 1) {
+      let digit = Number(digits[index]);
+      if (doubleDigit) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+      doubleDigit = !doubleDigit;
+    }
+    return sum % 10 === 0;
+  });
 }
 
 export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'phone' | 'address' | 'postalCode'>): LeadContactCompleteness {
@@ -110,9 +143,10 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   const errors: string[] = [];
   const leads: Omit<ContactLead, 'id' | 'createdAt'>[] = [];
   const historicalOrders = new Map<string, LeadHistoryImportInput>();
+  const sourceRecords = new Map<string, LeadSourceRecordImportInput>();
 
   if (!csvText || !csvText.trim()) {
-    return { leads: [], historicalOrders: [], errors: ['CSV content is empty.'], totalParsed: 0 };
+    return { leads: [], historicalOrders: [], sourceRecords: [], errors: ['CSV content is empty.'], totalParsed: 0 };
   }
 
   let rows: string[][];
@@ -122,23 +156,38 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     return {
       leads: [],
       historicalOrders: [],
+      sourceRecords: [],
       errors: [error instanceof Error ? error.message : 'CSV could not be parsed.'],
       totalParsed: 0,
     };
   }
   if (rows.length < 2) {
-    return { leads: [], historicalOrders: [], errors: ['CSV must have a header row and at least one data row.'], totalParsed: 0 };
+    return {
+      leads: [],
+      historicalOrders: [],
+      sourceRecords: [],
+      errors: ['CSV must have a header row and at least one data row.'],
+      totalParsed: 0,
+    };
   }
   if (rows.length > 20001) {
-    return { leads: [], historicalOrders: [], errors: ['A contact import can contain at most 20,000 rows.'], totalParsed: 0 };
+    return {
+      leads: [],
+      historicalOrders: [],
+      sourceRecords: [],
+      errors: ['A contact import can contain at most 20,000 rows.'],
+      totalParsed: 0,
+    };
   }
 
   const headers = rows[0].map((header) => header.trim().toLowerCase().replace(/[\s-]+/g, '_'));
   const findIdx = (names: string[]) => headers.findIndex((header) => names.includes(header));
   const fnIdx = findIdx(['first_name', 'firstname', 'first']);
   const lnIdx = findIdx(['last_name', 'lastname', 'last']);
-  const emailIdx = findIdx(['email', 'mail']);
-  const phoneIdx = findIdx(['phone', 'mobile', 'tel']);
+  const emailIndexes = headers.flatMap((header, index) =>
+    /(^|_)(e_?mail|mail)(_|$)/.test(header) ? [index] : []);
+  const phoneIndexes = headers.flatMap((header, index) =>
+    /(^|_)(phone|mobile|telephone|tel)(_|$)/.test(header) ? [index] : []);
   const countryIdx = findIdx(['country', 'country_name', 'location_country']);
   const addressIdx = findIdx(['address', 'street', 'street_address', 'delivery_address', 'shipping_address']);
   const postalCodeIdx = findIdx(['postal_code', 'postalcode', 'zip', 'zip_code', 'zipcode', 'postcode', 'postal']);
@@ -151,9 +200,12 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   const carrierIdx = findIdx(['carrier', 'shipping_carrier', 'delivery_carrier']);
   const sourceKeyIdx = findIdx(['source_key', 'source_record_key', 'record_key']);
   const sourceSheetIdx = findIdx(['source_sheet', 'sheet_name', 'source_tab']);
-  if (emailIdx === -1 && phoneIdx === -1 && postalCodeIdx === -1 && addressIdx === -1) {
+  const sourceFileIdx = findIdx(['source_file', 'workbook', 'filename']);
+  const sourceRowIdx = findIdx(['source_row', 'row_number', 'source_row_number']);
+  const sourceDataIdx = findIdx(['source_data', 'source_row_data', 'source_record_data']);
+  if (emailIndexes.length === 0 && phoneIndexes.length === 0 && postalCodeIdx === -1 && addressIdx === -1) {
     errors.push('CSV header must contain an email, phone, postal code, or address column.');
-    return { leads: [], historicalOrders: [], errors, totalParsed: 0 };
+    return { leads: [], historicalOrders: [], sourceRecords: [], errors, totalParsed: 0 };
   }
 
   const leadByIdentity = new Map<string, Omit<ContactLead, 'id' | 'createdAt'>>();
@@ -161,18 +213,35 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     const cols = rows[rowIndex];
     const firstName = (fnIdx === -1 ? '' : cols[fnIdx] || '').trim();
     const lastName = (lnIdx === -1 ? '' : cols[lnIdx] || '').trim();
-    const rawEmail = (emailIdx === -1 ? '' : cols[emailIdx] || '').trim().toLowerCase();
-    const validEmail = isValidLeadEmail(rawEmail);
-    const email = validEmail ? rawEmail : '';
-    const rawPhone = (phoneIdx === -1 ? '' : cols[phoneIdx] || '').trim();
-    const phoneIsPostalCode = /^\d{5}(?:-\d{4})?$/.test(rawPhone);
-    const phone = phoneIsPostalCode ? '' : rawPhone;
+    const emailValues = Array.from(new Set(emailIndexes.flatMap((index) => {
+      const value = cols[index] || '';
+      const matches = value.match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/gi) || [];
+      return matches.map((candidate) => candidate.toLowerCase()).filter(isValidLeadEmail);
+    })));
+    const rawPhoneValues = phoneIndexes.map((index) => (cols[index] || '').trim());
+    const phoneValues = Array.from(new Set(rawPhoneValues.flatMap((value) => {
+      if (!value || /^\d{5}(?:-\d{4})?$/.test(value)) return [];
+      const matches = value.match(/\+?\d(?:[\d\s().-]*\d)?/g) || [];
+      return matches
+        .map((candidate) => candidate.trim())
+        .filter((candidate) => candidate.replace(/\D/g, '').length >= 7 && !/^\d{5}(?:-\d{4})?$/.test(candidate));
+    })));
     const country = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
     const address = addressIdx !== -1 ? cols[addressIdx]?.trim() || '' : '';
-    const postalCode = (postalCodeIdx !== -1 ? cols[postalCodeIdx]?.trim() : '') || (phoneIsPostalCode ? rawPhone : '');
-    const hasPhone = phone.replace(/\D/g, '').length >= 7;
-    const hasAddressOnlyIdentity = Boolean(address || postalCode);
-    if (!validEmail && !hasPhone && !hasAddressOnlyIdentity) {
+    const postalCode = (postalCodeIdx !== -1 ? cols[postalCodeIdx]?.trim() : '')
+      || rawPhoneValues.find((value) => /^\d{5}(?:-\d{4})?$/.test(value))
+      || '';
+    const contactCandidates = emailValues.length > 0
+      ? [
+        ...emailValues.map((value) => ({ email: value, phone: phoneValues.length === 1 ? phoneValues[0] : '' })),
+        ...(phoneValues.length > 1 ? phoneValues.map((value) => ({ email: '', phone: value })) : []),
+      ]
+      : phoneValues.length > 0
+        ? phoneValues.map((value) => ({ email: '', phone: value }))
+        : address || postalCode
+          ? [{ email: '', phone: '' }]
+          : [];
+    if (contactCandidates.length === 0) {
       if (errors.length < 20) {
         errors.push(`Row ${rowIndex + 1}: Skipped row due to missing valid email, phone, or address.`);
       }
@@ -180,39 +249,45 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     }
     const consentValue = consentIdx === -1 ? '' : (cols[consentIdx] || '').toLowerCase();
 
-    const lead: Omit<ContactLead, 'id' | 'createdAt'> = {
-      firstName,
-      lastName,
-      leadSource: 'CSV Upload',
-      email,
-      phone,
-      country: country || getLeadCountry(phone),
-      address: address || undefined,
-      postalCode: postalCode || undefined,
-      status: 'Cold',
-      marketingConsent: ['yes', 'true', '1', 'opted in'].includes(consentValue),
-    };
-    const identity = validEmail
-      ? `email:${email}`
-      : hasPhone
-        ? `phone:${phone.replace(/\D/g, '')}:${firstName.toLowerCase()}:${lastName.toLowerCase()}`
-        : `address:${firstName.toLowerCase()}:${lastName.toLowerCase()}:${(address || postalCode).toLowerCase()}`;
-    const existing = leadByIdentity.get(identity);
-    if (!existing) {
-      leadByIdentity.set(identity, lead);
-    } else {
-      leadByIdentity.set(identity, {
-        ...existing,
-        firstName: existing.firstName || lead.firstName,
-        lastName: existing.lastName || lead.lastName,
-        phone: existing.phone || lead.phone,
-        country: existing.country || lead.country,
-        address: existing.address || lead.address,
-        postalCode: existing.postalCode || lead.postalCode,
-        marketingConsent: existing.marketingConsent || lead.marketingConsent,
-      });
+    for (const { email, phone } of contactCandidates) {
+      const hasPhone = phone.replace(/\D/g, '').length >= 7;
+      const lead: Omit<ContactLead, 'id' | 'createdAt'> = {
+        firstName,
+        lastName,
+        leadSource: 'CSV Upload',
+        email,
+        phone,
+        country: country || getLeadCountry(phone),
+        address: address || undefined,
+        postalCode: postalCode || undefined,
+        status: 'Cold',
+        marketingConsent: ['yes', 'true', '1', 'opted in'].includes(consentValue),
+      };
+      const identity = email
+        ? `email:${email}`
+        : hasPhone
+          ? `phone:${phone.replace(/\D/g, '')}:${firstName.toLowerCase()}:${lastName.toLowerCase()}`
+          : `address:${firstName.toLowerCase()}:${lastName.toLowerCase()}:${(address || postalCode).toLowerCase()}`;
+      const existing = leadByIdentity.get(identity);
+      if (!existing) {
+        leadByIdentity.set(identity, lead);
+      } else {
+        leadByIdentity.set(identity, {
+          ...existing,
+          firstName: existing.firstName || lead.firstName,
+          lastName: existing.lastName || lead.lastName,
+          phone: existing.phone || lead.phone,
+          country: existing.country || lead.country,
+          address: existing.address || lead.address,
+          postalCode: existing.postalCode || lead.postalCode,
+          marketingConsent: existing.marketingConsent || lead.marketingConsent,
+        });
+      }
     }
 
+    const primaryContact = contactCandidates[0];
+    const email = primaryContact.email;
+    const phone = primaryContact.phone;
     const orderNumber = orderNumberIdx === -1 ? '' : (cols[orderNumberIdx] || '').trim();
     const placedAt = orderDateIdx === -1 ? '' : (cols[orderDateIdx] || '').trim();
     const items = itemsIdx === -1 ? '' : (cols[itemsIdx] || '').trim();
@@ -248,11 +323,52 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
         sourceSheet,
       });
     }
+
+    const rawSourceData = sourceDataIdx === -1 ? '' : (cols[sourceDataIdx] || '').trim();
+    if (rawSourceData) {
+      try {
+        const parsed = JSON.parse(rawSourceData) as unknown;
+        const sourceKey = sourceKeyIdx === -1 ? '' : (cols[sourceKeyIdx] || '').trim();
+        const sourceRow = Number(sourceRowIdx === -1 ? '' : cols[sourceRowIdx]);
+        const sourceFile = sourceFileIdx === -1 ? '' : (cols[sourceFileIdx] || '').trim();
+        const sourceSheet = sourceSheetIdx === -1 ? '' : (cols[sourceSheetIdx] || '').trim();
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
+          || !sourceKey || !sourceFile || !sourceSheet || !Number.isSafeInteger(sourceRow) || sourceRow < 1) {
+          throw new Error('Source row details or provenance are invalid.');
+        }
+        const data = Object.fromEntries(
+          Object.entries(parsed).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string'
+            && !/(?:payment|credit|debit|card|(?:^|[^a-z])cc(?:[^a-z]|$)|cvv|cvc|ccv|security.?code|expir(?:y|ation)|medical|medication|prescription|diagnos|symptom|patient)/i.test(entry[0])
+            && !containsPossiblePaymentCardNumber(entry[1], entry[0]),
+          ),
+        );
+        for (const contact of contactCandidates) {
+          const identity = contact.email || contact.phone.replace(/\D/g, '') || address || postalCode;
+          sourceRecords.set(`${sourceKey}:${identity}`, {
+            firstName,
+            lastName,
+            email: contact.email,
+            phone: contact.phone,
+            address,
+            postalCode,
+            sourceFile,
+            sourceSheet,
+            sourceRow,
+            sourceKey,
+            data,
+          });
+        }
+      } catch {
+        if (errors.length < 20) errors.push(`Row ${rowIndex + 1}: Source row details or provenance are invalid.`);
+      }
+    }
   }
 
   return {
     leads: Array.from(leadByIdentity.values()),
     historicalOrders: Array.from(historicalOrders.values()),
+    sourceRecords: Array.from(sourceRecords.values()),
     errors,
     totalParsed: leadByIdentity.size,
   };

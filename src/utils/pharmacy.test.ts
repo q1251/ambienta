@@ -173,6 +173,53 @@ test('parseLeadsCsv preserves addresses and separately imports explicit order hi
   assert.equal('medicationName' in parsed.historicalOrders[0], false);
 });
 
+test('parseLeadsCsv preserves additional emails and phones in admin-only source records without sensitive fields', () => {
+  const sourceData = JSON.stringify({
+    email: 'first@example.com; second@example.com',
+    email_2: 'third@example.com',
+    phone: '555-0101; 555-0102',
+    card_number: '4111111111111111',
+    cc_number: '4111111111111111',
+    cvv: '123',
+    diagnosis: 'private clinical data',
+    unknown_column: '4111 1111 1111 1111',
+  });
+  const fields = [
+    'first_name',
+    'last_name',
+    'email',
+    'email_2',
+    'phone',
+    'source_file',
+    'source_sheet',
+    'source_row',
+    'source_key',
+    'source_data',
+  ];
+  const csvValue = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const parsed = parseLeadsCsv([
+    fields.join(','),
+    ['Ava', 'Stone', 'first@example.com; second@example.com', 'third@example.com', '555-0101; 555-0102',
+      'contacts.xlsx', 'Sheet1', '7', 'source-hash', sourceData].map(csvValue).join(','),
+  ].join('\n'));
+
+  assert.equal(parsed.errors.length, 0);
+  assert.deepEqual(parsed.leads.slice(0, 3).map((lead) => lead.email), [
+    'first@example.com',
+    'second@example.com',
+    'third@example.com',
+  ]);
+  assert.deepEqual(parsed.leads.slice(3).map((lead) => lead.phone), ['555-0101', '555-0102']);
+  assert.equal(parsed.sourceRecords.length, 5);
+  assert.equal(parsed.sourceRecords[0].sourceFile, 'contacts.xlsx');
+  assert.equal(parsed.sourceRecords[0].sourceRow, 7);
+  assert.equal('card_number' in parsed.sourceRecords[0].data, false);
+  assert.equal('cc_number' in parsed.sourceRecords[0].data, false);
+  assert.equal('cvv' in parsed.sourceRecords[0].data, false);
+  assert.equal('diagnosis' in parsed.sourceRecords[0].data, false);
+  assert.equal('unknown_column' in parsed.sourceRecords[0].data, false);
+});
+
 test('parseLeadsCsv treats ZIP+4 values as postal codes and retains address-only records', () => {
   const parsed = parseLeadsCsv([
     'first_name,last_name,email,phone,postal_code,address',

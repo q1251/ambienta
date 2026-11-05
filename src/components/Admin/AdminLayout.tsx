@@ -15,7 +15,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadHistoryImportInput, LeadProfile, OnlineOrder } from '../../types/pharmacy';
+import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadHistoryImportInput, LeadProfile, LeadSourceRecordImportInput, OnlineOrder } from '../../types/pharmacy';
 import type { ProductCsvItem } from '../../utils/productCsv';
 import { AuditLogView } from './AuditLogView';
 import { HostingerMailIntegration } from './HostingerMailIntegration';
@@ -64,7 +64,11 @@ interface AdminLayoutProps {
   leads: ContactLead[];
   leadDataError?: string;
   dataError?: string;
-  onSaveLeads: (leads: ContactLeadInput[], historicalOrders?: LeadHistoryImportInput[]) => Promise<void>;
+  onSaveLeads: (
+    leads: ContactLeadInput[],
+    historicalOrders?: LeadHistoryImportInput[],
+    sourceRecords?: LeadSourceRecordImportInput[],
+  ) => Promise<void>;
   onLoadLeadProfile: (leadId: number) => Promise<LeadProfile>;
   onUpdateLead: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
   onAddLeadActivity: (leadId: number, activity: LeadActivityInput) => Promise<LeadActivity>;

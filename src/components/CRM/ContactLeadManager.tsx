@@ -42,6 +42,7 @@ import {
   LeadContactCompleteness,
   LeadHistoryImportInput,
   LeadProfile,
+  LeadSourceRecordImportInput,
   LeadStatus,
   OnlineOrder,
 } from '../../types/pharmacy';
@@ -68,7 +69,11 @@ interface ContactLeadManagerProps {
   leads: ContactLead[];
   dataError?: string;
   onOpenEmailCampaigns?: () => void;
-  onSaveLeads: (leads: NewLead[], historicalOrders?: LeadHistoryImportInput[]) => Promise<void>;
+  onSaveLeads: (
+    leads: NewLead[],
+    historicalOrders?: LeadHistoryImportInput[],
+    sourceRecords?: LeadSourceRecordImportInput[],
+  ) => Promise<void>;
   onLoadLeadProfile?: (leadId: number) => Promise<LeadProfile>;
   onUpdateLead?: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
   onAddLeadActivity?: (leadId: number, activity: LeadActivityInput) => Promise<LeadProfile['activities'][number]>;
@@ -136,6 +141,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [csv, setCsv] = useState('');
   const [preview, setPreview] = useState<NewLead[]>([]);
   const [historyPreview, setHistoryPreview] = useState<LeadHistoryImportInput[]>([]);
+  const [sourceRecordsPreview, setSourceRecordsPreview] = useState<LeadSourceRecordImportInput[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [requestError, setRequestError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -195,7 +201,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [contactDetailsEditing, setContactDetailsEditing] = useState(false);
-  const [profileActiveTab, setProfileActiveTab] = useState<'overview' | 'orders' | 'timeline'>('overview');
+  const [profileActiveTab, setProfileActiveTab] = useState<'overview' | 'orders' | 'timeline' | 'source'>('overview');
 
   // Activities & Comments
   const [activityNote, setActivityNote] = useState('');
@@ -395,11 +401,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     const result = parseLeadsCsv(value);
     setPreview(result.leads);
     setHistoryPreview(result.historicalOrders);
+    setSourceRecordsPreview(result.sourceRecords);
     setErrors(result.errors);
     setRequestError('');
   };
 
-  const save = async (rows: NewLead[], historicalOrders: LeadHistoryImportInput[] = []) => {
+  const save = async (
+    rows: NewLead[],
+    historicalOrders: LeadHistoryImportInput[] = [],
+    sourceRecords: LeadSourceRecordImportInput[] = [],
+  ) => {
     const hasImportRows = rows.some((row) => row.leadSource === 'CSV Upload');
     const hasManualRows = rows.some((row) => row.leadSource !== 'CSV Upload');
     if ((hasImportRows && !canImportContactsForRole) || (hasManualRows && !canAddContactsForRole)) {
@@ -412,10 +423,15 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setRequestError('');
     setSuccess('');
     try {
-      await onSaveLeads(rows, historicalOrders);
-      setSuccess(`Saved ${rows.length} contact lead${rows.length === 1 ? '' : 's'}${historicalOrders.length ? ` and ${historicalOrders.length} historical order record${historicalOrders.length === 1 ? '' : 's'}` : ''}.`);
+      await onSaveLeads(rows, historicalOrders, isSuperadmin ? sourceRecords : []);
+      setSuccess(
+        `Saved ${rows.length} contact lead${rows.length === 1 ? '' : 's'}`
+        + `${historicalOrders.length ? ` and ${historicalOrders.length} historical order record${historicalOrders.length === 1 ? '' : 's'}` : ''}`
+        + `${isSuperadmin && sourceRecords.length ? ` and ${sourceRecords.length} source detail record${sourceRecords.length === 1 ? '' : 's'}` : ''}.`,
+      );
       setPreview([]);
       setHistoryPreview([]);
+      setSourceRecordsPreview([]);
       setCsv('');
       setFirstName('');
       setLastName('');
@@ -940,6 +956,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             >
               Unified Timeline ({combinedTimeline.length})
             </button>
+            {isSuperadmin && (
+              <button
+                type="button"
+                onClick={() => setProfileActiveTab('source')}
+                className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                  profileActiveTab === 'source'
+                    ? 'bg-blue-50 text-blue-800'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                Source details ({profile?.sourceRecords.length ?? 0})
+              </button>
+            )}
           </div>
         </header>
 
@@ -1330,6 +1359,38 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     </article>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {profileActiveTab === 'source' && isSuperadmin && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-base font-bold text-slate-900">Imported source details</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Admin-only source rows retained for provenance. Payment and medical fields are not stored.
+                </p>
+                {profile.sourceRecords.length > 0 ? (
+                  <div className="mt-4 max-h-[34rem] space-y-3 overflow-y-auto pr-1">
+                    {profile.sourceRecords.map((record) => (
+                      <article key={record.id} className="rounded-xl border border-slate-200 p-4">
+                        <p className="text-xs font-semibold text-slate-800">
+                          {record.sourceFile} · {record.sourceSheet} · Row {record.sourceRow}
+                        </p>
+                        <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {Object.entries(record.data).map(([field, value]) => (
+                            <div key={`${record.id}-${field}`} className="min-w-0 rounded-lg bg-slate-50 p-2.5">
+                              <dt className="break-words text-[10px] font-semibold uppercase tracking-wide text-slate-400">{field}</dt>
+                              <dd className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-700">{value || '—'}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-4 rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                    No source workbook details have been retained for this contact.
+                  </p>
+                )}
               </section>
             )}
 
@@ -2356,6 +2417,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         The import also contains {historyPreview.length} historical order record{historyPreview.length === 1 ? '' : 's'} to attach to matching contacts.
                       </p>
                     )}
+                    {isSuperadmin && sourceRecordsPreview.length > 0 && (
+                      <p className="text-xs font-medium text-slate-700">
+                        {sourceRecordsPreview.length} safe source detail record{sourceRecordsPreview.length === 1 ? '' : 's'} will be retained for admin-only review. Payment and medical fields are excluded.
+                      </p>
+                    )}
                   </>
                 )}
 
@@ -2371,7 +2437,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <button
                     type="button"
                     disabled={!preview.length || saving}
-                    onClick={() => void save(preview, historyPreview)}
+                    onClick={() => void save(preview, historyPreview, sourceRecordsPreview)}
                     className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#1e40af] disabled:opacity-50"
                   >
                     {saving ? 'Importing…' : `Import ${preview.length} leads`}

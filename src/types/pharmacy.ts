@@ -155,6 +155,28 @@ export interface LeadHistoricalOrder {
   sourceSheet: string | null;
 }
 
+export interface LeadSourceRecord {
+  id: number;
+  sourceFile: string;
+  sourceSheet: string;
+  sourceRow: number;
+  data: Record<string, string>;
+}
+
+export interface LeadSourceRecordImportInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  postalCode: string;
+  sourceFile: string;
+  sourceSheet: string;
+  sourceRow: number;
+  sourceKey: string;
+  data: Record<string, string>;
+}
+
 export interface LeadHistoryImportInput {
   firstName: string;
   lastName: string;
@@ -175,6 +197,7 @@ export interface LeadProfile {
   lead: ContactLead;
   orders: OnlineOrder[];
   historicalOrders: LeadHistoricalOrder[];
+  sourceRecords: LeadSourceRecord[];
   activities: LeadActivity[];
 }
 

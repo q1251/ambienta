@@ -20,6 +20,7 @@ import {
   LeadActivityInput,
   LeadHistoryImportInput,
   LeadProfile,
+  LeadSourceRecordImportInput,
   OnlineOrder,
   CatalogItem,
   CartItem,
@@ -674,7 +675,11 @@ export default function App() {
     }
   };
 
-  const handleSaveLeads = async (newLeads: ContactLeadInput[], historicalOrders: LeadHistoryImportInput[] = []) => {
+  const handleSaveLeads = async (
+    newLeads: ContactLeadInput[],
+    historicalOrders: LeadHistoryImportInput[] = [],
+    sourceRecords: LeadSourceRecordImportInput[] = [],
+  ) => {
     const saved: ContactLead[] = [];
     for (let offset = 0; offset < newLeads.length; offset += 100) {
       const batch = newLeads.slice(offset, offset + 100);
@@ -701,6 +706,26 @@ export default function App() {
           throw new Error(`Imported ${saved.length} of ${newLeads.length} contacts before the next batch failed: ${detail}`);
         }
         throw error;
+      }
+    }
+    let importedSourceRecords = 0;
+    for (let offset = 0; offset < sourceRecords.length; offset += 100) {
+      const batch = sourceRecords.slice(offset, offset + 100);
+      try {
+        const response = await fetch('/api/data.php?resource=lead-source-records', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ records: batch }),
+        });
+        const result = await response.json() as { imported?: number; message?: string };
+        if (!response.ok || typeof result.imported !== 'number') {
+          throw new Error(result.message || 'Source detail records could not be saved.');
+        }
+        importedSourceRecords += result.imported;
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'Source detail records could not be saved.';
+        throw new Error(`Saved ${newLeads.length} contacts, but retained ${importedSourceRecords} of ${sourceRecords.length} source detail records: ${detail}`);
       }
     }
     let importedHistory = 0;
@@ -730,11 +755,11 @@ export default function App() {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
     });
-    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; historicalOrders?: LeadProfile['historicalOrders']; activities?: LeadActivity[]; message?: string };
-    if (!response.ok || !result.lead || !Array.isArray(result.orders) || !Array.isArray(result.historicalOrders) || !Array.isArray(result.activities)) {
+    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; historicalOrders?: LeadProfile['historicalOrders']; sourceRecords?: LeadProfile['sourceRecords']; activities?: LeadActivity[]; message?: string };
+    if (!response.ok || !result.lead || !Array.isArray(result.orders) || !Array.isArray(result.historicalOrders) || !Array.isArray(result.sourceRecords) || !Array.isArray(result.activities)) {
       throw new Error(result.message || 'The contact profile could not be loaded.');
     }
-    return { lead: result.lead, orders: result.orders, historicalOrders: result.historicalOrders, activities: result.activities };
+    return { lead: result.lead, orders: result.orders, historicalOrders: result.historicalOrders, sourceRecords: result.sourceRecords, activities: result.activities };
   };
 
   const handleUpdateLead = async (leadId: number, update: ContactLeadUpdate) => {

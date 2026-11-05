@@ -108,21 +108,33 @@ added in the inventory workspace are shared with product forms, price filters,
 the public storefront, and order items.
 
 Contact lead CSV imports accept `first_name`, `last_name`, `email`, and optional
-`phone`, `country`, and `marketing_consent`. Country is saved on the lead and
-shown in both the table and profile; when omitted, the CRM can infer it from an
-international phone prefix. Imported leads start at **Cold**; marketing
-consent is false unless the CSV explicitly contains an affirmative value
-(`yes`, `true`, `1`, or `opted in`). Do not infer consent from possession of an
-email address. Lead profiles support manual stages (Cold, Contacted, Qualified,
-Customer, Inactive), consent changes, and order history matched by email,
-including fulfillment status and tracking details. Order activity does not
-change the manually managed lead stage; update it from the profile when
-appropriate. Profiles show the phone dialer with click-to-call and allow staff
-to add internal comments. Stage changes save immediately and appear in a
-dedicated history with the previous and new stage, acting staff member, and
-timestamp. Contact edits are audited; comments retain their author and
-timestamp. Notes are operational only: never enter health, prescription,
-insurance, payment-card, or other sensitive personal information.
+`phone`, `country`, `address`, `postal_code`, and `marketing_consent`. They can
+also include `order_number`, `order_date`, `items`, `tracking_number`, and
+`carrier` to attach historical orders, plus `source_file`, `source_sheet`,
+`source_row`, `source_key`, and JSON `source_data` to retain safe row
+provenance. Multiple email addresses or phone numbers can be separated by
+semicolons. Imports accept up to 20,000 data rows per CSV; contacts, order
+history, and source rows are sent to the API in bounded batches.
+
+Country is saved on the lead and shown in both the table and profile; when
+omitted, the CRM can infer it from an international phone prefix. Imported
+leads start at **Cold**; marketing consent is false unless the CSV explicitly
+contains an affirmative value (`yes`, `true`, `1`, or `opted in`). Do not infer
+consent from possession of an email address. Only the primary administrator
+can retain and view source-row details. Payment-card and medical fields, and
+card-like values that pass a checksum, are excluded; still review spreadsheet
+columns before importing and do not upload payment or clinical records.
+
+Lead profiles support manual stages (Cold, Contacted, Qualified, Customer,
+Inactive), consent changes, and order history matched to contacts, including
+fulfillment status and tracking details. Order activity does not change the
+manually managed lead stage; update it from the profile when appropriate.
+Profiles show the phone dialer with click-to-call and allow staff to add
+internal comments. Stage changes save immediately and appear in a dedicated
+history with the previous and new stage, acting staff member, and timestamp.
+Contact edits are audited; comments retain their author and timestamp. Notes
+are operational only: never enter health, prescription, insurance,
+payment-card, or other sensitive personal information.
 
 Only the primary administrator (the `admin` role / superadmin) can edit a
 lead's name, email, phone number, or country. This is enforced by the data API;
