@@ -220,6 +220,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   }, [props.email, props.role]);
   useEffect(() => {
     let failureReported = false;
+    let requestInProgress = false;
     const presencePermission = activeTab === 'orders' ? 'orders'
       : activeTab === 'inventory' ? 'products'
         : activeTab === 'leads' ? 'leads'
@@ -233,7 +234,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
       || (presencePermission !== null && !props.permissions.includes(presencePermission))
     ) ? 'overview' : activeTab;
     const heartbeat = async () => {
-      if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+      if (requestInProgress) return;
+      requestInProgress = true;
       try {
         const response = await fetch('/api/data.php?resource=staff-presence', {
           method: 'POST',
@@ -252,13 +254,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           console.error('Ambients CRM presence could not be updated.', error);
           failureReported = true;
         }
+      } finally {
+        requestInProgress = false;
       }
     };
-    const refreshPresence = () => {
-      if (document.visibilityState === 'visible' && document.hasFocus()) void heartbeat();
-    };
+    const refreshPresence = () => void heartbeat();
     void heartbeat();
-    const timer = window.setInterval(() => void heartbeat(), 30_000);
+    const timer = window.setInterval(() => void heartbeat(), 20_000);
     document.addEventListener('visibilitychange', refreshPresence);
     window.addEventListener('focus', refreshPresence);
     return () => {

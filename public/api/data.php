@@ -862,7 +862,7 @@ function data_chat_admin_online(PDO $db): bool
 {
     $query = $db->query('SELECT last_seen_at FROM staff_presence WHERE staff_id = 0 LIMIT 1');
     $lastSeen = $query->fetchColumn();
-    return is_string($lastSeen) && strtotime($lastSeen . ' UTC') >= time() - 90;
+    return is_string($lastSeen) && strtotime($lastSeen . ' UTC') >= time() - 120;
 }
 
 function data_chat_agents_can_claim(PDO $db): bool
@@ -4956,7 +4956,7 @@ if ($method === 'GET') {
             $lastSeenTimestamp = $lastSeenAt !== null ? strtotime($lastSeenAt . ' UTC') : false;
             $isOnline = (bool) $staffProfile['is_active']
                 && $lastSeenTimestamp !== false
-                && $lastSeenTimestamp >= $now - 90;
+                && $lastSeenTimestamp >= $now - 120;
             $staffProfile['presence'] = [
                 'online' => $isOnline,
                 'durationSeconds' => $isOnline && $sessionStartedTimestamp !== false
@@ -5060,7 +5060,7 @@ if ($method === 'GET') {
         data_respond(200, [
             'admin' => (static function () use ($db, $now): array {
                 $row = $db->query("SELECT session_started_at, last_seen_at, current_section FROM staff_presence WHERE staff_id = 0 LIMIT 1")->fetch();
-                $online = is_array($row) && strtotime((string) $row['last_seen_at'] . ' UTC') >= $now - 90;
+                $online = is_array($row) && strtotime((string) $row['last_seen_at'] . ' UTC') >= $now - 120;
                 return [
                     'online' => $online,
                     'durationSeconds' => $online ? max(0, $now - strtotime((string) $row['session_started_at'] . ' UTC')) : 0,
@@ -5069,7 +5069,7 @@ if ($method === 'GET') {
             })(),
             'staff' => array_map(static function (array $row) use ($now): array {
                 $lastSeen = is_string($row['last_seen_at']) ? strtotime($row['last_seen_at'] . ' UTC') : false;
-                $online = $lastSeen !== false && $lastSeen >= $now - 90 && (bool) $row['is_active'];
+                $online = $lastSeen !== false && $lastSeen >= $now - 120 && (bool) $row['is_active'];
                 return [
                     'id' => (int) $row['id'],
                     'displayName' => $row['display_name'],
@@ -5170,7 +5170,7 @@ if ($method === 'POST' && $resource === 'staff-presence') {
             'INSERT INTO staff_presence (staff_id, session_started_at, last_seen_at, current_section)
              VALUES (?, UTC_TIMESTAMP(), UTC_TIMESTAMP(), ?)
              ON DUPLICATE KEY UPDATE
-                session_started_at = IF(last_seen_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 SECOND), UTC_TIMESTAMP(), session_started_at),
+                session_started_at = IF(last_seen_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 120 SECOND), UTC_TIMESTAMP(), session_started_at),
                 last_seen_at = UTC_TIMESTAMP(),
                 current_section = VALUES(current_section)'
         );
@@ -5678,6 +5678,9 @@ if ($method === 'PATCH' && $resource === 'staff') {
     try {
         $db->beginTransaction();
         $db->prepare('UPDATE staff_users SET ' . implode(', ', $updates) . ' WHERE id = ?')->execute($parameters);
+        $db->prepare(
+            'UPDATE staff_presence SET last_seen_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 121 SECOND) WHERE staff_id = ?'
+        )->execute([$id]);
         if ($shouldRequeueChats) {
             $ownedChats = $db->prepare("SELECT id FROM chat_conversations WHERE owner_type = 'agent' AND owner_staff_id = ? AND status = 'open' FOR UPDATE");
             $ownedChats->execute([$id]);

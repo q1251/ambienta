@@ -559,6 +559,19 @@ if ($action === 'change-password' && $method === 'POST') {
 
 if ($action === 'logout' && $method === 'POST') {
     start_admin_session();
+    $presenceId = ($_SESSION['admin_role'] ?? '') === 'admin'
+        ? 0
+        : (int) ($_SESSION['staff_id'] ?? 0);
+    if ($presenceId >= 0 && ($presenceId > 0 || ($_SESSION['admin_role'] ?? '') === 'admin')) {
+        try {
+            $presence = connect_staff_database()->prepare(
+                'UPDATE staff_presence SET last_seen_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 121 SECOND) WHERE staff_id = ?'
+            );
+            $presence->execute([$presenceId]);
+        } catch (Throwable $error) {
+            error_log('Ambients staff presence could not be marked offline during logout: ' . $error->getMessage());
+        }
+    }
     $_SESSION = [];
     $cookie = session_get_cookie_params();
     setcookie(session_name(), '', [

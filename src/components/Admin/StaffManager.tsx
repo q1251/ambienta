@@ -536,9 +536,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <p className="mt-0.5 text-xs text-slate-600">{selectedProfile.email} · {selectedProfile.is_active ? 'Active' : 'Inactive'} agent</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {selectedProfile.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(selectedProfile)} className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-3.5 w-3.5" />Enter</button>}
                   <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { resetPassword: true }, 'A new one-time password was generated.')} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><KeyRound className="h-3.5 w-3.5" />Reset password</button>
                   <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { isActive: !selectedProfile.is_active }, `Agent ${selectedProfile.is_active ? 'deactivated' : 'activated'}.`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><UserX className="h-3.5 w-3.5" />{selectedProfile.is_active ? 'Deactivate' : 'Activate'}</button>
+                  {selectedProfile.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(selectedProfile)} className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-3.5 w-3.5" />Enter</button>}
                 </div>
               </header>
 
