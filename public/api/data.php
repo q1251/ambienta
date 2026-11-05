@@ -425,6 +425,8 @@ function data_ensure_schema(PDO $db): void
             payment_link_url VARCHAR(2048) NULL,
             payment_link_type VARCHAR(32) NULL,
             payment_link_name VARCHAR(80) NULL,
+            payment_crypto_asset VARCHAR(8) NULL,
+            payment_crypto_network VARCHAR(32) NULL,
             payment_link_sent_at DATETIME NULL,
             stripe_checkout_session_id VARCHAR(255) NULL,
             stripe_payment_intent_id VARCHAR(255) NULL,
@@ -443,6 +445,8 @@ function data_ensure_schema(PDO $db): void
         ['payment_link_url', 'VARCHAR(2048) NULL'],
         ['payment_link_type', 'VARCHAR(32) NULL'],
         ['payment_link_name', 'VARCHAR(80) NULL'],
+        ['payment_crypto_asset', 'VARCHAR(8) NULL'],
+        ['payment_crypto_network', 'VARCHAR(32) NULL'],
         ['payment_link_sent_at', 'DATETIME NULL'],
     ] as [$column, $definition]) {
         $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
@@ -2303,6 +2307,8 @@ function data_order_row(PDO $db, array $row): array
         'paymentLinkUrl' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_url'] ?? null) : null,
         'paymentLinkType' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_type'] ?? null) : null,
         'paymentLinkName' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_name'] ?? null) : null,
+        'paymentCryptoAsset' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_crypto_asset'] ?? null) : null,
+        'paymentCryptoNetwork' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_crypto_network'] ?? null) : null,
         'paymentLinkSentAt' => $row['payment_link_sent_at'] ?? null,
         'transactionId' => $row['stripe_payment_intent_id'] ?? null,
         'status' => $row['status'],
@@ -5207,10 +5213,12 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     if ($paymentLinkType === '') {
         $paymentLinkType = 'provider';
     }
-    if (!in_array($paymentLinkType, ['provider', 'crypto_wallet', 'custom'], true)) {
+    if (!in_array($paymentLinkType, ['provider', 'paypal', 'crypto_wallet', 'custom'], true)) {
         data_respond(400, ['error' => 'invalid_payment_link_type', 'message' => 'Choose a supported payment link type.']);
     }
     $paymentLinkName = data_string($body, 'paymentLinkName', 80, false);
+    $paymentCryptoAsset = data_string($body, 'paymentCryptoAsset', 8, false);
+    $paymentCryptoNetwork = data_string($body, 'paymentCryptoNetwork', 32, false);
     if ($paymentLinkType === 'custom' && trim($paymentLinkName) === '') {
         data_respond(400, ['error' => 'payment_link_name_required', 'message' => 'Enter a name for the custom payment link.']);
     }
@@ -5282,19 +5290,22 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             && isset($linkParts['host'])
             && !isset($linkParts['user'])
             && !isset($linkParts['pass']);
-        $isCryptoOrder = $order['payment_method'] === 'Cryptocurrency (USDC / BTC / ETH / SOL)';
-        $isCryptoWalletUri = $isCryptoOrder
-            && preg_match('/^(?:bitcoin|ethereum|solana):[A-Za-z0-9][A-Za-z0-9._?=&%+\-]{0,500}$/i', $paymentLink) === 1;
-        $isCryptoWalletAddress = $isCryptoOrder && (
-            preg_match('/^(?:1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/', $paymentLink) === 1
-            || preg_match('/^bc1[a-z0-9]{25,60}$/', $paymentLink) === 1
-            || preg_match('/^0x[a-fA-F0-9]{40}$/', $paymentLink) === 1
-            || (strlen($paymentLink) >= 32 && strlen($paymentLink) <= 44
-                && preg_match('/^[1-9A-HJ-NP-Za-km-z]+$/', $paymentLink) === 1)
-        );
+        $cryptoNetworkMatches = match ($paymentCryptoAsset) {
+            'BTC' => $paymentCryptoNetwork === 'Bitcoin',
+            'ETH' => $paymentCryptoNetwork === 'Ethereum (ERC-20)',
+            'USDT' => in_array($paymentCryptoNetwork, ['Ethereum (ERC-20)', 'TRON (TRC-20)'], true),
+            default => false,
+        };
+        $isCryptoWalletAddress = $cryptoNetworkMatches && match ([$paymentCryptoAsset, $paymentCryptoNetwork]) {
+            ['BTC', 'Bitcoin'] => preg_match('/^(?:1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/', $paymentLink) === 1
+                || preg_match('/^bc1[a-z0-9]{25,60}$/', $paymentLink) === 1,
+            ['ETH', 'Ethereum (ERC-20)'], ['USDT', 'Ethereum (ERC-20)'] => preg_match('/^0x[a-fA-F0-9]{40}$/', $paymentLink) === 1,
+            ['USDT', 'TRON (TRC-20)'] => preg_match('/^T[1-9A-HJ-NP-Za-km-z]{33}$/', $paymentLink) === 1,
+            default => false,
+        };
         $isValidPaymentLink = match ($paymentLinkType) {
-            'provider', 'custom' => $isHttpsPaymentLink,
-            'crypto_wallet' => $isCryptoOrder && ($isCryptoWalletUri || $isCryptoWalletAddress),
+            'provider', 'paypal', 'custom' => $isHttpsPaymentLink,
+            'crypto_wallet' => $isCryptoWalletAddress,
             default => false,
         };
         if (!$previewOnly && (
@@ -5305,9 +5316,9 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             data_respond(400, [
                 'error' => 'invalid_payment_link',
                 'message' => match ($paymentLinkType) {
-                    'crypto_wallet' => 'Enter a Bitcoin, Ethereum, or Solana payment URI or supported wallet address for this cryptocurrency order.',
+                    'crypto_wallet' => 'Choose BTC, ETH, or USDT with a supported network and enter a wallet address matching that asset and network.',
                     'custom' => 'Enter a valid external HTTPS URL for the custom payment link.',
-                    default => 'Enter a valid PayPal or payment-provider HTTPS link.',
+                    default => 'Enter a valid PayPal, payment-provider, or custom HTTPS link.',
                 },
             ]);
         }
@@ -5320,17 +5331,27 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $paymentLinkLabel = $paymentLinkType === 'custom'
             ? trim($paymentLinkName)
             : ($paymentLinkType === 'crypto_wallet'
-                ? 'Crypto wallet address / payment URI'
-                : ($order['payment_method'] === 'PayPal' ? 'PayPal payment link' : 'Payment provider link'));
+                ? $paymentCryptoAsset . ' wallet address (' . $paymentCryptoNetwork . ')'
+                : ($paymentLinkType === 'paypal'
+                    ? 'PayPal payment link'
+                    : ($paymentLinkType === 'provider' ? 'Payment provider link' : 'Custom link')));
+        $emailPaymentMethod = $paymentLinkType === 'crypto_wallet'
+            ? $paymentCryptoAsset . ' on ' . $paymentCryptoNetwork
+            : ($paymentLinkType === 'paypal'
+                ? 'PayPal'
+                : ($paymentLinkType === 'custom' ? trim($paymentLinkName) : $order['payment_method']));
         $subject = ($previewOnly ? '[DEMO PREVIEW] ' : '')
             . $template['subject'] . ' for Ambient order ' . $order['order_number'];
-        $paymentInstructions = match ($order['payment_method']) {
-            'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
-            'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
-            'Cryptocurrency (USDC / BTC / ETH / SOL)' => !$isHttpsPaymentLink
-                ? 'Send only the specified cryptocurrency on the correct network. Verify the asset, network, and full wallet address before confirming a transfer.'
-                : 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
-            default => '',
+        $paymentInstructions = match ($paymentLinkType) {
+            'crypto_wallet' => "Send only {$paymentCryptoAsset} on {$paymentCryptoNetwork}. Verify the asset, network, and full wallet address before confirming a transfer.",
+            'paypal' => 'Use the PayPal link below and confirm the order total before approving payment.',
+            'custom' => 'Use the custom payment link below. Check the link name and destination before completing payment.',
+            default => match ($order['payment_method']) {
+                'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
+                'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
+                'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
+                default => '',
+            },
         };
         $intro = sprintf($template['intro'], $order['order_number']);
         $closing = $template['closing'];
@@ -5338,7 +5359,7 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             . $intro . "\n\n"
             . "ORDER SUMMARY\n"
             . "Order: {$order['order_number']}\n"
-            . "Payment method: {$order['payment_method']}\n"
+            . "Payment method: {$emailPaymentMethod}\n"
             . "Total due: $" . number_format((float) $order['total_amount'], 2) . "\n\n"
             . $paymentInstructions . "\n\n"
             . "{$paymentLinkLabel}:\n{$paymentLink}\n";
@@ -5360,7 +5381,6 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         }
         $safeName = htmlspecialchars((string) $order['customer_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeOrderNumber = htmlspecialchars((string) $order['order_number'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $safeMethod = htmlspecialchars((string) $order['payment_method'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeIntro = htmlspecialchars($intro, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeClosing = htmlspecialchars($closing, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeInstructions = htmlspecialchars($paymentInstructions, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -5373,7 +5393,7 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $htmlBody = '<p>Hello ' . $safeName . ',</p><p>' . $safeIntro . '</p>'
             . '<div style="padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">'
             . '<strong>Order summary</strong><br>Order: ' . $safeOrderNumber
-            . '<br>Payment method: ' . $safeMethod . '<br>Total due: <strong>$'
+            . '<br>Payment method: ' . htmlspecialchars($emailPaymentMethod, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '<br>Total due: <strong>$'
             . number_format((float) $order['total_amount'], 2) . '</strong></div>'
             . '<p>' . $safeInstructions . '</p>'
             . '<p>' . $htmlPaymentLink . '</p>'
@@ -5414,8 +5434,15 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         }
 
         if (!$previewOnly) {
-            $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_type = ?, payment_link_name = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
-                ->execute([$paymentLink, $paymentLinkType, $paymentLinkType === 'custom' ? trim($paymentLinkName) : null, $orderId]);
+            $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_type = ?, payment_link_name = ?, payment_crypto_asset = ?, payment_crypto_network = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
+                ->execute([
+                    $paymentLink,
+                    $paymentLinkType,
+                    $paymentLinkType === 'custom' ? trim($paymentLinkName) : null,
+                    $paymentLinkType === 'crypto_wallet' ? $paymentCryptoAsset : null,
+                    $paymentLinkType === 'crypto_wallet' ? $paymentCryptoNetwork : null,
+                    $orderId,
+                ]);
         }
         $db->prepare('UPDATE email_activity SET status = ?, message_id = ? WHERE id = ?')
             ->execute(['Sent', $messageId, $activityId]);

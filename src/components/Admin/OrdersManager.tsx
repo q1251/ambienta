@@ -74,15 +74,12 @@ const paymentStatusClass = (status?: OnlineOrder['paymentStatus']): string => {
   return 'bg-amber-50 text-amber-800';
 };
 
-const paymentInstructionsForMethod = (method: string, cryptoWalletInput = false): string => {
+const paymentInstructionsForMethod = (method: string): string => {
   if (method === 'Credit / Debit Card') {
     return 'Complete your card payment using the secure provider link. Enter card details only on the provider checkout page.';
   }
   if (method === 'PayPal') {
     return 'Continue to PayPal using the secure provider link and confirm the order total before approving payment.';
-  }
-  if (cryptoWalletInput) {
-    return 'Send only the specified cryptocurrency on the correct network. Verify the asset, network, and full wallet address before confirming a transfer.';
   }
   return 'Use the secure provider link to review the available cryptocurrency and network, then follow the provider checkout instructions.';
 };
@@ -94,7 +91,9 @@ type PaymentEmailTemplate =
   | 'payment_reminder_final'
   | 'payment_link_updated';
 
-type PaymentLinkType = 'provider' | 'crypto_wallet' | 'custom';
+type PaymentLinkType = 'provider' | 'paypal' | 'crypto_wallet' | 'custom';
+type CryptoAsset = 'BTC' | 'ETH' | 'USDT';
+type CryptoNetwork = 'Bitcoin' | 'Ethereum (ERC-20)' | 'TRON (TRC-20)';
 
 const paymentEmailTemplates: Record<PaymentEmailTemplate, { label: string; intro: (orderNumber: string) => string; closing: string }> = {
   payment_request: {
@@ -173,6 +172,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [paymentLinkInput, setPaymentLinkInput] = useState('');
   const [paymentLinkType, setPaymentLinkType] = useState<PaymentLinkType>('provider');
   const [paymentLinkName, setPaymentLinkName] = useState('');
+  const [paymentCryptoAsset, setPaymentCryptoAsset] = useState<CryptoAsset>('BTC');
+  const [paymentCryptoNetwork, setPaymentCryptoNetwork] = useState<CryptoNetwork>('Bitcoin');
   const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<PaymentEmailTemplate>('payment_request');
   const [paymentEmailNote, setPaymentEmailNote] = useState('');
   const [isPaymentEmailModalOpen, setIsPaymentEmailModalOpen] = useState(false);
@@ -247,8 +248,12 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   useEffect(() => {
     setPaymentLinkInput(selectedOrder?.paymentLinkUrl || '');
-    setPaymentLinkType(selectedOrder?.paymentLinkType || 'provider');
+    setPaymentLinkType(selectedOrder?.paymentLinkType === 'provider' && selectedOrder.paymentMethod === 'PayPal'
+      ? 'paypal'
+      : selectedOrder?.paymentLinkType || (selectedOrder?.paymentMethod === 'PayPal' ? 'paypal' : 'provider'));
     setPaymentLinkName(selectedOrder?.paymentLinkName || '');
+    setPaymentCryptoAsset(selectedOrder?.paymentCryptoAsset || 'BTC');
+    setPaymentCryptoNetwork(selectedOrder?.paymentCryptoNetwork || (selectedOrder?.paymentCryptoAsset === 'ETH' ? 'Ethereum (ERC-20)' : 'Bitcoin'));
     setPaymentEmailTemplate(selectedOrder?.paymentLinkSentAt ? 'payment_reminder' : 'payment_request');
     setPaymentEmailNote('');
   }, [
@@ -256,6 +261,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     selectedOrder?.paymentLinkUrl,
     selectedOrder?.paymentLinkType,
     selectedOrder?.paymentLinkName,
+    selectedOrder?.paymentCryptoAsset,
+    selectedOrder?.paymentCryptoNetwork,
   ]);
 
   useEffect(() => {
@@ -412,6 +419,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           paymentLinkUrl: paymentLinkInput.trim(),
           paymentLinkType,
           paymentLinkName: paymentLinkName.trim(),
+          paymentCryptoAsset,
+          paymentCryptoNetwork,
           emailTemplate: paymentEmailTemplate,
           additionalMessage: paymentEmailNote.trim(),
           previewOnly,
@@ -1355,12 +1364,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   }}
                   className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
                 >
-                  <option value="provider">
-                    {selectedOrder.paymentMethod === 'PayPal' ? 'PayPal link' : 'Payment provider link'}
-                  </option>
-                  {selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)' && (
-                    <option value="crypto_wallet">Crypto wallet address / URI</option>
+                  {selectedOrder.paymentMethod !== 'PayPal' && (
+                    <option value="provider">Payment provider link</option>
                   )}
+                  <option value="paypal">PayPal link</option>
+                  <option value="crypto_wallet">Crypto wallet</option>
                   <option value="custom">Custom link</option>
                 </select>
               </label>
@@ -1378,15 +1386,57 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   />
                 </label>
               )}
+              {paymentLinkType === 'crypto_wallet' && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label htmlFor="order-payment-crypto-asset" className="block text-xs font-semibold text-slate-800">
+                    Asset
+                    <select
+                      id="order-payment-crypto-asset"
+                      value={paymentCryptoAsset}
+                      onChange={(event) => {
+                        const asset = event.target.value as CryptoAsset;
+                        setPaymentCryptoAsset(asset);
+                        setPaymentCryptoNetwork(asset === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC-20)');
+                      }}
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                    >
+                      <option value="BTC">Bitcoin (BTC)</option>
+                      <option value="ETH">Ethereum (ETH)</option>
+                      <option value="USDT">Tether (USDT)</option>
+                    </select>
+                  </label>
+                  <label htmlFor="order-payment-crypto-network" className="block text-xs font-semibold text-slate-800">
+                    Network
+                    <select
+                      id="order-payment-crypto-network"
+                      value={paymentCryptoNetwork}
+                      onChange={(event) => setPaymentCryptoNetwork(event.target.value as CryptoNetwork)}
+                      disabled={paymentCryptoAsset !== 'USDT'}
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20 disabled:bg-slate-100 disabled:text-slate-600"
+                    >
+                      {paymentCryptoAsset === 'BTC' ? (
+                        <option value="Bitcoin">Bitcoin</option>
+                      ) : paymentCryptoAsset === 'ETH' ? (
+                        <option value="Ethereum (ERC-20)">Ethereum (ERC-20)</option>
+                      ) : (
+                        <>
+                          <option value="Ethereum (ERC-20)">Ethereum (ERC-20)</option>
+                          <option value="TRON (TRC-20)">TRON (TRC-20)</option>
+                        </>
+                      )}
+                    </select>
+                  </label>
+                </div>
+              )}
               <label htmlFor="order-payment-link" className="block text-xs font-semibold text-slate-800">
-                {paymentLinkType === 'crypto_wallet' ? 'Crypto wallet address or URI' : 'Payment link'}
+                {paymentLinkType === 'crypto_wallet' ? `${paymentCryptoAsset} wallet address` : 'Payment link'}
                 <input
                   id="order-payment-link"
                   type="text"
                   value={paymentLinkInput}
                   onChange={(event) => setPaymentLinkInput(event.target.value)}
                   placeholder={paymentLinkType === 'crypto_wallet'
-                    ? 'https://… or crypto wallet address'
+                    ? 'Enter the wallet address'
                     : 'https://…'}
                   autoComplete="url"
                   autoFocus
@@ -1395,7 +1445,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </label>
               <p className="-mt-2 text-[11px] leading-5 text-slate-500">
                 {paymentLinkType === 'crypto_wallet'
-                  ? 'Enter a Bitcoin, Ethereum, or Solana payment URI or supported wallet address.'
+                  ? `Only use a ${paymentCryptoAsset} receiving address on ${paymentCryptoNetwork}.`
                   : paymentLinkType === 'custom'
                     ? 'Enter a custom HTTPS URL and the name customers should see in the email.'
                     : 'Enter a PayPal or payment-provider HTTPS link.'}
@@ -1425,22 +1475,30 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     <div className="rounded-lg border border-slate-200 p-3">
                       <p className="font-semibold text-slate-900">Order summary</p>
                       <p>Order: {selectedOrder.orderNumber}</p>
-                      <p>Payment method: {selectedOrder.paymentMethod}</p>
+                      <p>Payment method: {paymentLinkType === 'crypto_wallet'
+                        ? `${paymentCryptoAsset} on ${paymentCryptoNetwork}`
+                        : paymentLinkType === 'paypal'
+                          ? 'PayPal'
+                          : paymentLinkType === 'custom'
+                            ? paymentLinkName.trim() || 'Custom link'
+                            : selectedOrder.paymentMethod}</p>
+                      {paymentLinkType === 'crypto_wallet' && (
+                        <p>Asset/network: {paymentCryptoAsset} · {paymentCryptoNetwork}</p>
+                      )}
                       <p>Total due: ${selectedOrder.totalAmount.toFixed(2)}</p>
                     </div>
-                    <p>{paymentInstructionsForMethod(
-                      selectedOrder.paymentMethod || '',
-                      paymentLinkType === 'crypto_wallet'
-                        && Boolean(paymentLinkInput.trim())
-                        && !/^https:\/\//i.test(paymentLinkInput.trim()),
-                    )}</p>
+                    <p>{paymentLinkType === 'crypto_wallet'
+                      ? `Send only ${paymentCryptoAsset} on ${paymentCryptoNetwork}. Verify the asset, network, and full wallet address before confirming a transfer.`
+                      : paymentLinkType === 'paypal'
+                        ? 'Continue to PayPal using the link below and confirm the order total before approving payment.'
+                        : paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
                     <p className="font-semibold text-teal-800">
                       {paymentLinkInput.trim()
-                        ? paymentLinkType === 'crypto_wallet' && !/^https:\/\//i.test(paymentLinkInput.trim())
-                          ? `Crypto wallet address / URI: ${paymentLinkInput.trim()}`
+                        ? paymentLinkType === 'crypto_wallet'
+                          ? `${paymentCryptoAsset} wallet address (${paymentCryptoNetwork}): ${paymentLinkInput.trim()}`
                           : paymentLinkType === 'custom'
                             ? `${paymentLinkName.trim() || '[Custom link name]'}: ${paymentLinkInput.trim()}`
-                            : `${selectedOrder.paymentMethod === 'PayPal' ? 'PayPal link' : 'Payment provider link'}: ${paymentLinkInput.trim()}`
+                            : `${paymentLinkType === 'paypal' ? 'PayPal link' : 'Payment provider link'}: ${paymentLinkInput.trim()}`
                         : '[Payment link or wallet address appears here]'}
                     </p>
                     {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}

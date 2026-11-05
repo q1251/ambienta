@@ -183,6 +183,8 @@ export interface OnlineOrder {
   paymentLinkUrl?: string | null;
   paymentLinkType?: 'provider' | 'crypto_wallet' | 'custom' | null;
   paymentLinkName?: string | null;
+  paymentCryptoAsset?: 'BTC' | 'ETH' | 'USDT' | null;
+  paymentCryptoNetwork?: 'Bitcoin' | 'Ethereum (ERC-20)' | 'TRON (TRC-20)' | null;
   paymentLinkSentAt?: string | null;
   transactionId?: string;
   cryptoDetails?: CryptoPaymentDetails;
