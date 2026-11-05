@@ -21,6 +21,8 @@ interface AuthResponse {
 export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenticated }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailEditable, setEmailEditable] = useState(false);
+  const [passwordEditable, setPasswordEditable] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,6 +123,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
                   id="admin-email"
                   type="email"
                   autoComplete="off"
+                  readOnly={!emailEditable}
+                  onFocus={() => setEmailEditable(true)}
                   required
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -135,7 +139,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ setupMessage, onAuthenti
                   <input
                     id="admin-password"
                     type={showPassword ? 'text' : 'password'}
-                    autoComplete="off"
+                    autoComplete="new-password"
+                    readOnly={!passwordEditable}
+                    onFocus={() => setPasswordEditable(true)}
                     required
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
