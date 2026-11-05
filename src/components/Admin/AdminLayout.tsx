@@ -56,7 +56,7 @@ interface AdminLayoutProps {
     role: 'operator';
     email: string;
     displayName: string;
-    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'orders' | 'print_orders' | 'products' | 'integrations' | 'email_campaigns' | 'chat'>;
+    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'view_lead_emails' | 'view_lead_phone_numbers' | 'orders' | 'print_orders' | 'products' | 'integrations' | 'email_campaigns' | 'chat'>;
     impersonating: true;
     impersonatedBy: string;
   }) => void;

@@ -831,7 +831,7 @@ function data_require_lead_access(PDO $db, int $leadId, bool $allowUnassignedNew
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'print_orders', 'products', 'integrations', 'email_campaigns', 'chat'];
+    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'view_lead_emails', 'view_lead_phone_numbers', 'orders', 'print_orders', 'products', 'integrations', 'email_campaigns', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
@@ -839,7 +839,8 @@ function data_staff_permissions($permissions): ?array
     $permissions = array_values(array_unique($permissions));
     if ((in_array('new_leads', $permissions, true) || in_array('create_leads', $permissions, true)
         || in_array('add_leads', $permissions, true) || in_array('import_leads', $permissions, true)
-        || in_array('export_leads', $permissions, true)) && !in_array('leads', $permissions, true)) return null;
+        || in_array('export_leads', $permissions, true) || in_array('view_lead_emails', $permissions, true)
+        || in_array('view_lead_phone_numbers', $permissions, true)) && !in_array('leads', $permissions, true)) return null;
     if (in_array('print_orders', $permissions, true) && !in_array('orders', $permissions, true)) return null;
     if (in_array('email_campaigns', $permissions, true) && !in_array('integrations', $permissions, true)) return null;
     if (in_array('create_leads', $permissions, true)) {
@@ -2356,8 +2357,11 @@ function data_lead_row(array $row): array
                 : ($hasEmail ? 'email_only'
                     : ($hasPhone && $hasName ? 'phone_name'
                         : ($hasPhone ? 'phone_only' : ($hasAddress ? 'address_only' : 'incomplete'))))));
-    if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+    $isAdmin = ($_SESSION['admin_role'] ?? '') === 'admin';
+    if (!$isAdmin && !in_array('view_lead_emails', $_SESSION['admin_permissions'] ?? [], true)) {
         $email = $email === '' ? '' : data_mask_contact_email($email);
+    }
+    if (!$isAdmin && !in_array('view_lead_phone_numbers', $_SESSION['admin_permissions'] ?? [], true)) {
         $phone = $phone === '' ? '' : data_mask_contact_phone($phone);
     }
     $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
@@ -3434,6 +3438,7 @@ if (in_array($resource, [
         }
         $db = data_db();
         $includeUnassignedNew = in_array('new_leads', $_SESSION['admin_permissions'] ?? [], true);
+        $canViewLeadEmails = in_array('view_lead_emails', $_SESSION['admin_permissions'] ?? [], true);
         $query = $db->prepare(
             'SELECT id, first_name, last_name, email FROM leads
              WHERE assigned_staff_id = ?' . ($includeUnassignedNew ? " OR (assigned_staff_id IS NULL AND status = 'New')" : '') . '
@@ -3443,7 +3448,7 @@ if (in_array($resource, [
         $recipients = array_map(static fn (array $row): array => [
             'id' => (int) $row['id'],
             'name' => trim((string) $row['first_name'] . ' ' . (string) $row['last_name']),
-            'email' => data_mask_contact_email((string) $row['email']),
+            'email' => $canViewLeadEmails ? (string) $row['email'] : data_mask_contact_email((string) $row['email']),
         ], $query->fetchAll());
         data_respond(200, ['recipients' => $recipients]);
     }

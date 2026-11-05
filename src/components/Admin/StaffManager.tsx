@@ -7,6 +7,8 @@ const availablePermissions = [
   { id: 'add_leads', label: 'Add contacts' },
   { id: 'import_leads', label: 'Import contacts (CSV)' },
   { id: 'export_leads', label: 'Export contacts (CSV)' },
+  { id: 'view_lead_emails', label: 'View lead email addresses' },
+  { id: 'view_lead_phone_numbers', label: 'View lead phone numbers' },
   { id: 'orders', label: 'Orders' },
   { id: 'print_orders', label: 'Print orders' },
   { id: 'products', label: 'Products & stock' },
@@ -17,7 +19,8 @@ const availablePermissions = [
 type StaffPermission = (typeof availablePermissions)[number]['id'];
 const permissionRequiresLeads = (permission: StaffPermission) =>
   permission === 'new_leads' || permission === 'add_leads'
-  || permission === 'import_leads' || permission === 'export_leads';
+  || permission === 'import_leads' || permission === 'export_leads'
+  || permission === 'view_lead_emails' || permission === 'view_lead_phone_numbers';
 const permissionRequiresOrders = (permission: StaffPermission) => permission === 'print_orders';
 const permissionRequiresEmail = (permission: StaffPermission) => permission === 'email_campaigns';
 
@@ -210,7 +213,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     if (permissionRequiresEmail(permission) && !current.includes('integrations')) return;
     if (permission === 'leads' && current.includes('leads')) {
       update(current.filter((value) => value !== 'leads' && value !== 'new_leads'
-        && value !== 'add_leads' && value !== 'import_leads' && value !== 'export_leads'));
+        && value !== 'add_leads' && value !== 'import_leads' && value !== 'export_leads'
+        && value !== 'view_lead_emails' && value !== 'view_lead_phone_numbers'));
       return;
     }
     if (permission === 'orders' && current.includes('orders')) {
