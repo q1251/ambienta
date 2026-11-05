@@ -334,7 +334,9 @@ export default function App() {
     setMustChangePassword(false);
     setIsImpersonating(false);
     setImpersonatedBy('');
-    navigateTo('/admin');
+    setAdminAuthSetupMessage(undefined);
+    window.history.replaceState(null, '', '/admin');
+    setCurrentPath('/admin');
   };
 
   const handleEnterAgent = (session: {
