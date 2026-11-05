@@ -776,7 +776,7 @@ function data_require_lead_access(PDO $db, int $leadId, bool $allowUnassignedNew
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'products', 'integrations', 'chat'];
+    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'print_orders', 'products', 'integrations', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
@@ -785,6 +785,7 @@ function data_staff_permissions($permissions): ?array
     if ((in_array('new_leads', $permissions, true) || in_array('create_leads', $permissions, true)
         || in_array('add_leads', $permissions, true) || in_array('import_leads', $permissions, true)
         || in_array('export_leads', $permissions, true)) && !in_array('leads', $permissions, true)) return null;
+    if (in_array('print_orders', $permissions, true) && !in_array('orders', $permissions, true)) return null;
     if (in_array('create_leads', $permissions, true)) {
         $permissions = array_values(array_diff($permissions, ['create_leads']));
         $permissions = array_merge($permissions, ['add_leads', 'import_leads', 'export_leads']);

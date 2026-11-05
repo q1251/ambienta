@@ -54,7 +54,7 @@ interface AdminLayoutProps {
     role: 'operator';
     email: string;
     displayName: string;
-    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'orders' | 'products' | 'integrations' | 'chat'>;
+    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'orders' | 'print_orders' | 'products' | 'integrations' | 'chat'>;
     impersonating: true;
     impersonatedBy: string;
   }) => void;
@@ -371,6 +371,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
                 onCreateManualOrder={props.onCreateManualOrder}
                 catalogItems={props.catalogItems}
                 canManagePaymentLinks={props.role === 'admin'}
+                canPrintOrders={props.role === 'admin' || props.permissions.includes('print_orders')}
               />
             )}
             {activeTab === 'inventory' && (
