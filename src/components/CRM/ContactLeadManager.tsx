@@ -828,8 +828,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         try {
           const refreshed = await onLoadLeadProfile(lead.id);
           if (requestId === profileRequestId.current) setProfile(refreshed);
-        } catch {
-          // Keep current profile state
+        } catch (error) {
+          if (requestId === profileRequestId.current) {
+            setProfileError(error instanceof Error
+              ? `The lead was saved, but its latest history could not be refreshed: ${error.message}`
+              : 'The lead was saved, but its latest history could not be refreshed. Reload the profile.');
+          }
         }
       }
       return true;
@@ -1422,6 +1426,32 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </select>
                       </div>
 
+                      <div className="border-t border-slate-100 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status change history</h3>
+                        <div className="mt-3 space-y-3">
+                          {profile.activities
+                            .filter((activity) => activity.type === 'status_change')
+                            .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+                            .map((activity) => (
+                              <article key={activity.id} className="border-l-2 border-blue-200 pl-3">
+                                <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                                  <span className="font-semibold text-slate-800">
+                                    {activity.fromStatus || 'Unknown'} <span aria-hidden="true">→</span> {activity.toStatus || 'Unknown'}
+                                  </span>
+                                  <time className="text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
+                                </div>
+                                <p className="mt-1 text-xs text-slate-600">
+                                  Changed by {activity.actorName || activity.actorEmail || 'Staff'}
+                                </p>
+                                {activity.note && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">{activity.note}</p>}
+                              </article>
+                            ))}
+                          {!profile.activities.some((activity) => activity.type === 'status_change') && (
+                            <p className="text-xs text-slate-500">No recorded status changes.</p>
+                          )}
+                        </div>
+                      </div>
+
                       {isSuperadmin && (
                         <div>
                           <label className="block text-xs font-medium text-slate-600">Assigned Staff Agent</label>
@@ -1442,20 +1472,30 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </div>
                       )}
 
-                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
-                        <label className="flex items-start gap-2 text-xs text-slate-700">
-                          <input
-                            type="checkbox"
-                            disabled={!canEditSelectedLead || profileSaving}
-                            checked={profile.lead.marketingConsent}
-                            onChange={(e) => void updateProfile({ marketingConsent: e.target.checked })}
-                            className="mt-0.5 rounded text-blue-800"
-                          />
-                          <span>
-                            <strong className="block font-semibold text-slate-900">Marketing Consent</strong>
-                            Explicit opt-in recorded for wellness updates and promotional correspondence.
-                          </span>
-                        </label>
+                      <div className="border-t border-slate-100 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assignment history</h3>
+                        <div className="mt-3 space-y-3">
+                          {profile.activities
+                            .filter((activity) => activity.type === 'assignment_change')
+                            .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+                            .map((activity) => (
+                              <article key={activity.id} className="border-l-2 border-violet-200 pl-3">
+                                <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                                  <span className="font-semibold text-slate-800">
+                                    {activity.previousStaffName || 'Unassigned'} <span aria-hidden="true">→</span> {activity.assignedStaffName || 'Unassigned'}
+                                  </span>
+                                  <time className="text-slate-500">{new Date(activity.createdAt).toLocaleString()}</time>
+                                </div>
+                                <p className="mt-1 text-xs text-slate-600">
+                                  Assigned by {activity.actorName || activity.actorEmail || 'Staff'}
+                                  {activity.assignmentStrategy === 'least_loaded' ? ' · Least-loaded distribution' : ''}
+                                </p>
+                              </article>
+                            ))}
+                          {!profile.activities.some((activity) => activity.type === 'assignment_change') && (
+                            <p className="text-xs text-slate-500">No recorded assignment changes.</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -1664,6 +1704,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                       const activity = item.data;
                       const isStage = activity.type === 'status_change';
+                      const isAssignment = activity.type === 'assignment_change';
                       return (
                         <li key={`activity-${activity.id}`}>
                           <div className="relative pb-8">
@@ -1679,10 +1720,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                                   className={`flex h-8 w-8 items-center justify-center rounded-full ring-4 ring-white ${
                                     isStage
                                       ? 'bg-purple-100 text-purple-800'
+                                      : isAssignment
+                                      ? 'bg-violet-100 text-violet-800'
                                       : 'bg-blue-100 text-blue-800'
                                   }`}
                                 >
-                                  {isStage ? <TrendingUp className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
+                                  {isStage
+                                    ? <TrendingUp className="h-4 w-4" />
+                                    : isAssignment
+                                    ? <UserCheck className="h-4 w-4" />
+                                    : <MessageSquare className="h-4 w-4" />}
                                 </span>
                               </div>
                               <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
@@ -1690,8 +1737,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                                   <p className="text-sm font-semibold text-slate-900">
                                     {isStage
                                       ? `Stage transition: ${activity.fromStatus || 'Initial'} → ${activity.toStatus}`
+                                      : isAssignment
+                                      ? `Lead assignment: ${activity.previousStaffName || 'Unassigned'} → ${activity.assignedStaffName || 'Unassigned'}`
                                       : 'Internal Staff Note'}
                                   </p>
+                                  {isAssignment && (
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      Assigned by {activity.actorName || activity.actorEmail || 'Staff'}
+                                      {activity.assignmentStrategy === 'least_loaded' ? ' · Least-loaded distribution' : ''}
+                                    </p>
+                                  )}
                                   {activity.note && (
                                     <p className="mt-1 whitespace-pre-wrap text-xs text-slate-700">
                                       {activity.note}

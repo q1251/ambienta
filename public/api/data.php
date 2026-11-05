@@ -2461,7 +2461,8 @@ function data_lead_activities(PDO $db, int $leadId): array
     $audit = $db->prepare(
         "SELECT id, actor_email, action, details, created_at
          FROM admin_audit_log
-         WHERE entity_type = 'lead' AND entity_id = ? AND action IN ('lead.stage_changed', 'lead.phone_updated')
+         WHERE entity_type = 'lead' AND entity_id = ?
+           AND action IN ('lead.stage_changed', 'lead.assignment_changed', 'lead.phone_updated')
          ORDER BY id DESC LIMIT 200"
     );
     $audit->execute([(string) $leadId]);
@@ -2469,12 +2470,18 @@ function data_lead_activities(PDO $db, int $leadId): array
         $details = is_array($row['details']) ? $row['details'] : json_decode((string) ($row['details'] ?? ''), true);
         if (!is_array($details)) $details = [];
         $isStageChange = $row['action'] === 'lead.stage_changed';
+        $isAssignmentChange = $row['action'] === 'lead.assignment_changed';
         $activities[] = [
             'id' => 'audit-' . (string) $row['id'],
-            'type' => $isStageChange ? 'status_change' : 'phone_updated',
+            'type' => $isStageChange ? 'status_change' : ($isAssignmentChange ? 'assignment_change' : 'phone_updated'),
             'note' => isset($details['note']) && is_string($details['note']) ? $details['note'] : '',
             'fromStatus' => isset($details['from']) && is_string($details['from']) ? $details['from'] : null,
             'toStatus' => isset($details['to']) && is_string($details['to']) ? $details['to'] : null,
+            'previousStaffId' => isset($details['previousStaffId']) ? (int) $details['previousStaffId'] : null,
+            'previousStaffName' => isset($details['previousStaffName']) && is_string($details['previousStaffName']) ? $details['previousStaffName'] : null,
+            'assignedStaffId' => isset($details['assignedStaffId']) ? (int) $details['assignedStaffId'] : null,
+            'assignedStaffName' => isset($details['assignedStaffName']) && is_string($details['assignedStaffName']) ? $details['assignedStaffName'] : null,
+            'assignmentStrategy' => isset($details['strategy']) && is_string($details['strategy']) ? $details['strategy'] : null,
             'actorName' => isset($details['actorName']) && is_string($details['actorName']) && $details['actorName'] !== ''
                 ? $details['actorName']
                 : (string) $row['actor_email'],

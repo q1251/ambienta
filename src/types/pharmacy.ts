@@ -114,10 +114,15 @@ export type LeadCallOutcome =
 
 export interface LeadActivity {
   id: string;
-  type: 'status_change' | 'phone_updated' | 'note' | 'call';
+  type: 'status_change' | 'assignment_change' | 'phone_updated' | 'note' | 'call';
   note?: string;
   fromStatus?: LeadStatus;
   toStatus?: LeadStatus;
+  previousStaffId?: number | null;
+  previousStaffName?: string | null;
+  assignedStaffId?: number | null;
+  assignedStaffName?: string | null;
+  assignmentStrategy?: 'manual' | 'least_loaded' | string;
   outcome?: LeadCallOutcome;
   followUpDate?: string | null;
   actorName: string;
