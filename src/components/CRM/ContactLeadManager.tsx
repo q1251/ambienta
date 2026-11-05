@@ -40,6 +40,7 @@ import {
   ContactLeadUpdate,
   LeadActivityInput,
   LeadContactCompleteness,
+  LeadHistoryImportInput,
   LeadProfile,
   LeadStatus,
   OnlineOrder,
@@ -66,7 +67,7 @@ interface ContactLeadManagerProps {
   leads: ContactLead[];
   dataError?: string;
   onOpenEmailCampaigns?: () => void;
-  onSaveLeads: (leads: NewLead[]) => Promise<void>;
+  onSaveLeads: (leads: NewLead[], historicalOrders?: LeadHistoryImportInput[]) => Promise<void>;
   onLoadLeadProfile?: (leadId: number) => Promise<LeadProfile>;
   onUpdateLead?: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
   onAddLeadActivity?: (leadId: number, activity: LeadActivityInput) => Promise<LeadProfile['activities'][number]>;
@@ -96,15 +97,20 @@ const CONTACT_TYPE_LABELS: Record<LeadContactCompleteness, string> = {
   email_only: 'Email only',
   phone_name: 'Phone + name',
   phone_only: 'Phone only',
+  address_only: 'Address only',
   incomplete: 'Incomplete',
 };
 
 const leadContactType = (lead: ContactLead): LeadContactCompleteness =>
   lead.contactCompleteness ?? classifyLeadContact(lead);
 
-const leadDisplayName = (lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email'>): string => {
+const leadDisplayName = (lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'address' | 'postalCode' | 'contactCompleteness'>): string => {
   const name = `${lead.firstName} ${lead.lastName}`.trim();
-  return name || (lead.email ? 'Email-only contact' : 'Phone-only contact');
+  return name || (lead.email
+    ? 'Email-only contact'
+    : lead.address || lead.postalCode || lead.contactCompleteness === 'address_only'
+      ? 'Address-only contact'
+      : 'Phone-only contact');
 };
 
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
@@ -128,6 +134,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [mode, setMode] = useState<'csv' | 'manual' | null>(null);
   const [csv, setCsv] = useState('');
   const [preview, setPreview] = useState<NewLead[]>([]);
+  const [historyPreview, setHistoryPreview] = useState<LeadHistoryImportInput[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [requestError, setRequestError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -147,6 +154,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
   const [profileCountry, setProfileCountry] = useState('');
+  const [profileAddress, setProfileAddress] = useState('');
+  const [profilePostalCode, setProfilePostalCode] = useState('');
   const [editingLead, setEditingLead] = useState<ContactLead | null>(null);
   const [editLeadError, setEditLeadError] = useState('');
   const [editLeadSaving, setEditLeadSaving] = useState(false);
@@ -263,6 +272,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       email_only: 0,
       phone_name: 0,
       phone_only: 0,
+      address_only: 0,
       incomplete: 0,
     }),
     [leads],
@@ -278,6 +288,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       email_only: 0,
       phone_name: 0,
       phone_only: 0,
+      address_only: 0,
       incomplete: 0,
     }),
     [preview],
@@ -382,11 +393,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setCsv(value);
     const result = parseLeadsCsv(value);
     setPreview(result.leads);
+    setHistoryPreview(result.historicalOrders);
     setErrors(result.errors);
     setRequestError('');
   };
 
-  const save = async (rows: NewLead[]) => {
+  const save = async (rows: NewLead[], historicalOrders: LeadHistoryImportInput[] = []) => {
     const hasImportRows = rows.some((row) => row.leadSource === 'CSV Upload');
     const hasManualRows = rows.some((row) => row.leadSource !== 'CSV Upload');
     if ((hasImportRows && !canImportContactsForRole) || (hasManualRows && !canAddContactsForRole)) {
@@ -399,9 +411,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setRequestError('');
     setSuccess('');
     try {
-      await onSaveLeads(rows);
-      setSuccess(`Saved ${rows.length} contact lead${rows.length === 1 ? '' : 's'}.`);
+      await onSaveLeads(rows, historicalOrders);
+      setSuccess(`Saved ${rows.length} contact lead${rows.length === 1 ? '' : 's'}${historicalOrders.length ? ` and ${historicalOrders.length} historical order record${historicalOrders.length === 1 ? '' : 's'}` : ''}.`);
       setPreview([]);
+      setHistoryPreview([]);
       setCsv('');
       setFirstName('');
       setLastName('');
@@ -443,12 +456,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = [
-      ['first_name', 'last_name', 'email', 'phone', 'country', 'lead_source', 'status', 'marketing_consent', 'created_at'],
+      ['first_name', 'last_name', 'email', 'phone', 'address', 'postal_code', 'country', 'lead_source', 'status', 'marketing_consent', 'created_at'],
       ...contactsToExport.map((lead) => [
         lead.firstName,
         lead.lastName,
         lead.email,
         lead.phone,
+        lead.address || '',
+        lead.postalCode || '',
         lead.country || getLeadCountry(lead.phone),
         lead.leadSource,
         lead.status,
@@ -518,6 +533,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         setProfileEmail(loadedProfile.lead.email);
         setProfilePhone(loadedProfile.lead.phone);
         setProfileCountry(loadedProfile.lead.country || getLeadCountry(loadedProfile.lead.phone));
+        setProfileAddress(loadedProfile.lead.address || '');
+        setProfilePostalCode(loadedProfile.lead.postalCode || '');
       }
     } catch (error) {
       if (requestId === profileRequestId.current) {
@@ -567,6 +584,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       if (update.email !== undefined) setProfileEmail(lead.email);
       if (update.phone !== undefined) setProfilePhone(lead.phone);
       if (update.country !== undefined) setProfileCountry(lead.country || '');
+      if (update.address !== undefined) setProfileAddress(lead.address || '');
+      if (update.postalCode !== undefined) setProfilePostalCode(lead.postalCode || '');
 
       if (onLoadLeadProfile) {
         try {
@@ -593,6 +612,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileEmail(profile.lead.email);
     setProfilePhone(profile.lead.phone);
     setProfileCountry(profile.lead.country || getLeadCountry(profile.lead.phone));
+    setProfileAddress(profile.lead.address || '');
+    setProfilePostalCode(profile.lead.postalCode || '');
     setContactDetailsEditing(false);
   };
 
@@ -604,6 +625,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       email: profileEmail.trim(),
       phone: profilePhone.trim(),
       country: profileCountry.trim(),
+      address: profileAddress.trim(),
+      postalCode: profilePostalCode.trim(),
     }).then((saved) => {
       if (saved) setContactDetailsEditing(false);
     });
@@ -616,6 +639,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setProfileEmail(lead.email);
     setProfilePhone(lead.phone);
     setProfileCountry(lead.country || getLeadCountry(lead.phone));
+    setProfileAddress(lead.address || '');
+    setProfilePostalCode(lead.postalCode || '');
     setEditLeadError('');
   };
 
@@ -631,6 +656,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         email: profileEmail.trim(),
         phone: profilePhone.trim(),
         country: profileCountry.trim(),
+        address: profileAddress.trim(),
+        postalCode: profilePostalCode.trim(),
       });
       setEditingLead(null);
       setSuccess('Lead contact details saved.');
@@ -989,6 +1016,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Acquisition Source</p>
                           <p className="mt-1 text-sm font-semibold text-slate-900">{profile.lead.leadSource}</p>
                         </div>
+                        {(profile.lead.address || profile.lead.postalCode) && (
+                          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 sm:col-span-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Address & Postal Code</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-900">
+                              {[profile.lead.address, profile.lead.postalCode && `Postal code ${profile.lead.postalCode}`].filter(Boolean).join('\n') || 'No address recorded'}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <form onSubmit={saveContactDetails} className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -1031,6 +1066,25 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           <span className="mt-1 block">
                             <CountrySelect value={profileCountry} onChange={setProfileCountry} disabled={profileSaving} />
                           </span>
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700 sm:col-span-2">
+                          Address
+                          <textarea
+                            maxLength={500}
+                            rows={2}
+                            value={profileAddress}
+                            onChange={(e) => setProfileAddress(e.target.value)}
+                            className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold text-slate-700">
+                          Postal code
+                          <input
+                            maxLength={24}
+                            value={profilePostalCode}
+                            onChange={(e) => setProfilePostalCode(e.target.value)}
+                            className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                          />
                         </label>
                         <div className="flex items-center gap-2 sm:col-span-2">
                           <button
@@ -1234,9 +1288,47 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </div>
                 ) : (
                   <p className="rounded-xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
-                    No orders linked to this customer email yet.
+                    No current store orders are linked to this contact.
                   </p>
                 )}
+              </section>
+            )}
+
+            {profileActiveTab === 'orders' && profile.historicalOrders.length > 0 && (
+              <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-bold text-slate-900">Imported Historical Orders</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {profile.historicalOrders.length} historical record{profile.historicalOrders.length === 1 ? '' : 's'} from the source workbook. These are kept separate from current store orders.
+                  </p>
+                </div>
+                <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
+                  {profile.historicalOrders.map((order) => (
+                    <article key={order.id} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {order.items || 'Historical order'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {order.orderNumber ? `Order ${order.orderNumber}` : 'Order number not recorded'}
+                            {' · '}
+                            {order.placedAt ? new Date(order.placedAt).toLocaleDateString() : 'Date not recorded'}
+                            {order.sourceSheet ? ` · ${order.sourceSheet}` : ''}
+                          </p>
+                        </div>
+                        {order.trackingNumber && (
+                          <p className="text-xs font-medium text-slate-700">
+                            {order.carrier || 'Tracking'}: <span className="font-mono">{order.trackingNumber}</span>
+                          </p>
+                        )}
+                      </div>
+                      {order.deliveryAddress && (
+                        <p className="mt-2 text-xs text-slate-600">{order.deliveryAddress}</p>
+                      )}
+                    </article>
+                  ))}
+                </div>
               </section>
             )}
 
@@ -2179,7 +2271,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {mode === 'csv'
-                    ? 'Import up to 20,000 unique email or phone contacts. Missing details stay blank; marketing consent is never assumed.'
+                    ? 'Import up to 20,000 unique contacts using email, phone, address, or postal code. Missing details stay blank; marketing consent is never assumed.'
                     : 'Add an individual customer or prospect to the CRM.'}
                 </p>
               </div>
@@ -2258,6 +2350,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       </tbody>
                     </table>
                   </div>
+                    {historyPreview.length > 0 && (
+                      <p className="text-xs font-medium text-slate-700">
+                        The import also contains {historyPreview.length} historical order record{historyPreview.length === 1 ? '' : 's'} to attach to matching contacts.
+                      </p>
+                    )}
                   </>
                 )}
 
@@ -2273,7 +2370,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <button
                     type="button"
                     disabled={!preview.length || saving}
-                    onClick={() => void save(preview)}
+                    onClick={() => void save(preview, historyPreview)}
                     className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#1e40af] disabled:opacity-50"
                   >
                     {saving ? 'Importing…' : `Import ${preview.length} leads`}

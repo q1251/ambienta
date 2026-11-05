@@ -141,6 +141,8 @@ function data_ensure_schema(PDO $db): void
             phone VARCHAR(40) NOT NULL DEFAULT '',
             import_key CHAR(64) NULL,
             country VARCHAR(100) NOT NULL DEFAULT '',
+            address VARCHAR(500) NOT NULL DEFAULT '',
+            postal_code VARCHAR(24) NOT NULL DEFAULT '',
             lead_source VARCHAR(24) NOT NULL,
             status VARCHAR(24) NOT NULL DEFAULT 'Cold',
             marketing_consent TINYINT(1) NOT NULL DEFAULT 0,
@@ -172,6 +174,20 @@ function data_ensure_schema(PDO $db): void
     if ((int) $leadImportKeyIndex->fetchColumn() === 0) {
         $db->exec('ALTER TABLE leads ADD UNIQUE INDEX leads_import_key (import_key)');
     }
+    $leadAddressColumn = $db->prepare(
+        'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+    );
+    $leadAddressColumn->execute([$databaseName, 'leads', 'address']);
+    if ((int) $leadAddressColumn->fetchColumn() === 0) {
+        $db->exec("ALTER TABLE leads ADD COLUMN address VARCHAR(500) NOT NULL DEFAULT '' AFTER country");
+    }
+    $leadPostalCodeColumn = $db->prepare(
+        'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+    );
+    $leadPostalCodeColumn->execute([$databaseName, 'leads', 'postal_code']);
+    if ((int) $leadPostalCodeColumn->fetchColumn() === 0) {
+        $db->exec("ALTER TABLE leads ADD COLUMN postal_code VARCHAR(24) NOT NULL DEFAULT '' AFTER address");
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS lead_activities (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -185,6 +201,24 @@ function data_ensure_schema(PDO $db): void
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             KEY lead_activities_history (lead_id, id),
             CONSTRAINT lead_activities_lead_fk FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS lead_order_history (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            source_key CHAR(64) NOT NULL,
+            source_sheet VARCHAR(64) NULL,
+            order_number VARCHAR(100) NULL,
+            placed_at DATETIME NULL,
+            items TEXT NULL,
+            tracking_number VARCHAR(180) NULL,
+            carrier VARCHAR(120) NULL,
+            delivery_address VARCHAR(500) NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY lead_order_history_source_key (source_key),
+            KEY lead_order_history_contact (lead_id, placed_at, id),
+            CONSTRAINT lead_order_history_lead_fk FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
@@ -2270,12 +2304,14 @@ function data_lead_row(array $row): array
         && trim((string) ($row['last_name'] ?? '')) !== '';
     $hasName = trim((string) ($row['first_name'] ?? '')) !== ''
         || trim((string) ($row['last_name'] ?? '')) !== '';
+    $hasAddress = trim((string) ($row['address'] ?? '')) !== ''
+        || trim((string) ($row['postal_code'] ?? '')) !== '';
     $contactCompleteness = $hasEmail && $hasPhone && $hasFullName ? 'full_contact'
         : ($hasEmail && $hasPhone ? 'email_phone'
             : ($hasEmail && $hasName ? 'email_name'
                 : ($hasEmail ? 'email_only'
                     : ($hasPhone && $hasName ? 'phone_name'
-                        : ($hasPhone ? 'phone_only' : 'incomplete')))));
+                        : ($hasPhone ? 'phone_only' : ($hasAddress ? 'address_only' : 'incomplete'))))));
     if (($_SESSION['admin_role'] ?? '') !== 'admin') {
         $email = $email === '' ? '' : data_mask_contact_email($email);
         $phone = $phone === '' ? '' : data_mask_contact_phone($phone);
@@ -2296,6 +2332,10 @@ function data_lead_row(array $row): array
     ];
     $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
         || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
+    if ($canViewOrders) {
+        $lead['address'] = (string) ($row['address'] ?? '');
+        $lead['postalCode'] = (string) ($row['postal_code'] ?? '');
+    }
     if ($canViewOrders && array_key_exists('order_count', $row)) $lead['orderCount'] = (int) $row['order_count'];
     if ($canViewOrders && array_key_exists('last_order_at', $row)) $lead['lastOrderAt'] = $row['last_order_at'];
     if ($canViewOrders && array_key_exists('active_order_count', $row)) $lead['activeOrderCount'] = (int) $row['active_order_count'];
@@ -4564,7 +4604,7 @@ if ($method === 'GET') {
             }
             data_require_lead_access($db, (int) $id, true);
             $find = $db->prepare(
-                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                         l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                         COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                         COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
@@ -4578,18 +4618,35 @@ if ($method === 'GET') {
             $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
                 || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
             $orders = [];
+            $historicalOrders = [];
             if ($canViewOrders) {
                 $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
                 $orderQuery->execute([$lead['email']]);
                 $orders = array_map(static fn (array $row): array => data_staff_order_row($db, $row), $orderQuery->fetchAll());
+                $historyQuery = $db->prepare(
+                    'SELECT id, order_number, placed_at, items, tracking_number, carrier, delivery_address, source_sheet
+                     FROM lead_order_history WHERE lead_id = ? ORDER BY placed_at DESC, id DESC LIMIT 100'
+                );
+                $historyQuery->execute([$id]);
+                $historicalOrders = array_map(static fn (array $row): array => [
+                    'id' => (int) $row['id'],
+                    'orderNumber' => $row['order_number'],
+                    'placedAt' => $row['placed_at'],
+                    'items' => (string) ($row['items'] ?? ''),
+                    'trackingNumber' => $row['tracking_number'],
+                    'carrier' => $row['carrier'],
+                    'deliveryAddress' => $row['delivery_address'],
+                    'sourceSheet' => $row['source_sheet'],
+                ], $historyQuery->fetchAll());
             }
             data_respond(200, [
                 'lead' => data_lead_row($lead),
                 'orders' => $orders,
+                'historicalOrders' => $historicalOrders,
                 'activities' => data_lead_activities($db, (int) $id),
             ]);
         }
-        $listSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        $listSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                     l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                     COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                     COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
@@ -6361,17 +6418,19 @@ if ($method === 'POST' && $resource === 'leads') {
     $canEditContactDetails = ($_SESSION['admin_role'] ?? '') === 'admin';
     $assignedStaffId = $canEditContactDetails ? null : (int) ($_SESSION['staff_id'] ?? 0);
     $insert = $db->prepare(
-        'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at, assigned_staff_id, import_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL), ?, ?)
+        'INSERT INTO leads (first_name, last_name, email, phone, country, address, postal_code, lead_source, marketing_consent, marketing_consent_at, assigned_staff_id, import_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL), ?, ?)
          ON DUPLICATE KEY UPDATE first_name = IF(? = 1 AND VALUES(first_name) <> \'\', VALUES(first_name), first_name),
            last_name = IF(? = 1 AND VALUES(last_name) <> \'\', VALUES(last_name), last_name),
-           phone = IF(? = 1 AND VALUES(phone) <> \'\', VALUES(phone), phone),
+           phone = IF(? = 1 AND (phone REGEXP \'^[0-9]{5}(-[0-9]{4})?$\' OR VALUES(phone) <> \'\'), VALUES(phone), phone),
            country = IF(? = 1 AND VALUES(country) <> \'\', VALUES(country), country),
+           address = IF(? = 1 AND address = \'\', VALUES(address), address),
+           postal_code = IF(? = 1 AND postal_code = \'\', VALUES(postal_code), postal_code),
            marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
            marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at),
            assigned_staff_id = IF(assigned_staff_id IS NULL, VALUES(assigned_staff_id), assigned_staff_id)'
     );
-    $findSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+    $findSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                 l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
@@ -6396,17 +6455,32 @@ if ($method === 'POST' && $resource === 'leads') {
             $email = strtolower(data_string($lead, 'email', 254, false));
             $phone = data_string($lead, 'phone', 40, false);
             $country = data_string($lead, 'country', 100, false);
+            $address = $canEditContactDetails ? data_string($lead, 'address', 500, false) : '';
+            $postalCode = $canEditContactDetails ? data_string($lead, 'postalCode', 24, false) : '';
+            if (preg_match('/^\d{5}(?:-\d{4})?$/', $phone) === 1) {
+                if ($postalCode === '') $postalCode = $phone;
+                $phone = '';
+            }
             $marketingConsent = $lead['marketingConsent'] ?? false;
             if (!is_bool($marketingConsent)) {
                 data_respond(400, ['error' => 'invalid_consent', 'message' => 'Marketing consent must be explicitly true or false.']);
             }
+            $phoneDigits = preg_replace('/\D/', '', $phone) ?? '';
+            $hasAddressOnlyIdentity = $address !== '' || $postalCode !== '';
             if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))
-                || ($email === '' && strlen(preg_replace('/\D/', '', $phone) ?? '') < 7)) {
-                data_respond(400, ['error' => 'invalid_contact', 'message' => 'Each lead must have a valid email address or a phone number with at least seven digits.']);
+                || ($email === '' && strlen($phoneDigits) < 7 && !$hasAddressOnlyIdentity)) {
+                data_respond(400, ['error' => 'invalid_contact', 'message' => 'Each lead must have a valid email, phone number, or address.']);
             }
-            $importKey = $email === ''
-                ? hash('sha256', strtolower(trim($firstName)) . '|' . strtolower(trim($lastName)) . '|' . (preg_replace('/\D/', '', $phone) ?? ''))
-                : null;
+            $importKey = null;
+            if ($email === '') {
+                $nameKey = strtolower(trim($firstName)) . '|' . strtolower(trim($lastName)) . '|';
+                $identitySuffix = strlen($phoneDigits) >= 7
+                    ? $phoneDigits
+                    : (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCode) === 1
+                        ? (preg_replace('/\D/', '', $postalCode) ?? '')
+                        : 'address:' . strtolower(trim($address !== '' ? $address : $postalCode)));
+                $importKey = hash('sha256', $nameKey . $identitySuffix);
+            }
             $identityValue = $email === '' ? $importKey : $email;
             $priorConsentQuery = $email === '' ? $priorConsentByImportKey : $priorConsentByEmail;
             $priorConsentQuery->execute([$identityValue]);
@@ -6427,11 +6501,15 @@ if ($method === 'POST' && $resource === 'leads') {
                 $email === '' ? null : $email,
                 $phone,
                 $country,
+                $address,
+                $postalCode,
                 $source,
                 (int) $marketingConsent,
                 (int) $marketingConsent,
                 $assignedStaffId,
                 $importKey,
+                $canEditValue,
+                $canEditValue,
                 $canEditValue,
                 $canEditValue,
                 $canEditValue,
@@ -6461,6 +6539,174 @@ if ($method === 'POST' && $resource === 'leads') {
     data_respond(201, ['leads' => $saved]);
 }
 
+if ($method === 'POST' && $resource === 'lead-history') {
+    data_require_permission('import_leads');
+    if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+        data_respond(403, ['error' => 'admin_required', 'message' => 'Only a superadmin can import historical order records.']);
+    }
+    $body = data_read_json();
+    $records = $body['orders'] ?? null;
+    if (!is_array($records) || count($records) < 1 || count($records) > 100) {
+        data_respond(400, ['error' => 'invalid_history', 'message' => 'Provide between 1 and 100 historical order records.']);
+    }
+
+    $normalizedRecords = [];
+    foreach ($records as $index => $record) {
+        if (!is_array($record)) {
+            data_respond(400, ['error' => 'invalid_history_record', 'message' => 'A historical order record is invalid.']);
+        }
+        $email = strtolower(data_string($record, 'email', 254, false));
+        $phone = data_string($record, 'phone', 40, false);
+        $firstName = data_string($record, 'firstName', 100, false);
+        $lastName = data_string($record, 'lastName', 100, false);
+        $postalCode = data_string($record, 'postalCode', 24, false);
+        if (preg_match('/^\d{5}(?:-\d{4})?$/', $phone) === 1) {
+            if ($postalCode === '') $postalCode = $phone;
+            $phone = '';
+        }
+        $deliveryAddress = data_string($record, 'deliveryAddress', 500, false);
+        if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))
+            || ($email === '' && strlen(preg_replace('/\D/', '', $phone) ?? '') < 7
+                && $postalCode === '' && $deliveryAddress === '')) {
+            data_respond(400, ['error' => 'invalid_history_contact', 'message' => 'Each historical order needs an email, phone, or address/postal code.']);
+        }
+        $orderNumber = data_string($record, 'orderNumber', 100, false);
+        $dateInput = data_string($record, 'placedAt', 32, false);
+        $items = data_string($record, 'items', 2000, false);
+        $trackingNumber = data_string($record, 'trackingNumber', 180, false);
+        $carrier = data_string($record, 'carrier', 120, false);
+        $sourceKey = data_string($record, 'sourceKey', 255, false);
+        $sourceSheet = data_string($record, 'sourceSheet', 64, false);
+        if ($orderNumber === '' && $dateInput === '' && $items === '' && $trackingNumber === '') {
+            data_respond(400, ['error' => 'empty_history_record', 'message' => 'A historical order must include an order number, date, item, or tracking number.']);
+        }
+        $placedAt = null;
+        if ($dateInput !== '') {
+            if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2}))?$/', $dateInput, $dateParts)
+                || !checkdate((int) $dateParts[2], (int) $dateParts[3], (int) $dateParts[1])
+                || (isset($dateParts[4]) && ((int) $dateParts[4] > 23 || (int) $dateParts[5] > 59 || (int) $dateParts[6] > 59))) {
+                data_respond(400, ['error' => 'invalid_history_date', 'message' => 'Historical order dates must use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS.']);
+            }
+            $placedAt = substr($dateInput, 0, 10) . ' ' . (isset($dateParts[4]) && $dateParts[4] !== '' ? substr($dateInput, 11) : '00:00:00');
+        }
+        $normalizedRecords[] = [
+            'row' => $index + 1,
+            'email' => $email,
+            'phone' => $phone,
+            'postalCode' => $postalCode,
+            'firstName' => $firstName,
+            'lastName' => $lastName,
+            'orderNumber' => $orderNumber,
+            'placedAt' => $placedAt,
+            'items' => $items,
+            'trackingNumber' => $trackingNumber,
+            'carrier' => $carrier,
+            'deliveryAddress' => $deliveryAddress,
+            'sourceKey' => $sourceKey,
+            'sourceSheet' => $sourceSheet,
+        ];
+    }
+
+    $db = data_db();
+    $findByEmail = $db->prepare('SELECT id, address, postal_code FROM leads WHERE email = ? LIMIT 1 FOR UPDATE');
+    $findByImportKey = $db->prepare('SELECT id, address, postal_code FROM leads WHERE import_key = ? LIMIT 1 FOR UPDATE');
+    $findByPhoneAndName = $db->prepare(
+        'SELECT id, address, postal_code FROM leads WHERE phone = ? AND LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?) LIMIT 1 FOR UPDATE'
+    );
+    $saveHistory = $db->prepare(
+        'INSERT INTO lead_order_history (lead_id, source_key, source_sheet, order_number, placed_at, items, tracking_number, carrier, delivery_address)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           source_sheet = COALESCE(source_sheet, VALUES(source_sheet)),
+           order_number = COALESCE(order_number, VALUES(order_number)),
+           placed_at = COALESCE(placed_at, VALUES(placed_at)),
+           items = COALESCE(items, VALUES(items)),
+           tracking_number = COALESCE(tracking_number, VALUES(tracking_number)),
+           carrier = COALESCE(carrier, VALUES(carrier)),
+           delivery_address = COALESCE(delivery_address, VALUES(delivery_address))'
+    );
+    $updateAddress = $db->prepare("UPDATE leads SET address = ? WHERE id = ? AND address = ''");
+    $updatePostalCode = $db->prepare("UPDATE leads SET postal_code = ? WHERE id = ? AND postal_code = ''");
+    $db->beginTransaction();
+    try {
+        foreach ($normalizedRecords as $record) {
+            $lead = false;
+            if ($record['email'] !== '') {
+                $findByEmail->execute([$record['email']]);
+                $lead = $findByEmail->fetch();
+            }
+            if (!$lead && strlen(preg_replace('/\D/', '', $record['phone']) ?? '') >= 7) {
+                $importKey = hash(
+                    'sha256',
+                    strtolower(trim($record['firstName'])) . '|'
+                        . strtolower(trim($record['lastName'])) . '|'
+                        . (preg_replace('/\D/', '', $record['phone']) ?? '')
+                );
+                $findByImportKey->execute([$importKey]);
+                $lead = $findByImportKey->fetch();
+                if (!$lead && $record['firstName'] !== '' && $record['lastName'] !== '') {
+                    $findByPhoneAndName->execute([$record['phone'], $record['firstName'], $record['lastName']]);
+                    $lead = $findByPhoneAndName->fetch();
+                }
+            }
+            if (!$lead && $record['email'] === '' && strlen(preg_replace('/\D/', '', $record['phone']) ?? '') < 7) {
+                $identitySuffix = preg_match('/^\d{5}(?:-\d{4})?$/', $record['postalCode']) === 1
+                    ? (preg_replace('/\D/', '', $record['postalCode']) ?? '')
+                    : 'address:' . strtolower(trim($record['deliveryAddress'] !== '' ? $record['deliveryAddress'] : $record['postalCode']));
+                $importKey = hash(
+                    'sha256',
+                    strtolower(trim($record['firstName'])) . '|'
+                        . strtolower(trim($record['lastName'])) . '|'
+                        . $identitySuffix
+                );
+                $findByImportKey->execute([$importKey]);
+                $lead = $findByImportKey->fetch();
+            }
+            if (!$lead) {
+                $db->rollBack();
+                data_respond(404, [
+                    'error' => 'history_contact_not_found',
+                    'message' => 'A historical order could not be matched to an imported contact; no records in this batch were saved.',
+                    'row' => $record['row'],
+                ]);
+            }
+            $sourceIdentity = $record['sourceKey'] !== ''
+                ? strtolower(trim($record['sourceKey']))
+                : implode('|', [
+                    (string) $lead['id'],
+                    strtolower(trim($record['orderNumber'])),
+                    (string) ($record['placedAt'] ?? ''),
+                    strtolower(trim($record['items'])),
+                    strtolower(trim($record['trackingNumber'])),
+                ]);
+            $saveHistory->execute([
+                (int) $lead['id'],
+                hash('sha256', $sourceIdentity),
+                $record['sourceSheet'] !== '' ? $record['sourceSheet'] : null,
+                $record['orderNumber'] !== '' ? $record['orderNumber'] : null,
+                $record['placedAt'],
+                $record['items'] !== '' ? $record['items'] : null,
+                $record['trackingNumber'] !== '' ? $record['trackingNumber'] : null,
+                $record['carrier'] !== '' ? $record['carrier'] : null,
+                $record['deliveryAddress'] !== '' ? $record['deliveryAddress'] : null,
+            ]);
+            if ($record['deliveryAddress'] !== '' && $lead['address'] === '') {
+                $updateAddress->execute([$record['deliveryAddress'], (int) $lead['id']]);
+            }
+            if ($record['postalCode'] !== '' && $lead['postal_code'] === '') {
+                $updatePostalCode->execute([$record['postalCode'], (int) $lead['id']]);
+            }
+        }
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients historical order import failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'history_import_failed', 'message' => 'Historical order records could not be saved.']);
+    }
+    data_audit($db, 'lead.history_imported', 'lead', 'bulk', ['recordCount' => count($normalizedRecords)]);
+    data_respond(201, ['imported' => count($normalizedRecords)]);
+}
+
 if ($method === 'PATCH' && $resource === 'leads') {
     data_require_permission('leads');
     $body = data_read_json();
@@ -6484,7 +6730,18 @@ if ($method === 'PATCH' && $resource === 'leads') {
     $phone = $phoneProvided ? data_string($body, 'phone', 40, false) : null;
     $countryProvided = array_key_exists('country', $body);
     $country = $countryProvided ? data_string($body, 'country', 100, false) : null;
-    $contactDetailsProvided = $firstNameProvided || $lastNameProvided || $emailProvided || $phoneProvided || $countryProvided;
+    $addressProvided = array_key_exists('address', $body);
+    $address = $addressProvided ? data_string($body, 'address', 500, false) : null;
+    $postalCodeProvided = array_key_exists('postalCode', $body);
+    $postalCode = $postalCodeProvided ? data_string($body, 'postalCode', 24, false) : null;
+    if ($phoneProvided && preg_match('/^\d{5}(?:-\d{4})?$/', $phone) === 1) {
+        if (!$postalCodeProvided || $postalCode === '') {
+            $postalCode = $phone;
+            $postalCodeProvided = true;
+        }
+        $phone = '';
+    }
+    $contactDetailsProvided = $firstNameProvided || $lastNameProvided || $emailProvided || $phoneProvided || $countryProvided || $addressProvided || $postalCodeProvided;
     $assignedStaffProvided = array_key_exists('assignedStaffId', $body);
     $assignedStaffId = $body['assignedStaffId'] ?? null;
     if ($contactDetailsProvided && ($_SESSION['admin_role'] ?? '') !== 'admin') {
@@ -6518,7 +6775,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
                 data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent or leave the lead unassigned.']);
             }
         }
-        $find = $db->prepare('SELECT id, first_name, last_name, email, phone, country, status, marketing_consent, assigned_staff_id FROM leads WHERE id = ? FOR UPDATE');
+        $find = $db->prepare('SELECT id, first_name, last_name, email, phone, country, address, postal_code, status, marketing_consent, assigned_staff_id FROM leads WHERE id = ? FOR UPDATE');
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
@@ -6532,9 +6789,16 @@ if ($method === 'PATCH' && $resource === 'leads') {
         }
         $emailValue = $emailProvided ? ($email === '' ? null : $email) : $current['email'];
         $phoneValue = $phoneProvided ? $phone : (string) ($current['phone'] ?? '');
-        if ($emailValue === null && strlen(preg_replace('/\D/', '', $phoneValue) ?? '') < 7) {
+        $addressValue = $addressProvided ? $address : (string) ($current['address'] ?? '');
+        $postalCodeValue = $postalCodeProvided ? $postalCode : (string) ($current['postal_code'] ?? '');
+        $finalFirstName = $firstNameProvided ? $firstName : (string) $current['first_name'];
+        $finalLastName = $lastNameProvided ? $lastName : (string) $current['last_name'];
+        $hasAddressOnlyIdentity = $addressValue !== '' || $postalCodeValue !== '';
+        if ($emailValue === null
+            && strlen(preg_replace('/\D/', '', $phoneValue) ?? '') < 7
+            && !$hasAddressOnlyIdentity) {
             $db->rollBack();
-            data_respond(400, ['error' => 'invalid_contact', 'message' => 'A lead must have a valid email address or a phone number with at least seven digits.']);
+            data_respond(400, ['error' => 'invalid_contact', 'message' => 'A lead must have an email, phone, address, or postal code.']);
         }
         if ($emailProvided && $emailValue !== $current['email']) {
             if ($emailValue !== null) {
@@ -6583,20 +6847,19 @@ if ($method === 'PATCH' && $resource === 'leads') {
                 $updates[] = 'import_key = NULL';
             }
         }
-        if ($emailValue === null && ($firstNameProvided || $lastNameProvided || $phoneProvided || $emailProvided)) {
-            $finalFirstName = $firstNameProvided ? $firstName : (string) $current['first_name'];
-            $finalLastName = $lastNameProvided ? $lastName : (string) $current['last_name'];
-            $finalImportKey = hash(
-                'sha256',
-                strtolower(trim($finalFirstName)) . '|'
-                    . strtolower(trim($finalLastName)) . '|'
-                    . (preg_replace('/\D/', '', $phoneValue) ?? '')
-            );
+        if ($emailValue === null && ($firstNameProvided || $lastNameProvided || $phoneProvided || $emailProvided || $addressProvided || $postalCodeProvided)) {
+            $phoneDigits = preg_replace('/\D/', '', $phoneValue) ?? '';
+            $identitySuffix = strlen($phoneDigits) >= 7
+                ? $phoneDigits
+                : (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCodeValue) === 1
+                    ? (preg_replace('/\D/', '', $postalCodeValue) ?? '')
+                    : 'address:' . strtolower(trim($addressValue !== '' ? $addressValue : $postalCodeValue)));
+            $finalImportKey = hash('sha256', strtolower(trim($finalFirstName)) . '|' . strtolower(trim($finalLastName)) . '|' . $identitySuffix);
             $duplicateKey = $db->prepare('SELECT id FROM leads WHERE import_key = ? AND id <> ? LIMIT 1 FOR UPDATE');
             $duplicateKey->execute([$finalImportKey, $id]);
             if ($duplicateKey->fetchColumn()) {
                 $db->rollBack();
-                data_respond(409, ['error' => 'lead_contact_in_use', 'message' => 'Another phone-only contact already has these details.']);
+                data_respond(409, ['error' => 'lead_contact_in_use', 'message' => 'Another contact already has these identifying details.']);
             }
             $updates[] = 'import_key = ?';
             $parameters[] = $finalImportKey;
@@ -6623,6 +6886,16 @@ if ($method === 'PATCH' && $resource === 'leads') {
             $updates[] = 'country = ?';
             $parameters[] = $country;
             $changedContactFields[] = 'country';
+        }
+        if ($addressProvided && $address !== $current['address']) {
+            $updates[] = 'address = ?';
+            $parameters[] = $address;
+            $changedContactFields[] = 'address';
+        }
+        if ($postalCodeProvided && $postalCode !== $current['postal_code']) {
+            $updates[] = 'postal_code = ?';
+            $parameters[] = $postalCode;
+            $changedContactFields[] = 'postalCode';
         }
         if ($changedContactFields !== []) {
             data_audit($db, 'lead.contact_details_updated', 'lead', (string) $id, [
@@ -6653,7 +6926,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
         data_respond(500, ['error' => 'lead_update_failed', 'message' => 'The contact lead could not be updated.']);
     }
     $find = $db->prepare(
-        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                 l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,

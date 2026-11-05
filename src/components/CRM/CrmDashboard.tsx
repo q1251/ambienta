@@ -15,7 +15,7 @@ import {
   Clock,
   Pill,
 } from 'lucide-react';
-import { ContactLead, Patient, HostingerConfig, EmailLog, ReminderRule, HealthCategory } from '../../types/pharmacy';
+import { ContactLead, LeadHistoryImportInput, Patient, HostingerConfig, EmailLog, ReminderRule, HealthCategory } from '../../types/pharmacy';
 import { calculateDaysRemaining } from '../../utils/pharmacyLogic';
 import { ContactLeadManager } from './ContactLeadManager';
 import { AutomatedRemindersView } from './AutomatedRemindersView';
@@ -27,7 +27,7 @@ interface CrmDashboardProps {
   onSelectPatient: (patient: Patient) => void;
   leads: ContactLead[];
   leadDataError?: string;
-  onSaveLeads: (leads: Omit<ContactLead, 'id' | 'createdAt'>[]) => Promise<void>;
+  onSaveLeads: (leads: Omit<ContactLead, 'id' | 'createdAt'>[], historicalOrders?: LeadHistoryImportInput[]) => Promise<void>;
   hostingerConfig: HostingerConfig;
   onUpdateHostingerConfig: (config: HostingerConfig) => void;
   emailLogs: EmailLog[];

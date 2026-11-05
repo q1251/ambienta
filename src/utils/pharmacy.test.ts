@@ -115,6 +115,7 @@ test('contact classification distinguishes completeness without inferring market
   assert.equal(classifyLeadContact({ firstName: '', lastName: '', email: 'ava@example.com', phone: '' }), 'email_only');
   assert.equal(classifyLeadContact({ firstName: 'Ava', lastName: 'Stone', email: '', phone: '+1 213 373 4253' }), 'phone_name');
   assert.equal(classifyLeadContact({ firstName: '', lastName: '', email: '', phone: '+1 213 373 4253' }), 'phone_only');
+  assert.equal(classifyLeadContact({ firstName: '', lastName: '', email: '', phone: '', postalCode: '90210-1234' }), 'address_only');
 });
 
 test('parseLeadsCsv imports email-only and phone-only contacts and merges duplicates', () => {
@@ -135,6 +136,46 @@ test('parseLeadsCsv imports email-only and phone-only contacts and merges duplic
   assert.equal(parsed.leads[2].firstName, 'Jordan');
   assert.equal(parsed.leads[2].email, '');
   assert.equal('medicationName' in parsed.leads[2], false);
+});
+
+test('parseLeadsCsv preserves addresses and separately imports explicit order history fields', () => {
+  const parsed = parseLeadsCsv([
+    'first_name,last_name,email,phone,postal_code,address,order_number,order_date,product_name,tracking_number,carrier,source_key,source_sheet,medication_name,rx_number',
+    'Ava,Stone,ava@example.com,+1 213 373 4253,90210,12 Oak Street,ORD-1,2025-03-04,Wellness item,1Z999AA10123456784,UPS,stable-order-1,Sheet7,ignored,ignored',
+    ',,ava@example.com,+1 213 373 4253,90210,12 Oak Street,ORD-2,2025-03-05,Another item,,,,,ignored,ignored',
+  ].join('\n'));
+
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.leads.length, 1);
+  assert.equal(parsed.leads[0].address, '12 Oak Street');
+  assert.equal(parsed.leads[0].phone, '+1 213 373 4253');
+  assert.equal(parsed.historicalOrders.length, 2);
+  assert.equal(parsed.historicalOrders[0].orderNumber, 'ORD-1');
+  assert.equal(parsed.historicalOrders[0].trackingNumber, '1Z999AA10123456784');
+  assert.equal(parsed.historicalOrders[0].sourceKey, 'stable-order-1');
+  assert.equal(parsed.historicalOrders[0].sourceSheet, 'Sheet7');
+  assert.equal('medicationName' in parsed.historicalOrders[0], false);
+});
+
+test('parseLeadsCsv treats ZIP+4 values as postal codes and retains address-only records', () => {
+  const parsed = parseLeadsCsv([
+    'first_name,last_name,email,phone,postal_code,address',
+    ',,,90210-1234,,',
+    ',,, ,90210-1234,',
+    ',,,,,24 Oak Street',
+    'Ava,Stone,,90210,90210,1 Oak Street',
+    'Ben,Stone,,,90210,2 Oak Street',
+  ].join('\n'));
+
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.leads.length, 4);
+  assert.equal(parsed.leads[0].phone, '');
+  assert.equal(parsed.leads[0].postalCode, '90210-1234');
+  assert.equal(parsed.leads[1].address, '24 Oak Street');
+  assert.equal(classifyLeadContact(parsed.leads[0]), 'address_only');
+  assert.equal(parsed.leads[2].phone, '');
+  assert.equal(parsed.leads[2].address, '1 Oak Street');
+  assert.equal(parsed.leads[3].address, '2 Oak Street');
 });
 
 test('filterPatientsByHealthCategory isolates requested segments', () => {

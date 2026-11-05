@@ -1,4 +1,4 @@
-import { ContactLead, HealthCategory, LeadContactCompleteness, OnlineOrder, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
+import { ContactLead, HealthCategory, LeadContactCompleteness, LeadHistoryImportInput, OnlineOrder, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
 import { parseCsvRows } from './csv';
 import { getLeadCountry } from './countryOptions';
 export { getLeadCountry } from './countryOptions';
@@ -72,11 +72,12 @@ export function filterPatientsByHealthCategory(
 
 export interface CsvParseResult {
   leads: Omit<ContactLead, 'id' | 'createdAt'>[];
+  historicalOrders: LeadHistoryImportInput[];
   errors: string[];
   totalParsed: number;
 }
 
-export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'phone'>): LeadContactCompleteness {
+export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'phone' | 'address' | 'postalCode'>): LeadContactCompleteness {
   const hasEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email.trim());
   const hasPhone = lead.phone.replace(/\D/g, '').length >= 7;
   const hasFullName = Boolean(lead.firstName.trim() && lead.lastName.trim());
@@ -88,6 +89,7 @@ export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastN
   if (hasEmail) return 'email_only';
   if (hasPhone && hasName) return 'phone_name';
   if (hasPhone) return 'phone_only';
+  if (lead.address?.trim() || lead.postalCode?.trim()) return 'address_only';
   return 'incomplete';
 }
 
@@ -97,9 +99,10 @@ export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastN
 export function parseLeadsCsv(csvText: string): CsvParseResult {
   const errors: string[] = [];
   const leads: Omit<ContactLead, 'id' | 'createdAt'>[] = [];
+  const historicalOrders = new Map<string, LeadHistoryImportInput>();
 
   if (!csvText || !csvText.trim()) {
-    return { leads: [], errors: ['CSV content is empty.'], totalParsed: 0 };
+    return { leads: [], historicalOrders: [], errors: ['CSV content is empty.'], totalParsed: 0 };
   }
 
   let rows: string[][];
@@ -108,15 +111,16 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   } catch (error) {
     return {
       leads: [],
+      historicalOrders: [],
       errors: [error instanceof Error ? error.message : 'CSV could not be parsed.'],
       totalParsed: 0,
     };
   }
   if (rows.length < 2) {
-    return { leads: [], errors: ['CSV must have a header row and at least one data row.'], totalParsed: 0 };
+    return { leads: [], historicalOrders: [], errors: ['CSV must have a header row and at least one data row.'], totalParsed: 0 };
   }
   if (rows.length > 20001) {
-    return { leads: [], errors: ['A contact import can contain at most 20,000 rows.'], totalParsed: 0 };
+    return { leads: [], historicalOrders: [], errors: ['A contact import can contain at most 20,000 rows.'], totalParsed: 0 };
   }
 
   const headers = rows[0].map((header) => header.trim().toLowerCase().replace(/[\s-]+/g, '_'));
@@ -126,10 +130,20 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   const emailIdx = findIdx(['email', 'mail']);
   const phoneIdx = findIdx(['phone', 'mobile', 'tel']);
   const countryIdx = findIdx(['country', 'country_name', 'location_country']);
+  const addressIdx = findIdx(['address', 'street', 'street_address', 'delivery_address', 'shipping_address']);
+  const postalCodeIdx = findIdx(['postal_code', 'postalcode', 'zip', 'zip_code', 'zipcode', 'postcode', 'postal']);
+  const historyAddressIdx = findIdx(['delivery_address', 'shipping_address']);
   const consentIdx = findIdx(['marketing_consent', 'marketing_opt_in', 'consent']);
-  if (emailIdx === -1 && phoneIdx === -1) {
-    errors.push('CSV header must contain an email or phone column.');
-    return { leads: [], errors, totalParsed: 0 };
+  const orderNumberIdx = findIdx(['order_number', 'order_id', 'invoice_number']);
+  const orderDateIdx = findIdx(['order_date', 'placed_at', 'purchase_date']);
+  const itemsIdx = findIdx(['order_items', 'items', 'product', 'products', 'product_name', 'item_description', 'order_description']);
+  const trackingIdx = findIdx(['tracking_number', 'tracking', 'shipment_tracking']);
+  const carrierIdx = findIdx(['carrier', 'shipping_carrier', 'delivery_carrier']);
+  const sourceKeyIdx = findIdx(['source_key', 'source_record_key', 'record_key']);
+  const sourceSheetIdx = findIdx(['source_sheet', 'sheet_name', 'source_tab']);
+  if (emailIdx === -1 && phoneIdx === -1 && postalCodeIdx === -1 && addressIdx === -1) {
+    errors.push('CSV header must contain an email, phone, postal code, or address column.');
+    return { leads: [], historicalOrders: [], errors, totalParsed: 0 };
   }
 
   const leadByIdentity = new Map<string, Omit<ContactLead, 'id' | 'createdAt'>>();
@@ -138,12 +152,18 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     const firstName = (fnIdx === -1 ? '' : cols[fnIdx] || '').trim();
     const lastName = (lnIdx === -1 ? '' : cols[lnIdx] || '').trim();
     const email = (emailIdx === -1 ? '' : cols[emailIdx] || '').trim().toLowerCase();
-    const phone = (phoneIdx === -1 ? '' : cols[phoneIdx] || '').trim();
+    const rawPhone = (phoneIdx === -1 ? '' : cols[phoneIdx] || '').trim();
+    const phoneIsPostalCode = /^\d{5}(?:-\d{4})?$/.test(rawPhone);
+    const phone = phoneIsPostalCode ? '' : rawPhone;
     const country = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
+    const address = addressIdx !== -1 ? cols[addressIdx]?.trim() || '' : '';
+    const postalCode = (postalCodeIdx !== -1 ? cols[postalCodeIdx]?.trim() : '') || (phoneIsPostalCode ? rawPhone : '');
     const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    if ((email && !validEmail) || (!validEmail && phone.replace(/\D/g, '').length < 7)) {
+    const hasPhone = phone.replace(/\D/g, '').length >= 7;
+    const hasAddressOnlyIdentity = Boolean(address || postalCode);
+    if ((email && !validEmail) || (!validEmail && !hasPhone && !hasAddressOnlyIdentity)) {
       if (errors.length < 20) {
-        errors.push(`Row ${rowIndex + 1}: Skipped row due to missing valid email or phone.`);
+        errors.push(`Row ${rowIndex + 1}: Skipped row due to missing valid email, phone, or address.`);
       }
       continue;
     }
@@ -156,12 +176,16 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
       email,
       phone,
       country: country || getLeadCountry(phone),
+      address: address || undefined,
+      postalCode: postalCode || undefined,
       status: 'Cold',
       marketingConsent: ['yes', 'true', '1', 'opted in'].includes(consentValue),
     };
     const identity = validEmail
       ? `email:${email}`
-      : `phone:${phone.replace(/\D/g, '')}:${firstName.toLowerCase()}:${lastName.toLowerCase()}`;
+      : hasPhone
+        ? `phone:${phone.replace(/\D/g, '')}:${firstName.toLowerCase()}:${lastName.toLowerCase()}`
+        : `address:${firstName.toLowerCase()}:${lastName.toLowerCase()}:${(address || postalCode).toLowerCase()}`;
     const existing = leadByIdentity.get(identity);
     if (!existing) {
       leadByIdentity.set(identity, lead);
@@ -172,12 +196,55 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
         lastName: existing.lastName || lead.lastName,
         phone: existing.phone || lead.phone,
         country: existing.country || lead.country,
+        address: existing.address || lead.address,
+        postalCode: existing.postalCode || lead.postalCode,
         marketingConsent: existing.marketingConsent || lead.marketingConsent,
+      });
+    }
+
+    const orderNumber = orderNumberIdx === -1 ? '' : (cols[orderNumberIdx] || '').trim();
+    const placedAt = orderDateIdx === -1 ? '' : (cols[orderDateIdx] || '').trim();
+    const items = itemsIdx === -1 ? '' : (cols[itemsIdx] || '').trim();
+    const trackingNumber = trackingIdx === -1 ? '' : (cols[trackingIdx] || '').trim();
+    const carrier = carrierIdx === -1 ? '' : (cols[carrierIdx] || '').trim();
+    const deliveryAddress = historyAddressIdx === -1
+      ? address
+      : (cols[historyAddressIdx] || '').trim() || address;
+    if (orderNumber || placedAt || items || trackingNumber) {
+      const sourceKey = sourceKeyIdx === -1 ? '' : (cols[sourceKeyIdx] || '').trim();
+      const sourceSheet = sourceSheetIdx === -1 ? '' : (cols[sourceSheetIdx] || '').trim();
+      const identityKey = sourceKey || [
+        email,
+        phone.replace(/\D/g, ''),
+        orderNumber.toLowerCase(),
+        placedAt,
+        items.toLowerCase(),
+        trackingNumber.toLowerCase(),
+      ].join('|');
+      historicalOrders.set(identityKey, {
+        firstName,
+        lastName,
+        email,
+        phone,
+        postalCode,
+        orderNumber,
+        placedAt,
+        items,
+        trackingNumber,
+        carrier,
+        deliveryAddress,
+        sourceKey,
+        sourceSheet,
       });
     }
   }
 
-  return { leads: Array.from(leadByIdentity.values()), errors, totalParsed: leadByIdentity.size };
+  return {
+    leads: Array.from(leadByIdentity.values()),
+    historicalOrders: Array.from(historicalOrders.values()),
+    errors,
+    totalParsed: leadByIdentity.size,
+  };
 }
 
 /**

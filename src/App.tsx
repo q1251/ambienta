@@ -18,6 +18,7 @@ import {
   ContactLeadUpdate,
   LeadActivity,
   LeadActivityInput,
+  LeadHistoryImportInput,
   LeadProfile,
   OnlineOrder,
   CatalogItem,
@@ -673,10 +674,10 @@ export default function App() {
     }
   };
 
-  const handleSaveLeads = async (newLeads: ContactLeadInput[]) => {
+  const handleSaveLeads = async (newLeads: ContactLeadInput[], historicalOrders: LeadHistoryImportInput[] = []) => {
     const saved: ContactLead[] = [];
-    for (let offset = 0; offset < newLeads.length; offset += 500) {
-      const batch = newLeads.slice(offset, offset + 500);
+    for (let offset = 0; offset < newLeads.length; offset += 100) {
+      const batch = newLeads.slice(offset, offset + 100);
       try {
         const response = await fetch('/api/data.php?resource=leads', {
           method: 'POST',
@@ -702,6 +703,26 @@ export default function App() {
         throw error;
       }
     }
+    let importedHistory = 0;
+    for (let offset = 0; offset < historicalOrders.length; offset += 100) {
+      const batch = historicalOrders.slice(offset, offset + 100);
+      try {
+        const response = await fetch('/api/data.php?resource=lead-history', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ orders: batch }),
+        });
+        const result = await response.json() as { imported?: number; message?: string };
+        if (!response.ok || typeof result.imported !== 'number') {
+          throw new Error(result.message || 'Historical order records could not be saved.');
+        }
+        importedHistory += result.imported;
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'Historical order records could not be saved.';
+        throw new Error(`Saved ${newLeads.length} contacts, but imported ${importedHistory} of ${historicalOrders.length} historical order records: ${detail}`);
+      }
+    }
   };
 
   const handleLoadLeadProfile = async (leadId: number): Promise<LeadProfile> => {
@@ -709,11 +730,11 @@ export default function App() {
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
     });
-    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; activities?: LeadActivity[]; message?: string };
-    if (!response.ok || !result.lead || !Array.isArray(result.orders) || !Array.isArray(result.activities)) {
+    const result = await response.json() as { lead?: ContactLead; orders?: OnlineOrder[]; historicalOrders?: LeadProfile['historicalOrders']; activities?: LeadActivity[]; message?: string };
+    if (!response.ok || !result.lead || !Array.isArray(result.orders) || !Array.isArray(result.historicalOrders) || !Array.isArray(result.activities)) {
       throw new Error(result.message || 'The contact profile could not be loaded.');
     }
-    return { lead: result.lead, orders: result.orders, activities: result.activities };
+    return { lead: result.lead, orders: result.orders, historicalOrders: result.historicalOrders, activities: result.activities };
   };
 
   const handleUpdateLead = async (leadId: number, update: ContactLeadUpdate) => {

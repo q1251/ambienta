@@ -67,6 +67,8 @@ export interface ContactLead {
   lastName: string;
   email: string;
   phone: string;
+  address?: string;
+  postalCode?: string;
   contactCompleteness?: LeadContactCompleteness;
   country?: string;
   leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo' | 'Live chat';
@@ -89,11 +91,12 @@ export type LeadContactCompleteness =
   | 'email_only'
   | 'phone_name'
   | 'phone_only'
+  | 'address_only'
   | 'incomplete';
 
 export type ContactLeadInput = Pick<
   ContactLead,
-  'firstName' | 'lastName' | 'email' | 'phone' | 'leadSource' | 'status' | 'marketingConsent' | 'country'
+  'firstName' | 'lastName' | 'email' | 'phone' | 'leadSource' | 'status' | 'marketingConsent' | 'country' | 'address' | 'postalCode'
 >;
 
 export type LeadStatus = 'New' | 'Cold' | 'Contacted' | 'Qualified' | 'Customer' | 'Inactive';
@@ -136,12 +139,42 @@ export interface ContactLeadUpdate {
   marketingConsent?: boolean;
   phone?: string;
   country?: string;
+  address?: string;
+  postalCode?: string;
   assignedStaffId?: number | null;
+}
+
+export interface LeadHistoricalOrder {
+  id: number;
+  orderNumber: string | null;
+  placedAt: string | null;
+  items: string;
+  trackingNumber: string | null;
+  carrier: string | null;
+  deliveryAddress: string | null;
+  sourceSheet: string | null;
+}
+
+export interface LeadHistoryImportInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  postalCode: string;
+  orderNumber: string;
+  placedAt: string;
+  items: string;
+  trackingNumber: string;
+  carrier: string;
+  deliveryAddress: string;
+  sourceKey: string;
+  sourceSheet: string;
 }
 
 export interface LeadProfile {
   lead: ContactLead;
   orders: OnlineOrder[];
+  historicalOrders: LeadHistoricalOrder[];
   activities: LeadActivity[];
 }
 
