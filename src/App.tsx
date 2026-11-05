@@ -32,7 +32,13 @@ import type { OrderPagination, OrderSearch } from './components/Admin/AdminLayou
 import type { ProductCsvItem } from './utils/productCsv';
 
 const mergeCatalogItem = (item: CatalogItem, seededItem?: CatalogItem): CatalogItem => {
-  const images = item.images ?? (item.image ? [item.image] : seededItem?.image ? [seededItem.image] : []);
+  const apiImages = item.images?.filter((image) => typeof image === 'string' && image.length > 0) ?? [];
+  const seededImages = seededItem?.images?.length ? seededItem.images : seededItem?.image ? [seededItem.image] : [];
+  const images = apiImages.length > 0
+    ? apiImages
+    : item.image
+      ? [item.image]
+      : seededImages;
   const image = item.image || images[0];
   return {
     ...seededItem,

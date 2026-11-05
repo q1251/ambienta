@@ -66,6 +66,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [viewingItem, setViewingItem] = useState<CatalogItem | null>(null);
+  const [viewingImageIndex, setViewingImageIndex] = useState(0);
   const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false);
   const [isProductCsvOpen, setIsProductCsvOpen] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('All');
@@ -393,6 +394,12 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     clearPendingProductImages(editingProductImages, setEditingProductImages);
     setEditingItem({ ...item, images: getProductImages(item) });
   };
+  const openProductDetails = (item: CatalogItem) => {
+    setViewingImageIndex(0);
+    setViewingItem(item);
+  };
+  const viewingImages = viewingItem ? getProductImages(viewingItem) : [];
+  const activeViewingImage = viewingImages[viewingImageIndex];
 
   return (
     viewingItem ? (
@@ -405,7 +412,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Product details</p>
               <h1 className="text-xl font-bold text-slate-900">{viewingItem.name}</h1>
-              <p className="text-xs text-slate-500">SKU: {viewingItem.sku}</p>
+              <p className="text-xs text-slate-500">SKU: {viewingItem.sku || 'Not specified'} · Product ID: {viewingItem.id}</p>
             </div>
           </div>
           <button type="button" onClick={() => { openEditItem(viewingItem); setViewingItem(null); }} className="inline-flex items-center gap-2 rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900">
@@ -413,39 +420,62 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           </button>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]">
           <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start gap-4">
-              {getProductImages(viewingItem)[0] ? (
-                <img src={getProductImages(viewingItem)[0]} alt={viewingItem.name} className="h-28 w-28 rounded-xl border border-slate-200 object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="flex h-28 w-28 items-center justify-center rounded-xl bg-teal-50 text-teal-800"><Package className="h-10 w-10" /></div>
-              )}
-              <div className="min-w-0 flex-1">
+            <div className="grid gap-5 md:grid-cols-[minmax(16rem,0.8fr)_minmax(0,1.2fr)]">
+              <div className="space-y-3">
+                <div className="flex aspect-square max-h-[28rem] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  {activeViewingImage ? (
+                    <img src={activeViewingImage} alt={`${viewingItem.name} image ${viewingImageIndex + 1}`} className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-slate-400"><Package className="h-12 w-12" /><span className="text-xs">No product images</span></div>
+                  )}
+                </div>
+                {viewingImages.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {viewingImages.map((image, index) => (
+                      <button key={`${image}-${index}`} type="button" onClick={() => setViewingImageIndex(index)} aria-label={`Show product image ${index + 1}`} aria-pressed={index === viewingImageIndex} className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${index === viewingImageIndex ? 'border-teal-700' : 'border-slate-200'}`}>
+                        <img src={image} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">{viewingItem.category}</span>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${viewingItem.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>{viewingItem.isActive === false ? 'Hidden from storefront' : 'Published'}</span>
                   {viewingItem.isFeatured && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Featured</span>}
                   {viewingItem.rxRequired && <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">Prescription required</span>}
                 </div>
-                <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{viewingItem.description || 'No product description has been added.'}</p>
+                <h2 className="mt-4 text-2xl font-bold leading-tight text-slate-900">{viewingItem.name}</h2>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{viewingItem.description || 'No product description has been added.'}</p>
               </div>
             </div>
             <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
               <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dosage / formulation</p><p className="mt-1 text-sm font-medium text-slate-800">{viewingItem.dosage || 'Not specified'}</p></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">NDC code</p><p className="mt-1 font-mono text-sm text-slate-800">{viewingItem.ndcCode || 'Not specified'}</p></div>
+              <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Product SKU</p><p className="mt-1 font-mono text-sm text-slate-800">{viewingItem.sku || 'Not specified'}</p></div>
+              <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Listing status</p><p className="mt-1 text-sm font-medium text-slate-800">{viewingItem.isActive === false ? 'Hidden from storefront' : 'Published on storefront'}{viewingItem.isFeatured ? ' · Featured' : ''}</p></div>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Retail price</p><p className="mt-1 text-xl font-bold text-slate-900">${viewingItem.price.toFixed(2)}</p></div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Copay</p><p className="mt-1 text-xl font-bold text-slate-900">{viewingItem.copayPrice && viewingItem.copayPrice > 0 ? `$${viewingItem.copayPrice.toFixed(2)}` : '—'}</p></div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Copay estimate</p><p className="mt-1 text-xl font-bold text-slate-900">{viewingItem.copayPrice && viewingItem.copayPrice > 0 ? `$${viewingItem.copayPrice.toFixed(2)}` : '—'}</p></div>
+              {viewingItem.costPrice !== undefined && <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Unit cost</p><p className="mt-1 text-xl font-bold text-slate-900">${viewingItem.costPrice.toFixed(2)}</p></div>}
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs font-semibold text-slate-500">Inventory</p>
               <p className={`mt-1 text-2xl font-bold ${viewingItem.stockCount <= 0 ? 'text-rose-700' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'text-amber-700' : 'text-slate-900'}`}>{viewingItem.stockCount} units</p>
               <p className="mt-1 text-xs text-slate-500">Low stock threshold: {viewingItem.minStockThreshold}</p>
+              <p className={`mt-2 text-xs font-semibold ${viewingItem.stockCount <= 0 ? 'text-rose-700' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'text-amber-700' : 'text-emerald-700'}`}>{viewingItem.stockCount <= 0 ? 'Out of stock' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'Low stock' : 'In stock'}</p>
+              <p className="mt-2 text-xs text-slate-500">Availability: {viewingItem.inStock && viewingItem.stockCount > 0 ? 'Available' : 'Unavailable'}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500">Restocking</p>
+              <p className="mt-1 text-sm text-slate-800">{viewingItem.lastRestocked || 'No restock date recorded'}</p>
             </div>
           </div>
         </div>
@@ -643,9 +673,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        {item.image ? (
+                        {getProductImages(item)[0] ? (
                           <img
-                            src={item.image}
+                            src={getProductImages(item)[0]}
                             alt={item.name}
                             className="w-10 h-10 rounded-md object-cover border border-slate-200 shrink-0"
                             referrerPolicy="no-referrer"
@@ -789,7 +819,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={(event) => { event.stopPropagation(); setViewingItem(item); }}
+                        onClick={(event) => { event.stopPropagation();                         openProductDetails(item); }}
                         className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-800"
                         title="View product page"
                         aria-label={`View ${item.name} product page`}
