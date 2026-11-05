@@ -2247,8 +2247,19 @@ function data_mask_mail_text(string $text): string
 
 function data_contains_contact_details(string $text): bool
 {
-    return preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $text) === 1
-        || preg_match('/(?<![A-Za-z0-9])\+?\d(?:[\s().-]*\d){6,}(?![A-Za-z0-9])/', $text) === 1;
+    return data_contact_detail_types($text) !== [];
+}
+
+function data_contact_detail_types(string $text): array
+{
+    $types = [];
+    if (preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $text) === 1) {
+        $types[] = 'email';
+    }
+    if (preg_match('/(?<![A-Za-z0-9])\+?\d(?:[\s().-]*\d){6,}(?![A-Za-z0-9])/', $text) === 1) {
+        $types[] = 'phone';
+    }
+    return $types;
 }
 
 function data_lead_row(array $row): array
@@ -2369,15 +2380,15 @@ function data_product_row(array $row): array
 
 function data_audit(PDO $db, string $action, string $entityType, string $entityId, array $details = []): void
 {
-    $encoded = json_encode($details, JSON_UNESCAPED_SLASHES);
-    if ($encoded === false) {
-        throw new RuntimeException('Audit detail encoding failed.');
-    }
     $actor = is_string($_SESSION['impersonated_by'] ?? null)
         ? $_SESSION['impersonated_by']
         : (is_string($_SESSION['admin_email'] ?? null) ? $_SESSION['admin_email'] : 'unknown');
     if (!empty($_SESSION['is_impersonating']) && is_string($_SESSION['admin_email'] ?? null)) {
         $details['actingAs'] = $_SESSION['admin_email'];
+    }
+    $encoded = json_encode($details, JSON_UNESCAPED_SLASHES);
+    if ($encoded === false) {
+        throw new RuntimeException('Audit detail encoding failed.');
     }
     $db->prepare(
         'INSERT INTO admin_audit_log (actor_email, action, entity_type, entity_id, details) VALUES (?, ?, ?, ?, ?)'
@@ -3579,6 +3590,14 @@ if (in_array($resource, [
             data_respond(400, ['error' => 'invalid_email_content', 'message' => 'Enter a message of 24,000 bytes or less.']);
         }
         if ($isOperator) {
+            $contactDetailTypes = data_contact_detail_types($subject . "\n" . $message);
+            if ($contactDetailTypes !== []) {
+                data_audit($db, 'security.contact_details_blocked', 'staff', (string) ($_SESSION['staff_id'] ?? 0), [
+                    'channel' => 'email',
+                    'detectedTypes' => $contactDetailTypes,
+                ]);
+                data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Agent emails cannot include email addresses or phone-number-like contact details in the subject or message. The administrator has been alerted.']);
+            }
             $ccValue = $body['cc'] ?? '';
             $bccValue = $body['bcc'] ?? '';
             $attachmentsValue = $body['attachments'] ?? [];
@@ -3586,9 +3605,6 @@ if (in_array($resource, [
                 || !is_string($bccValue) || trim($bccValue) !== ''
                 || !is_array($attachmentsValue) || $attachmentsValue !== []) {
                 data_respond(403, ['error' => 'agent_email_restrictions', 'message' => 'Agent emails cannot include additional recipients or attachments.']);
-            }
-            if (data_contains_contact_details($subject . "\n" . $message)) {
-                data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Agent emails cannot include email addresses or phone-number-like contact details in the subject or message.']);
             }
         }
         if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
@@ -3903,11 +3919,17 @@ if (in_array($resource, [
         if (preg_match('/[\r\n\x00]/', $name . $subject) === 1 || preg_match('/\x00/', $message) === 1) {
             data_respond(400, ['error' => 'invalid_campaign', 'message' => 'The campaign contains unsupported control characters.']);
         }
-        if ($campaignStaffId !== null && (
-            data_contains_contact_details($subject . "\n" . $message)
-            || preg_match('/\{\{\s*email\s*\}\}/i', $subject . "\n" . $message) === 1
-        )) {
-            data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Agent campaigns cannot include email addresses or phone-number-like contact details in the subject or message.']);
+        $campaignContactDetailTypes = data_contact_detail_types($subject . "\n" . $message);
+        $usesEmailMergeField = preg_match('/\{\{\s*email\s*\}\}/i', $subject . "\n" . $message) === 1;
+        if ($campaignStaffId !== null && ($campaignContactDetailTypes !== [] || $usesEmailMergeField)) {
+            if ($usesEmailMergeField && !in_array('email', $campaignContactDetailTypes, true)) {
+                $campaignContactDetailTypes[] = 'email';
+            }
+            data_audit($db, 'security.contact_details_blocked', 'staff', (string) $campaignStaffId, [
+                'channel' => 'email campaign',
+                'detectedTypes' => $campaignContactDetailTypes,
+            ]);
+            data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Agent campaigns cannot include email addresses or phone-number-like contact details in the subject or message. The administrator has been alerted.']);
         }
         try {
             $audienceFilter = data_campaign_filters($body['audienceFilter'] ?? []);
@@ -4543,6 +4565,39 @@ if ($method === 'GET') {
         unset($row);
         data_respond(200, ['entries' => $rows]);
     }
+    if ($resource === 'security-alerts') {
+        data_require_admin('admin');
+        $afterId = null;
+        if (isset($_GET['afterId'])) {
+            $afterId = filter_var($_GET['afterId'], FILTER_VALIDATE_INT);
+            if ($afterId === false || $afterId < 0) {
+                data_respond(400, ['error' => 'invalid_alert_cursor', 'message' => 'The security alert cursor is invalid.']);
+            }
+        }
+        if ($afterId === null) {
+            $rows = $db->query(
+                "SELECT id, actor_email, entity_id, details, created_at
+                 FROM admin_audit_log
+                 WHERE action = 'security.contact_details_blocked'
+                 ORDER BY id DESC LIMIT 50"
+            )->fetchAll();
+            $rows = array_reverse($rows);
+        } else {
+            $statement = $db->prepare(
+                "SELECT id, actor_email, entity_id, details, created_at
+                 FROM admin_audit_log
+                 WHERE action = 'security.contact_details_blocked' AND id > ?
+                 ORDER BY id ASC LIMIT 50"
+            );
+            $statement->execute([$afterId]);
+            $rows = $statement->fetchAll();
+        }
+        foreach ($rows as &$row) {
+            $row['details'] = $row['details'] === null ? null : json_decode($row['details'], true);
+        }
+        unset($row);
+        data_respond(200, ['alerts' => $rows]);
+    }
     if ($resource === 'staff') {
         data_require_admin('admin');
         if (isset($_GET['id'])) {
@@ -4860,6 +4915,16 @@ if ($method === 'POST' && $resource === 'chat-admin') {
             if (!$isPrimaryAdmin && ($conversation['owner_type'] !== 'agent' || (int) $conversation['owner_staff_id'] !== $staffId)) {
                 $db->rollBack();
                 data_respond(409, ['error' => 'chat_not_owned', 'message' => 'Claim this chat before replying. Another staff member may already own it.']);
+            }
+            $contactDetailTypes = $isPrimaryAdmin ? [] : data_contact_detail_types($message);
+            if ($contactDetailTypes !== []) {
+                data_audit($db, 'security.contact_details_blocked', 'staff', (string) $staffId, [
+                    'channel' => 'chat',
+                    'conversationId' => (int) $conversationId,
+                    'detectedTypes' => $contactDetailTypes,
+                ]);
+                $db->commit();
+                data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Your reply was not sent because it contains an email address or phone-number-like contact detail. The administrator has been alerted.']);
             }
             if ($isPrimaryAdmin && $conversation['owner_type'] !== 'admin') {
                 $previousOwner = $conversation['owner_type'] === 'admin' ? 'the administrator' : 'the shared queue';

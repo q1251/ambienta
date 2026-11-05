@@ -9,9 +9,11 @@ import {
   MessageCircle,
   Package,
   Settings2,
+  ShieldAlert,
   ShieldCheck,
   Users,
   UserRound,
+  X,
 } from 'lucide-react';
 import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadProfile, OnlineOrder } from '../../types/pharmacy';
 import type { ProductCsvItem } from '../../utils/productCsv';
@@ -116,6 +118,18 @@ const permissionForTab: Partial<Record<AdminTab, string>> = {
 };
 
 export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
+  const [securityAlerts, setSecurityAlerts] = useState<Array<{
+    id: number;
+    actor_email: string;
+    details: {
+      channel?: string;
+      detectedTypes?: string[];
+      actingAs?: string;
+    } | null;
+    created_at: string;
+  }>>([]);
+  const [securityAlertError, setSecurityAlertError] = useState('');
+  const lastSecurityAlertId = React.useRef(0);
   const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has('leadId')) return 'leads';
@@ -135,6 +149,70 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   const [logoutError, setLogoutError] = useState('');
   const [impersonationError, setImpersonationError] = useState('');
   const [emailInitialFolder, setEmailInitialFolder] = useState<'inbox' | 'campaigns'>('inbox');
+  useEffect(() => {
+    if (props.role !== 'admin') {
+      setSecurityAlerts([]);
+      setSecurityAlertError('');
+      return;
+    }
+
+    const storageKey = `ambienta:security-alerts:last-seen:${props.email.toLowerCase()}`;
+    let requestInProgress = false;
+    let failureReported = false;
+    try {
+      lastSecurityAlertId.current = Number(window.localStorage.getItem(storageKey)) || 0;
+    } catch (error) {
+      console.error('Ambienta CRM could not read the security alert cursor.', error);
+      lastSecurityAlertId.current = 0;
+    }
+    const refreshSecurityAlerts = async () => {
+      if (requestInProgress) return;
+      requestInProgress = true;
+      try {
+        const cursor = lastSecurityAlertId.current;
+        const query = cursor > 0 ? `&afterId=${encodeURIComponent(String(cursor))}` : '';
+        const response = await fetch(`/api/data.php?resource=security-alerts${query}`, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json() as {
+          alerts?: Array<{
+            id: number;
+            actor_email: string;
+            details: { channel?: string; detectedTypes?: string[]; actingAs?: string } | null;
+            created_at: string;
+          }>;
+          message?: string;
+        };
+        if (!response.ok) throw new Error(result.message || `Security alerts could not be refreshed (${response.status}).`);
+        if (!Array.isArray(result.alerts)) throw new Error('The security alert response was invalid.');
+        if (result.alerts.length > 0) {
+          const newestId = Math.max(...result.alerts.map((alert) => alert.id));
+          lastSecurityAlertId.current = newestId;
+          try {
+            window.localStorage.setItem(storageKey, String(newestId));
+          } catch (error) {
+            console.error('Ambienta CRM could not save the security alert cursor.', error);
+          }
+          setSecurityAlerts((current) => [...current, ...result.alerts!].slice(-5));
+        }
+        setSecurityAlertError('');
+        failureReported = false;
+      } catch (error) {
+        setSecurityAlertError(error instanceof Error ? error.message : 'Security alerts could not be refreshed.');
+        if (!failureReported) {
+          console.error('Ambienta CRM security alerts could not be refreshed.', error);
+          failureReported = true;
+        }
+      } finally {
+        requestInProgress = false;
+      }
+    };
+
+    void refreshSecurityAlerts();
+    const timer = window.setInterval(() => void refreshSecurityAlerts(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [props.email, props.role]);
   useEffect(() => {
     let failureReported = false;
     const presencePermission = activeTab === 'orders' ? 'orders'
@@ -289,6 +367,42 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
         )}
         {impersonationError && <p role="alert" className="border-t border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">{impersonationError}</p>}
       </header>
+      {props.role === 'admin' && (securityAlerts.length > 0 || securityAlertError) && (
+        <div className="fixed right-4 top-[88px] z-50 flex w-[min(420px,calc(100vw-2rem))] flex-col gap-2">
+          {securityAlertError && (
+            <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900 shadow-lg">
+              {securityAlertError}
+            </p>
+          )}
+          {securityAlerts.map((alert) => {
+            const detected = alert.details?.detectedTypes ?? [];
+            const staff = alert.details?.actingAs || alert.actor_email || 'An agent';
+            const channel = alert.details?.channel === 'chat'
+              ? 'live chat'
+              : alert.details?.channel === 'email campaign' ? 'an email campaign' : 'email';
+            return (
+              <div key={alert.id} role="alert" className="flex items-start gap-3 rounded-xl border border-rose-200 bg-white p-3.5 text-rose-950 shadow-lg">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold">Blocked contact-detail attempt</p>
+                  <p className="mt-1 text-xs leading-5 text-rose-800">
+                    {staff} attempted to include {detected.length ? detected.join(' and ') : 'contact'} details in {channel}. The message was not sent.
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500">{new Date(alert.created_at).toLocaleString()}</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Dismiss security alert"
+                  onClick={() => setSecurityAlerts((current) => current.filter((item) => item.id !== alert.id))}
+                  className="rounded-md p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-800"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className={`flex ${
         activeTab === 'email' || activeTab === 'chat'
