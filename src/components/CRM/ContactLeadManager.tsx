@@ -49,6 +49,7 @@ import {
   generateSampleCsv,
   classifyLeadContact,
   getLeadCountry,
+  isValidLeadEmail,
   parseLeadsCsv,
   sortContactLeads,
   LeadSortField,
@@ -485,7 +486,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     const emailValue = email.trim();
     const phoneValue = phone.trim();
     if (
-      (emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue))
+      (emailValue && !isValidLeadEmail(emailValue))
       || (!emailValue && phoneValue.replace(/\D/g, '').length < 7)
     ) {
       setRequestError('Enter a valid email address or a phone number with at least seven digits.');

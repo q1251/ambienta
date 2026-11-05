@@ -138,6 +138,22 @@ test('parseLeadsCsv imports email-only and phone-only contacts and merges duplic
   assert.equal('medicationName' in parsed.leads[2], false);
 });
 
+test('parseLeadsCsv drops malformed email values while preserving valid alternate contacts', () => {
+  const parsed = parseLeadsCsv([
+    'first_name,last_name,email,phone,address',
+    'Ava,Stone,ava..stone@example.com,+1 213 373 4253,',
+    'Noah,Reed,noah..reed@example.com,,12 Oak Street',
+    'Mia,Lin,mia..lin@example.com,,',
+  ].join('\n'));
+
+  assert.equal(parsed.leads.length, 2);
+  assert.equal(parsed.leads[0].email, '');
+  assert.equal(parsed.leads[0].phone, '+1 213 373 4253');
+  assert.equal(parsed.leads[1].email, '');
+  assert.equal(parsed.leads[1].address, '12 Oak Street');
+  assert.equal(parsed.errors.length, 1);
+});
+
 test('parseLeadsCsv preserves addresses and separately imports explicit order history fields', () => {
   const parsed = parseLeadsCsv([
     'first_name,last_name,email,phone,postal_code,address,order_number,order_date,product_name,tracking_number,carrier,source_key,source_sheet,medication_name,rx_number',

@@ -77,8 +77,18 @@ export interface CsvParseResult {
   totalParsed: number;
 }
 
+export function isValidLeadEmail(email: string): boolean {
+  if (email.length > 254 || email.includes('..')) return false;
+  const [local, domain, ...extra] = email.split('@');
+  if (!local || !domain || extra.length > 0 || local.length > 64 || local.startsWith('.') || local.endsWith('.')) {
+    return false;
+  }
+  if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local)) return false;
+  return /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/.test(domain);
+}
+
 export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'phone' | 'address' | 'postalCode'>): LeadContactCompleteness {
-  const hasEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email.trim());
+  const hasEmail = isValidLeadEmail(lead.email.trim());
   const hasPhone = lead.phone.replace(/\D/g, '').length >= 7;
   const hasFullName = Boolean(lead.firstName.trim() && lead.lastName.trim());
   const hasName = Boolean(lead.firstName.trim() || lead.lastName.trim());
@@ -151,17 +161,18 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
     const cols = rows[rowIndex];
     const firstName = (fnIdx === -1 ? '' : cols[fnIdx] || '').trim();
     const lastName = (lnIdx === -1 ? '' : cols[lnIdx] || '').trim();
-    const email = (emailIdx === -1 ? '' : cols[emailIdx] || '').trim().toLowerCase();
+    const rawEmail = (emailIdx === -1 ? '' : cols[emailIdx] || '').trim().toLowerCase();
+    const validEmail = isValidLeadEmail(rawEmail);
+    const email = validEmail ? rawEmail : '';
     const rawPhone = (phoneIdx === -1 ? '' : cols[phoneIdx] || '').trim();
     const phoneIsPostalCode = /^\d{5}(?:-\d{4})?$/.test(rawPhone);
     const phone = phoneIsPostalCode ? '' : rawPhone;
     const country = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
     const address = addressIdx !== -1 ? cols[addressIdx]?.trim() || '' : '';
     const postalCode = (postalCodeIdx !== -1 ? cols[postalCodeIdx]?.trim() : '') || (phoneIsPostalCode ? rawPhone : '');
-    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const hasPhone = phone.replace(/\D/g, '').length >= 7;
     const hasAddressOnlyIdentity = Boolean(address || postalCode);
-    if ((email && !validEmail) || (!validEmail && !hasPhone && !hasAddressOnlyIdentity)) {
+    if (!validEmail && !hasPhone && !hasAddressOnlyIdentity) {
       if (errors.length < 20) {
         errors.push(`Row ${rowIndex + 1}: Skipped row due to missing valid email, phone, or address.`);
       }
