@@ -110,6 +110,7 @@ const demoAgentNames = new Set([
   'Agent Four',
   'Agent Five',
   'CRM QA Test Agent',
+  'CRM QA Test Agent Updated',
 ]);
 
 const formatTimestamp = (value: string) => {
