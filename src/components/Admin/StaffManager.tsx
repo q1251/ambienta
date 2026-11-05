@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Activity, ArrowLeft, CalendarDays, Clock3, KeyRound, LogIn, Mail, ShoppingBag, Trash2, UserPlus, Users, UserX } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, Clock3, KeyRound, LogIn, Mail, Search, ShoppingBag, Trash2, UserPlus, Users, UserX } from 'lucide-react';
 
 const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
@@ -145,6 +145,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [editingId, setEditingId] = useState<number | null>(null);
   const [profileAccountId, setProfileAccountId] = useState<number | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<AgentProfile | null>(null);
+  const [assignedLeadSearch, setAssignedLeadSearch] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [resetPasswordReveal, setResetPasswordReveal] = useState<{ accountId: number; password: string } | null>(null);
@@ -159,6 +160,10 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   const [agentsMayClaimWhenAdminOnline, setAgentsMayClaimWhenAdminOnline] = useState(false);
   const [routingSaving, setRoutingSaving] = useState(false);
   const demoAccounts = accounts.filter((account) => demoAgentNames.has(account.display_name));
+  const filteredAssignedLeads = (selectedProfile?.assignedLeads ?? []).filter((lead) => {
+    const query = assignedLeadSearch.trim().toLocaleLowerCase();
+    return !query || `${lead.firstName} ${lead.lastName} ${lead.email} ${lead.status}`.toLocaleLowerCase().includes(query);
+  });
 
   const loadAccounts = useCallback(async () => {
     setLoading(true);
@@ -408,6 +413,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
 
   const openProfile = async (account: StaffAccount) => {
     if (profileAccountId !== account.id) setResetPasswordReveal(null);
+    if (profileAccountId !== account.id) setAssignedLeadSearch('');
     setProfileAccountId(account.id);
     setSelectedProfile(null);
     setProfileError('');
@@ -620,15 +626,28 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                         <h3 className="font-semibold text-slate-900">Assigned leads</h3>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.assignedLeads.length}</span>
                       </div>
+                      <label className="relative mt-3 block">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="search"
+                          aria-label="Search assigned leads"
+                          placeholder="Search by name, email, or status"
+                          value={assignedLeadSearch}
+                          onChange={(event) => setAssignedLeadSearch(event.target.value)}
+                          className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        />
+                      </label>
                       {selectedProfile.assignedLeads.length ? (
-                        <div className="mt-2 max-h-[min(28vh,18rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain pr-1">
-                          {selectedProfile.assignedLeads.map((lead) => (
+                        filteredAssignedLeads.length ? (
+                          <div className="mt-2 max-h-[min(28vh,18rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain pr-1">
+                            {filteredAssignedLeads.map((lead) => (
                             <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                               <div><p className="text-sm font-medium text-slate-900">{lead.firstName} {lead.lastName}</p><p className="text-xs text-slate-500">{lead.email}</p></div>
                               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{lead.status}</span>
                             </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        ) : <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No assigned leads match your search.</p>
                       ) : <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No leads assigned yet. Assign leads from Contact Leads.</p>}
                     </section>
                   </div>
