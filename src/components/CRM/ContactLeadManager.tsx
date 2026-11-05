@@ -173,6 +173,19 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [countryFilter, setCountryFilter] = useState('All');
   const [contactTypeFilter, setContactTypeFilter] = useState<'All' | LeadContactCompleteness>('All');
   const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
+  const [tableFilters, setTableFilters] = useState({
+    name: '',
+    email: '',
+    details: '',
+    phone: '',
+    address: '',
+    country: 'All',
+    status: 'All' as 'All' | LeadStatus,
+    consent: 'All',
+    orders: '',
+    lastOrder: '',
+    agent: 'All',
+  });
   const [leadPage, setLeadPage] = useState(1);
   const [sortField, setSortField] = useState<LeadSortField>('completeness');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -184,6 +197,28 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setSortField(field);
       setSortOrder(field === 'name' || field === 'country' ? 'asc' : 'desc');
     }
+  };
+
+  const updateTableFilter = <K extends keyof typeof tableFilters>(field: K, value: (typeof tableFilters)[K]) => {
+    setTableFilters((current) => ({ ...current, [field]: value }));
+    setLeadPage(1);
+  };
+
+  const clearTableFilters = () => {
+    setTableFilters({
+      name: '',
+      email: '',
+      details: '',
+      phone: '',
+      address: '',
+      country: 'All',
+      status: 'All',
+      consent: 'All',
+      orders: '',
+      lastOrder: '',
+      agent: 'All',
+    });
+    setLeadPage(1);
   };
 
   // Multi-select batch actions
@@ -339,14 +374,46 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     });
   }, [leads, stageFilter, countryFilter, contactTypeFilter, search, leadTab]);
 
+  const tableFilteredLeads = useMemo(() => {
+    const includes = (value: string | undefined, query: string) =>
+      !query.trim() || (value || '').toLowerCase().includes(query.trim().toLowerCase());
+    return filteredLeads.filter((lead) => {
+      const countryLabel = getLeadCountryLabel(lead.country || '', lead.phone);
+      const orderCount = leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0;
+      const detailsScore = lead.profileCompletenessScore ?? calculateLeadProfileCompleteness(lead);
+      const lastOrderTimestamp = lead.lastOrderAt ? Date.parse(lead.lastOrderAt) : Number.NaN;
+      const lastOrder = Number.isFinite(lastOrderTimestamp) ? new Date(lastOrderTimestamp).toISOString().slice(0, 10) : '';
+      return includes(`${lead.firstName} ${lead.lastName}`.trim(), tableFilters.name)
+        && includes(lead.email, tableFilters.email)
+        && (!tableFilters.details || detailsScore === Number(tableFilters.details))
+        && includes(lead.phone, tableFilters.phone)
+        && includes(`${lead.address || ''} ${lead.postalCode || ''}`, tableFilters.address)
+        && (tableFilters.country === 'All' || countryLabel === tableFilters.country)
+        && (tableFilters.status === 'All' || lead.status === tableFilters.status)
+        && (tableFilters.consent === 'All'
+          || (tableFilters.consent === 'yes' ? lead.marketingConsent : !lead.marketingConsent))
+        && (!tableFilters.orders || orderCount === Number(tableFilters.orders))
+        && (!tableFilters.lastOrder || lastOrder === tableFilters.lastOrder)
+        && (tableFilters.agent === 'All'
+          || (tableFilters.agent === 'unassigned'
+            ? lead.assignedStaffId == null
+            : String(lead.assignedStaffId ?? '') === tableFilters.agent));
+    });
+  }, [filteredLeads, tableFilters, leadTab]);
+
   const sortedLeads = useMemo(() => {
-    return sortContactLeads(filteredLeads, sortField, sortOrder);
-  }, [filteredLeads, sortField, sortOrder]);
+    return sortContactLeads(tableFilteredLeads, sortField, sortOrder);
+  }, [tableFilteredLeads, sortField, sortOrder]);
 
   const pageSize = 50;
   const pageCount = Math.max(1, Math.ceil(sortedLeads.length / pageSize));
   const currentPage = Math.min(leadPage, pageCount);
   const visibleLeads = sortedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const hasTableFilters = Object.entries(tableFilters).some(([key, value]) => value !== (key === 'status' || key === 'country' || key === 'consent' || key === 'agent' ? 'All' : ''));
+  const maxProfileCompletenessScore = leads.reduce(
+    (max, lead) => Math.max(max, lead.profileCompletenessMaxScore ?? 7),
+    0,
+  );
 
   // Multi-select helpers
   const isAllVisibleSelected = visibleLeads.length > 0 && visibleLeads.every((l) => selectedLeadIds.includes(l.id));
@@ -2079,6 +2146,140 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   {isSuperadmin && <th className="px-4 py-3.5">Assigned Agent</th>}
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
+                <tr className="border-t border-slate-200 bg-white normal-case tracking-normal">
+                  <th className="px-2 py-2 text-center">
+                    {hasTableFilters && (
+                      <button
+                        type="button"
+                        onClick={clearTableFilters}
+                        className="text-[10px] font-semibold text-blue-800 hover:underline"
+                        aria-label="Clear table filters"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      value={tableFilters.name}
+                      onChange={(event) => updateTableFilter('name', event.target.value)}
+                      placeholder="Filter name"
+                      aria-label="Filter table by name"
+                      className="w-full min-w-24 rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-normal text-slate-700 placeholder:text-slate-400"
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      value={tableFilters.email}
+                      onChange={(event) => updateTableFilter('email', event.target.value)}
+                      placeholder="Filter email"
+                      aria-label="Filter table by email"
+                      className="w-full min-w-28 rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-normal text-slate-700 placeholder:text-slate-400"
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={tableFilters.details}
+                      onChange={(event) => updateTableFilter('details', event.target.value)}
+                      aria-label="Filter table by profile details score"
+                      className="w-full min-w-16 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
+                    >
+                      <option value="">All</option>
+                      {Array.from({ length: maxProfileCompletenessScore + 1 }, (_, score) => (
+                        <option key={score} value={score}>{score}/{maxProfileCompletenessScore}</option>
+                      ))}
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      value={tableFilters.phone}
+                      onChange={(event) => updateTableFilter('phone', event.target.value)}
+                      placeholder="Filter phone"
+                      aria-label="Filter table by phone"
+                      className="w-full min-w-24 rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-normal text-slate-700 placeholder:text-slate-400"
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      value={tableFilters.address}
+                      onChange={(event) => updateTableFilter('address', event.target.value)}
+                      placeholder="Filter address"
+                      aria-label="Filter table by address or postal code"
+                      className="w-full min-w-28 rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-normal text-slate-700 placeholder:text-slate-400"
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={tableFilters.country}
+                      onChange={(event) => updateTableFilter('country', event.target.value)}
+                      aria-label="Filter table by country"
+                      className="w-full min-w-28 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
+                    >
+                      <option value="All">All countries</option>
+                      {availableCountries.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={tableFilters.status}
+                      onChange={(event) => updateTableFilter('status', event.target.value as 'All' | LeadStatus)}
+                      aria-label="Filter table by status"
+                      className="w-full min-w-24 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
+                    >
+                      <option value="All">All statuses</option>
+                      {STAGES.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <select
+                      value={tableFilters.consent}
+                      onChange={(event) => updateTableFilter('consent', event.target.value)}
+                      aria-label="Filter table by marketing consent"
+                      className="w-full min-w-24 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
+                    >
+                      <option value="All">All</option>
+                      <option value="yes">Opted in</option>
+                      <option value="no">No consent</option>
+                    </select>
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={tableFilters.orders}
+                      onChange={(event) => updateTableFilter('orders', event.target.value)}
+                      placeholder="Count"
+                      aria-label="Filter table by order count"
+                      className="w-full min-w-16 rounded-md border border-slate-200 px-2 py-1.5 text-[11px] font-normal text-slate-700 placeholder:text-slate-400"
+                    />
+                  </th>
+                  <th className="px-2 py-2">
+                    <input
+                      type="date"
+                      value={tableFilters.lastOrder}
+                      onChange={(event) => updateTableFilter('lastOrder', event.target.value)}
+                      aria-label="Filter table by last order date"
+                      className="w-full min-w-32 rounded-md border border-slate-200 px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
+                    />
+                  </th>
+                  {isSuperadmin && (
+                    <th className="px-2 py-2">
+                      <select
+                        value={tableFilters.agent}
+                        onChange={(event) => updateTableFilter('agent', event.target.value)}
+                        aria-label="Filter table by assigned agent"
+                        className="w-full min-w-28 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
+                      >
+                        <option value="All">All agents</option>
+                        <option value="unassigned">Unassigned</option>
+                        {agents.map((agent) => (
+                          <option key={agent.id} value={String(agent.id)}>{agent.display_name || agent.email}</option>
+                        ))}
+                      </select>
+                    </th>
+                  )}
+                  <th className="px-2 py-2" />
+                </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {visibleLeads.map((lead) => {
@@ -2219,8 +2420,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           {/* Pagination Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
             <span>
-              Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredLeads.length)} of{' '}
-              {filteredLeads.length} contacts
+            Showing {sortedLeads.length ? (currentPage - 1) * pageSize + 1 : 0}–{Math.min(currentPage * pageSize, sortedLeads.length)} of{' '}
+            {sortedLeads.length} contacts
             </span>
             <div className="flex items-center gap-2">
               <button
