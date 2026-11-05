@@ -434,6 +434,10 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   };
 
   const handleSendPaymentLink = async (previewOnly = false) => {
+    if (!canManagePaymentLinks) {
+      setPaymentEmailError('Only a superadmin can send payment links.');
+      return;
+    }
     if (!selectedOrder) return;
     setPaymentEmailError('');
     setPaymentLinkSuccess('');
@@ -531,6 +535,25 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       setNewInternalNote('');
     } catch (error) {
       setOrderSaveError(error instanceof Error ? error.message : 'Order note could not be saved.');
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handleRequestPaymentLink = async () => {
+    if (!selectedOrder || canManagePaymentLinks) return;
+    setOrderSaveError('');
+    setIsSavingNote(true);
+    try {
+      const noteText = await onAddOrderInternalNote(
+        selectedOrder.id,
+        `Payment link requested from superadmin for order ${selectedOrder.orderNumber}. Please review and email payment instructions to the customer.`,
+      );
+      setSelectedOrder((current) => current?.id === selectedOrder.id
+        ? { ...current, internalNotes: [noteText, ...(current.internalNotes || [])] }
+        : current);
+    } catch (error) {
+      setOrderSaveError(error instanceof Error ? error.message : 'The payment-link request could not be added to the order notes.');
     } finally {
       setIsSavingNote(false);
     }
@@ -1157,6 +1180,21 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       </div>
                     )
                   )}
+                  {!canManagePaymentLinks && selectedOrder.status !== 'Cancelled' && selectedOrder.paymentStatus !== 'Paid' && (
+                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                      <p className="text-[11px] leading-5 text-slate-600">
+                        Payment links are sent by the superadmin. Request one using the order notes; after the order ships, you can add its tracking details below.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleRequestPaymentLink()}
+                        disabled={isSavingNote}
+                        className="w-full rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isSavingNote ? 'Adding request…' : 'Request payment link from superadmin'}
+                      </button>
+                    </div>
+                  )}
                   {canManagePaymentLinks && selectedOrder.paymentLinkSentAt && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
                     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
                       <p className="text-[11px] leading-5 text-slate-500">
@@ -1365,7 +1403,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         </div>
       )}
 
-      {isPaymentEmailModalOpen && selectedOrder && (
+      {canManagePaymentLinks && isPaymentEmailModalOpen && selectedOrder && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4"
           role="presentation"
