@@ -181,7 +181,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     address: '',
     country: 'All',
     status: 'All' as 'All' | LeadStatus,
-    consent: 'All',
     orders: '',
     lastOrder: '',
     agent: 'All',
@@ -213,7 +212,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       address: '',
       country: 'All',
       status: 'All',
-      consent: 'All',
       orders: '',
       lastOrder: '',
       agent: 'All',
@@ -390,8 +388,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         && includes(`${lead.address || ''} ${lead.postalCode || ''}`, tableFilters.address)
         && (tableFilters.country === 'All' || countryLabel === tableFilters.country)
         && (tableFilters.status === 'All' || lead.status === tableFilters.status)
-        && (tableFilters.consent === 'All'
-          || (tableFilters.consent === 'yes' ? lead.marketingConsent : !lead.marketingConsent))
         && (!tableFilters.orders || orderCount === Number(tableFilters.orders))
         && (!tableFilters.lastOrder || lastOrder === tableFilters.lastOrder)
         && (tableFilters.agent === 'All'
@@ -409,7 +405,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const pageCount = Math.max(1, Math.ceil(sortedLeads.length / pageSize));
   const currentPage = Math.min(leadPage, pageCount);
   const visibleLeads = sortedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const hasTableFilters = Object.entries(tableFilters).some(([key, value]) => value !== (key === 'status' || key === 'country' || key === 'consent' || key === 'agent' ? 'All' : ''));
+  const hasTableFilters = Object.entries(tableFilters).some(([key, value]) => value !== (key === 'status' || key === 'country' || key === 'agent' ? 'All' : ''));
   const maxProfileCompletenessScore = leads.reduce(
     (max, lead) => Math.max(max, lead.profileCompletenessMaxScore ?? 7),
     0,
@@ -2127,7 +2123,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-3.5">Marketing Consent</th>
                   <th className="px-4 py-3.5">
                     <button
                       type="button"
@@ -2228,18 +2223,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <option value="All">All statuses</option>
                       {STAGES.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}
-                    </select>
-                  </th>
-                  <th className="px-2 py-2">
-                    <select
-                      value={tableFilters.consent}
-                      onChange={(event) => updateTableFilter('consent', event.target.value)}
-                      aria-label="Filter table by marketing consent"
-                      className="w-full min-w-24 rounded-md border border-slate-200 bg-white px-1.5 py-1.5 text-[11px] font-normal text-slate-700"
-                    >
-                      <option value="All">All</option>
-                      <option value="yes">Opted in</option>
-                      <option value="no">No consent</option>
                     </select>
                   </th>
                   <th className="px-2 py-2">
@@ -2359,12 +2342,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </span>
                       </td>
 
-                      <td className="px-4 py-3">
-                        <span className={lead.marketingConsent ? 'font-medium text-emerald-700' : 'text-slate-500'}>
-                          {lead.marketingConsent ? 'Opted in' : 'No consent'}
-                        </span>
-                      </td>
-
                       <td className="px-4 py-3 font-semibold text-slate-900">
                         {leadTab === 'uncalled_repeat_buyers' ? lead.activeOrderCount || 0 : lead.orderCount || 0}
                       </td>
@@ -2408,7 +2385,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                 {!visibleLeads.length && (
                   <tr>
-                    <td colSpan={isSuperadmin ? 13 : 12} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={isSuperadmin ? 12 : 11} className="px-6 py-12 text-center text-slate-400">
                       No contacts match the current filters or search query.
                     </td>
                   </tr>
