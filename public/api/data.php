@@ -5232,17 +5232,6 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         data_respond(400, ['error' => 'invalid_email_template', 'message' => 'Choose a supported payment email template.']);
     }
     $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
-    $linkParts = filter_var($paymentLink, FILTER_VALIDATE_URL) ? parse_url($paymentLink) : false;
-    if (!$previewOnly && (
-        !is_array($linkParts)
-        || strtolower((string) ($linkParts['scheme'] ?? '')) !== 'https'
-        || !isset($linkParts['host'])
-        || isset($linkParts['user'])
-        || isset($linkParts['pass'])
-        || preg_match('/[\r\n\x00]/', $paymentLink) === 1
-    )) {
-        data_respond(400, ['error' => 'invalid_payment_link', 'message' => 'Enter a valid external HTTPS payment link.']);
-    }
 
     $settings = data_mail_settings();
     if ($settings === [] || empty($settings['verified'])) {
@@ -5267,6 +5256,34 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             $db->rollBack();
             data_respond(409, ['error' => 'payment_link_not_supported', 'message' => 'Payment links are only available for card, PayPal, and cryptocurrency orders.']);
         }
+        $linkParts = filter_var($paymentLink, FILTER_VALIDATE_URL) ? parse_url($paymentLink) : false;
+        $isHttpsPaymentLink = is_array($linkParts)
+            && strtolower((string) ($linkParts['scheme'] ?? '')) === 'https'
+            && isset($linkParts['host'])
+            && !isset($linkParts['user'])
+            && !isset($linkParts['pass']);
+        $isCryptoOrder = $order['payment_method'] === 'Cryptocurrency (USDC / BTC / ETH / SOL)';
+        $isCryptoWalletUri = $isCryptoOrder
+            && preg_match('/^(?:bitcoin|ethereum|solana):[A-Za-z0-9][A-Za-z0-9._?=&%+\-]{0,500}$/i', $paymentLink) === 1;
+        $isCryptoWalletAddress = $isCryptoOrder && (
+            preg_match('/^(?:1|3)[a-km-zA-HJ-NP-Z1-9]{25,34}$/', $paymentLink) === 1
+            || preg_match('/^bc1[a-z0-9]{25,60}$/', $paymentLink) === 1
+            || preg_match('/^0x[a-fA-F0-9]{40}$/', $paymentLink) === 1
+            || (strlen($paymentLink) >= 32 && strlen($paymentLink) <= 44
+                && preg_match('/^[1-9A-HJ-NP-Za-km-z]+$/', $paymentLink) === 1)
+        );
+        if (!$previewOnly && (
+            preg_match('/[\r\n\x00]/', $paymentLink) === 1
+            || (!$isHttpsPaymentLink && !$isCryptoWalletUri && !$isCryptoWalletAddress)
+        )) {
+            $db->rollBack();
+            data_respond(400, [
+                'error' => 'invalid_payment_link',
+                'message' => $isCryptoOrder
+                    ? 'Enter an HTTPS payment link, a Bitcoin/Ethereum/Solana wallet URI, or a supported wallet address.'
+                    : 'Enter a valid external HTTPS payment link.',
+            ]);
+        }
         if ($order['payment_status'] === 'Paid' || $order['status'] === 'Cancelled') {
             $db->rollBack();
             data_respond(409, ['error' => 'order_not_payable', 'message' => 'A payment link cannot be sent for a paid or cancelled order.']);
@@ -5278,7 +5295,9 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $paymentInstructions = match ($order['payment_method']) {
             'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
             'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
-            'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
+            'Cryptocurrency (USDC / BTC / ETH / SOL)' => !$isHttpsPaymentLink
+                ? 'Send only the specified cryptocurrency on the correct network. Verify the asset, network, and full wallet address before confirming a transfer.'
+                : 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
             default => '',
         };
         $intro = sprintf($template['intro'], $order['order_number']);
@@ -5315,13 +5334,16 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $safeInstructions = htmlspecialchars($paymentInstructions, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeLink = htmlspecialchars($paymentLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeAdditionalMessage = htmlspecialchars($additionalMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $htmlPaymentLink = $isHttpsPaymentLink
+            ? '<a href="' . $safeLink . '">Complete secure payment</a>'
+            : '<strong>Crypto wallet address / payment URI:</strong><br><code style="overflow-wrap:anywhere">' . $safeLink . '</code>';
         $htmlBody = '<p>Hello ' . $safeName . ',</p><p>' . $safeIntro . '</p>'
             . '<div style="padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">'
             . '<strong>Order summary</strong><br>Order: ' . $safeOrderNumber
             . '<br>Payment method: ' . $safeMethod . '<br>Total due: <strong>$'
             . number_format((float) $order['total_amount'], 2) . '</strong></div>'
             . '<p>' . $safeInstructions . '</p>'
-            . '<p><a href="' . $safeLink . '">Complete secure payment</a></p>'
+            . '<p>' . $htmlPaymentLink . '</p>'
             . ($safeAdditionalMessage !== '' ? '<p>' . nl2br($safeAdditionalMessage, false) . '</p>' : '')
             . '<p>' . $safeClosing . '</p><p>Warm regards,<br>Ambient</p>';
         if ($previewOnly) {

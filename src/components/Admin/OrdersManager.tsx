@@ -74,12 +74,15 @@ const paymentStatusClass = (status?: OnlineOrder['paymentStatus']): string => {
   return 'bg-amber-50 text-amber-800';
 };
 
-const paymentInstructionsForMethod = (method: string): string => {
+const paymentInstructionsForMethod = (method: string, cryptoWalletInput = false): string => {
   if (method === 'Credit / Debit Card') {
     return 'Complete your card payment using the secure provider link. Enter card details only on the provider checkout page.';
   }
   if (method === 'PayPal') {
     return 'Continue to PayPal using the secure provider link and confirm the order total before approving payment.';
+  }
+  if (cryptoWalletInput) {
+    return 'Send only the specified cryptocurrency on the correct network. Verify the asset, network, and full wallet address before confirming a transfer.';
   }
   return 'Use the secure provider link to review the available cryptocurrency and network, then follow the provider checkout instructions.';
 };
@@ -1329,18 +1332,25 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
             </header>
             <div className="space-y-4 p-5">
               <label htmlFor="order-payment-link" className="block text-xs font-semibold text-slate-800">
-                Secure payment link
+                Payment link or wallet address
                 <input
                   id="order-payment-link"
-                  type="url"
+                  type="text"
                   value={paymentLinkInput}
                   onChange={(event) => setPaymentLinkInput(event.target.value)}
-                  placeholder="https://…"
+                  placeholder={selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                    ? 'https://… or crypto wallet address'
+                    : 'https://…'}
                   autoComplete="url"
                   autoFocus
                   className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
                 />
               </label>
+              <p className="-mt-2 text-[11px] leading-5 text-slate-500">
+                {selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                  ? 'Use an HTTPS provider/custom link, Bitcoin/Ethereum/Solana payment URI, or supported wallet address.'
+                  : 'Use a PayPal, payment-provider, or custom HTTPS link.'}
+              </p>
               <label htmlFor="order-payment-email-template" className="block text-xs font-semibold text-slate-800">
                 Email body template
                 <select
@@ -1369,9 +1379,19 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       <p>Payment method: {selectedOrder.paymentMethod}</p>
                       <p>Total due: ${selectedOrder.totalAmount.toFixed(2)}</p>
                     </div>
-                    <p>{paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
+                    <p>{paymentInstructionsForMethod(
+                      selectedOrder.paymentMethod || '',
+                      selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                        && Boolean(paymentLinkInput.trim())
+                        && !/^https:\/\//i.test(paymentLinkInput.trim()),
+                    )}</p>
                     <p className="font-semibold text-teal-800">
-                      {paymentLinkInput.trim() || '[Secure payment link appears here]'}
+                      {paymentLinkInput.trim()
+                        ? selectedOrder.paymentMethod === 'Cryptocurrency (USDC / BTC / ETH / SOL)'
+                          && !/^https:\/\//i.test(paymentLinkInput.trim())
+                          ? `Wallet address / payment URI: ${paymentLinkInput.trim()}`
+                          : paymentLinkInput.trim()
+                        : '[Payment link or wallet address appears here]'}
                     </p>
                     {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}
                     <p>{paymentEmailTemplates[paymentEmailTemplate].closing}</p>
