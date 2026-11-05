@@ -247,9 +247,16 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   useEffect(() => {
     setPaymentLinkInput(selectedOrder?.paymentLinkUrl || '');
+    setPaymentLinkType(selectedOrder?.paymentLinkType || 'provider');
+    setPaymentLinkName(selectedOrder?.paymentLinkName || '');
     setPaymentEmailTemplate(selectedOrder?.paymentLinkSentAt ? 'payment_reminder' : 'payment_request');
     setPaymentEmailNote('');
-  }, [selectedOrder?.id, selectedOrder?.paymentLinkUrl]);
+  }, [
+    selectedOrder?.id,
+    selectedOrder?.paymentLinkUrl,
+    selectedOrder?.paymentLinkType,
+    selectedOrder?.paymentLinkName,
+  ]);
 
   useEffect(() => {
     setIsPaymentEmailModalOpen(false);

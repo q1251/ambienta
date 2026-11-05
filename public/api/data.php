@@ -423,6 +423,8 @@ function data_ensure_schema(PDO $db): void
             payment_method VARCHAR(48) NOT NULL,
             payment_status VARCHAR(32) NOT NULL,
             payment_link_url VARCHAR(2048) NULL,
+            payment_link_type VARCHAR(32) NULL,
+            payment_link_name VARCHAR(80) NULL,
             payment_link_sent_at DATETIME NULL,
             stripe_checkout_session_id VARCHAR(255) NULL,
             stripe_payment_intent_id VARCHAR(255) NULL,
@@ -439,6 +441,8 @@ function data_ensure_schema(PDO $db): void
     );
     foreach ([
         ['payment_link_url', 'VARCHAR(2048) NULL'],
+        ['payment_link_type', 'VARCHAR(32) NULL'],
+        ['payment_link_name', 'VARCHAR(80) NULL'],
         ['payment_link_sent_at', 'DATETIME NULL'],
     ] as [$column, $definition]) {
         $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
@@ -2297,6 +2301,8 @@ function data_order_row(PDO $db, array $row): array
         'paymentMethod' => $row['payment_method'],
         'paymentStatus' => $row['payment_status'],
         'paymentLinkUrl' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_url'] ?? null) : null,
+        'paymentLinkType' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_type'] ?? null) : null,
+        'paymentLinkName' => ($_SESSION['admin_role'] ?? '') === 'admin' ? ($row['payment_link_name'] ?? null) : null,
         'paymentLinkSentAt' => $row['payment_link_sent_at'] ?? null,
         'transactionId' => $row['stripe_payment_intent_id'] ?? null,
         'status' => $row['status'],
@@ -5408,8 +5414,8 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         }
 
         if (!$previewOnly) {
-            $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
-                ->execute([$paymentLink, $orderId]);
+            $db->prepare('UPDATE orders SET payment_link_url = ?, payment_link_type = ?, payment_link_name = ?, payment_link_sent_at = UTC_TIMESTAMP() WHERE id = ?')
+                ->execute([$paymentLink, $paymentLinkType, $paymentLinkType === 'custom' ? trim($paymentLinkName) : null, $orderId]);
         }
         $db->prepare('UPDATE email_activity SET status = ?, message_id = ? WHERE id = ?')
             ->execute(['Sent', $messageId, $activityId]);

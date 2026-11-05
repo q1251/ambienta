@@ -181,6 +181,8 @@ export interface OnlineOrder {
   paymentMethod?: PaymentMethod;
   paymentStatus?: PaymentStatus;
   paymentLinkUrl?: string | null;
+  paymentLinkType?: 'provider' | 'crypto_wallet' | 'custom' | null;
+  paymentLinkName?: string | null;
   paymentLinkSentAt?: string | null;
   transactionId?: string;
   cryptoDetails?: CryptoPaymentDetails;
