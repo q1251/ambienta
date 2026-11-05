@@ -39,12 +39,14 @@ import {
   ContactLeadInput,
   ContactLeadUpdate,
   LeadActivityInput,
+  LeadContactCompleteness,
   LeadProfile,
   LeadStatus,
   OnlineOrder,
 } from '../../types/pharmacy';
 import {
   generateSampleCsv,
+  classifyLeadContact,
   getLeadCountry,
   parseLeadsCsv,
   sortContactLeads,
@@ -86,6 +88,24 @@ const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; b
   { id: 'Customer', label: 'Customer', bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
   { id: 'Inactive', label: 'Inactive', bg: 'bg-zinc-100', text: 'text-zinc-600', border: 'border-zinc-200' },
 ];
+
+const CONTACT_TYPE_LABELS: Record<LeadContactCompleteness, string> = {
+  full_contact: 'Full details',
+  email_phone: 'Email + phone',
+  email_name: 'Email + name',
+  email_only: 'Email only',
+  phone_name: 'Phone + name',
+  phone_only: 'Phone only',
+  incomplete: 'Incomplete',
+};
+
+const leadContactType = (lead: ContactLead): LeadContactCompleteness =>
+  lead.contactCompleteness ?? classifyLeadContact(lead);
+
+const leadDisplayName = (lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email'>): string => {
+  const name = `${lead.firstName} ${lead.lastName}`.trim();
+  return name || (lead.email ? 'Email-only contact' : 'Phone-only contact');
+};
 
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   role,
@@ -135,6 +155,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [countryFilter, setCountryFilter] = useState('All');
+  const [contactTypeFilter, setContactTypeFilter] = useState<'All' | LeadContactCompleteness>('All');
   const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
   const [leadPage, setLeadPage] = useState(1);
   const [sortField, setSortField] = useState<LeadSortField>('createdAt');
@@ -231,6 +252,36 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const customersCount = leads.filter((l) => (l.orderCount ?? 0) > 0 || l.status === 'Customer').length;
   const eligibleMarketingCount = leads.filter((l) => l.marketingConsent).length;
   const needsFollowupCount = leads.filter((l) => ['Cold', 'Contacted', 'Qualified'].includes(l.status)).length;
+  const contactTypeCounts = useMemo(
+    () => leads.reduce<Record<LeadContactCompleteness, number>>((counts, lead) => {
+      counts[leadContactType(lead)] += 1;
+      return counts;
+    }, {
+      full_contact: 0,
+      email_phone: 0,
+      email_name: 0,
+      email_only: 0,
+      phone_name: 0,
+      phone_only: 0,
+      incomplete: 0,
+    }),
+    [leads],
+  );
+  const previewContactTypeCounts = useMemo(
+    () => preview.reduce<Record<LeadContactCompleteness, number>>((counts, lead) => {
+      counts[classifyLeadContact(lead)] += 1;
+      return counts;
+    }, {
+      full_contact: 0,
+      email_phone: 0,
+      email_name: 0,
+      email_only: 0,
+      phone_name: 0,
+      phone_only: 0,
+      incomplete: 0,
+    }),
+    [preview],
+  );
 
   const isUncalledRepeatBuyer = (lead: ContactLead) =>
     (lead.callCount ?? 0) === 0 && (lead.activeOrderCount ?? 0) >= 2;
@@ -251,6 +302,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       const leadCountry = lead.country || getLeadCountry(lead.phone);
       const matchesStage = stageFilter === 'All' || lead.status === stageFilter;
       const matchesCountry = countryFilter === 'All' || leadCountry === countryFilter;
+      const matchesContactType = contactTypeFilter === 'All' || leadContactType(lead) === contactTypeFilter;
       const query = search.trim().toLowerCase();
       const matchesSearch =
         !query ||
@@ -265,9 +317,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         matchesTab = ['Cold', 'Contacted', 'Qualified'].includes(lead.status);
       }
 
-      return matchesStage && matchesCountry && matchesSearch && matchesTab;
+      return matchesStage && matchesCountry && matchesContactType && matchesSearch && matchesTab;
     });
-  }, [leads, stageFilter, countryFilter, search, leadTab]);
+  }, [leads, stageFilter, countryFilter, contactTypeFilter, search, leadTab]);
 
   const sortedLeads = useMemo(() => {
     return sortContactLeads(filteredLeads, sortField, sortOrder);
@@ -415,16 +467,25 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
   const handleManualSubmit = (event: React.FormEvent) => {
     event.preventDefault();
+    const emailValue = email.trim();
+    const phoneValue = phone.trim();
+    if (
+      (emailValue && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue))
+      || (!emailValue && phoneValue.replace(/\D/g, '').length < 7)
+    ) {
+      setRequestError('Enter a valid email address or a phone number with at least seven digits.');
+      return;
+    }
     void save([
       {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        country: country.trim() || getLeadCountry(phone),
+        email: emailValue,
+        phone: phoneValue,
+        country: country.trim() || getLeadCountry(phoneValue),
         leadSource: 'Manual Entry',
         status: 'Cold',
-        marketingConsent,
+        marketingConsent: Boolean(emailValue && marketingConsent),
       },
     ]);
   };
@@ -747,7 +808,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={!canEditSelectedLead || !canSendEmail}
+              disabled={!canEditSelectedLead || !canSendEmail || !profile?.lead.email}
+              title={!profile?.lead.email ? 'This contact has no email address.' : undefined}
               onClick={() => {
                 setEmailError('');
                 setEmailComposerOpen(true);
@@ -771,9 +833,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h1 className="text-2xl font-bold text-slate-900">
                     {profile
-                      ? `${profile.lead.firstName} ${profile.lead.lastName}`
+                      ? leadDisplayName(profile.lead)
                       : selectedLead
-                      ? `${selectedLead.firstName} ${selectedLead.lastName}`
+                      ? leadDisplayName(selectedLead)
                       : 'Lead profile'}
                   </h1>
                   <span
@@ -788,7 +850,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   )}
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                  <span className="font-mono text-slate-700">{profile?.lead.email || selectedLead?.email}</span>
+                  {(profile?.lead.email || selectedLead?.email) && (
+                    <span className="font-mono text-slate-700">{profile?.lead.email || selectedLead?.email}</span>
+                  )}
                   {profile?.lead.phone && <span>· {profile.lead.phone}</span>}
                   <span>· {profile?.lead.country || getLeadCountry(profile?.lead.phone || '')}</span>
                   <span>· Source: {profile?.lead.leadSource || selectedLead?.leadSource}</span>
@@ -901,8 +965,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Email Address</p>
                           <div className="mt-1 flex items-center justify-between">
-                            <span className="truncate text-sm font-semibold text-slate-900">{profile.lead.email}</span>
-                            {copyButton(profile.lead, 'email', profile.lead.email)}
+                            <span className="truncate text-sm font-semibold text-slate-900">
+                              {profile.lead.email || 'Not provided'}
+                            </span>
+                            {profile.lead.email && copyButton(profile.lead, 'email', profile.lead.email)}
                           </div>
                         </div>
                         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5">
@@ -929,7 +995,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         <label className="text-xs font-semibold text-slate-700">
                           First name
                           <input
-                            required
                             maxLength={100}
                             value={profileFirstName}
                             onChange={(e) => setProfileFirstName(e.target.value)}
@@ -939,7 +1004,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         <label className="text-xs font-semibold text-slate-700">
                           Last name
                           <input
-                            required
                             maxLength={100}
                             value={profileLastName}
                             onChange={(e) => setProfileLastName(e.target.value)}
@@ -949,7 +1013,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         <label className="text-xs font-semibold text-slate-700">
                           Email
                           <input
-                            required
                             type="email"
                             maxLength={254}
                             value={profileEmail}
@@ -1103,7 +1166,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <div>
                     <h2 className="text-base font-bold text-slate-900">Customer Purchase History</h2>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {profile.orders.length} order{profile.orders.length === 1 ? '' : 's'} linked to {profile.lead.email}
+                      {profile.orders.length} order{profile.orders.length === 1 ? '' : 's'} linked to {profile.lead.email || 'this contact'}
                     </p>
                   </div>
                   <span className="text-sm font-bold text-slate-900">
@@ -1640,13 +1703,31 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               ))}
             </select>
 
-            {(search || stageFilter !== 'All' || countryFilter !== 'All' || leadTab !== 'all') && (
+            <select
+              aria-label="Filter by contact details"
+              value={contactTypeFilter}
+              onChange={(e) => {
+                setContactTypeFilter(e.target.value as 'All' | LeadContactCompleteness);
+                setLeadPage(1);
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 shadow-sm"
+            >
+              <option value="All">All contact details</option>
+              {(Object.keys(CONTACT_TYPE_LABELS) as LeadContactCompleteness[]).map((type) => (
+                <option key={type} value={type}>
+                  {CONTACT_TYPE_LABELS[type]} ({contactTypeCounts[type]})
+                </option>
+              ))}
+            </select>
+
+            {(search || stageFilter !== 'All' || countryFilter !== 'All' || contactTypeFilter !== 'All' || leadTab !== 'all') && (
               <button
                 type="button"
                 onClick={() => {
                   setSearch('');
                   setStageFilter('All');
                   setCountryFilter('All');
+                  setContactTypeFilter('All');
                   setLeadTab('all');
                 }}
                 className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
@@ -1869,17 +1950,18 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                       <td className="px-4 py-3 font-semibold text-blue-900">
                         <div className="flex items-center">
-                          <span>
-                            {lead.firstName} {lead.lastName}
+                          <span>{leadDisplayName(lead)}</span>
+                          {(lead.firstName || lead.lastName) && copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
+                          <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {CONTACT_TYPE_LABELS[leadContactType(lead)]}
                           </span>
-                          {copyButton(lead, 'name', `${lead.firstName} ${lead.lastName}`)}
                         </div>
                       </td>
 
                       <td className="px-4 py-3 font-mono text-slate-600">
                         <div className="flex items-center">
-                          <span className="truncate max-w-[180px]">{lead.email}</span>
-                          {copyButton(lead, 'email', lead.email)}
+                          <span className="truncate max-w-[180px]">{lead.email || <span className="text-slate-400">Not provided</span>}</span>
+                          {lead.email && copyButton(lead, 'email', lead.email)}
                         </div>
                       </td>
 
@@ -2022,12 +2104,17 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="font-bold text-slate-900 truncate">
-                          {lead.firstName} {lead.lastName}
+                          {leadDisplayName(lead)}
                         </h4>
                         <CountryFlag countryCode={getLeadCountryCode(lead.country ?? '', lead.phone)} />
                       </div>
 
-                      <p className="mt-1 truncate font-mono text-[11px] text-slate-500">{lead.email}</p>
+                      <p className="mt-1 truncate font-mono text-[11px] text-slate-500">
+                        {lead.email || 'No email address'}
+                      </p>
+                      <span className="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        {CONTACT_TYPE_LABELS[leadContactType(lead)]}
+                      </span>
 
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500 border-t border-slate-100 pt-2.5">
                         <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
@@ -2092,7 +2179,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {mode === 'csv'
-                    ? 'Upload or paste contact records to preview and import into the database.'
+                    ? 'Import up to 20,000 unique email or phone contacts. Missing details stay blank; marketing consent is never assumed.'
                     : 'Add an individual customer or prospect to the CRM.'}
                 </p>
               </div>
@@ -2137,7 +2224,17 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 ))}
 
                 {preview.length > 0 && (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <>
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      {(Object.keys(CONTACT_TYPE_LABELS) as LeadContactCompleteness[])
+                        .filter((type) => previewContactTypeCounts[type] > 0)
+                        .map((type) => (
+                          <span key={type} className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-800">
+                            {CONTACT_TYPE_LABELS[type]}: {previewContactTypeCounts[type]}
+                          </span>
+                        ))}
+                    </div>
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 font-semibold text-slate-500">
                         <tr>
@@ -2149,11 +2246,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {preview.slice(0, 10).map((p, i) => (
-                          <tr key={`${p.email}-${i}`}>
+                          <tr key={`${p.email || p.phone}-${i}`}>
                             <td className="px-3 py-2">
-                              {p.firstName} {p.lastName}
+                              {leadDisplayName(p)}
                             </td>
-                            <td className="px-3 py-2 font-mono">{p.email}</td>
+                            <td className="px-3 py-2 font-mono">{p.email || '—'}</td>
                             <td className="px-3 py-2">{p.phone || '—'}</td>
                             <td className="px-3 py-2">{p.marketingConsent ? 'Opted in' : 'No'}</td>
                           </tr>
@@ -2161,6 +2258,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       </tbody>
                     </table>
                   </div>
+                  </>
                 )}
 
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
@@ -2187,7 +2285,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <label className="text-xs font-semibold text-slate-700">
                   First name
                   <input
-                    required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
@@ -2196,24 +2293,25 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 <label className="text-xs font-semibold text-slate-700">
                   Last name
                   <input
-                    required
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   />
                 </label>
                 <label className="text-xs font-semibold text-slate-700">
-                  Email address
+                  Email address (optional)
                   <input
                     type="email"
-                    required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (!e.target.value.trim()) setMarketingConsent(false);
+                    }}
                     className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   />
                 </label>
                 <label className="text-xs font-semibold text-slate-700">
-                  Phone (optional)
+                  Phone
                   <span className="mt-1 block">
                     <PhoneCountryInput value={phone} onChange={setPhone} />
                   </span>
@@ -2228,6 +2326,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <input
                     type="checkbox"
                     checked={marketingConsent}
+                    disabled={!email.trim()}
                     onChange={(e) => setMarketingConsent(e.target.checked)}
                     className="mt-0.5 rounded text-blue-800"
                   />

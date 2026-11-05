@@ -1,4 +1,4 @@
-import { ContactLead, HealthCategory, OnlineOrder, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
+import { ContactLead, HealthCategory, LeadContactCompleteness, OnlineOrder, Patient, RefillRecord, ReminderRule, RefillStatus } from '../types/pharmacy';
 import { parseCsvRows } from './csv';
 import { getLeadCountry } from './countryOptions';
 export { getLeadCountry } from './countryOptions';
@@ -76,6 +76,21 @@ export interface CsvParseResult {
   totalParsed: number;
 }
 
+export function classifyLeadContact(lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'phone'>): LeadContactCompleteness {
+  const hasEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email.trim());
+  const hasPhone = lead.phone.replace(/\D/g, '').length >= 7;
+  const hasFullName = Boolean(lead.firstName.trim() && lead.lastName.trim());
+  const hasName = Boolean(lead.firstName.trim() || lead.lastName.trim());
+
+  if (hasEmail && hasPhone && hasFullName) return 'full_contact';
+  if (hasEmail && hasPhone) return 'email_phone';
+  if (hasEmail && hasName) return 'email_name';
+  if (hasEmail) return 'email_only';
+  if (hasPhone && hasName) return 'phone_name';
+  if (hasPhone) return 'phone_only';
+  return 'incomplete';
+}
+
 /**
  * Parses contact-only CSV data. Clinical and prescription columns are ignored.
  */
@@ -100,8 +115,8 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   if (rows.length < 2) {
     return { leads: [], errors: ['CSV must have a header row and at least one data row.'], totalParsed: 0 };
   }
-  if (rows.length > 501) {
-    return { leads: [], errors: ['A contact import can contain at most 500 rows.'], totalParsed: 0 };
+  if (rows.length > 20001) {
+    return { leads: [], errors: ['A contact import can contain at most 20,000 rows.'], totalParsed: 0 };
   }
 
   const headers = rows[0].map((header) => header.trim().toLowerCase().replace(/[\s-]+/g, '_'));
@@ -112,25 +127,29 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
   const phoneIdx = findIdx(['phone', 'mobile', 'tel']);
   const countryIdx = findIdx(['country', 'country_name', 'location_country']);
   const consentIdx = findIdx(['marketing_consent', 'marketing_opt_in', 'consent']);
-  if (emailIdx === -1 || fnIdx === -1 || lnIdx === -1) {
-    errors.push('CSV header must contain first_name, last_name, and email columns.');
+  if (emailIdx === -1 && phoneIdx === -1) {
+    errors.push('CSV header must contain an email or phone column.');
     return { leads: [], errors, totalParsed: 0 };
   }
 
+  const leadByIdentity = new Map<string, Omit<ContactLead, 'id' | 'createdAt'>>();
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const cols = rows[rowIndex];
-    const firstName = cols[fnIdx] || '';
-    const lastName = cols[lnIdx] || '';
-    const email = (cols[emailIdx] || '').toLowerCase();
-    const phone = phoneIdx !== -1 ? cols[phoneIdx] || '' : '';
+    const firstName = (fnIdx === -1 ? '' : cols[fnIdx] || '').trim();
+    const lastName = (lnIdx === -1 ? '' : cols[lnIdx] || '').trim();
+    const email = (emailIdx === -1 ? '' : cols[emailIdx] || '').trim().toLowerCase();
+    const phone = (phoneIdx === -1 ? '' : cols[phoneIdx] || '').trim();
     const country = countryIdx !== -1 ? cols[countryIdx]?.trim() || '' : '';
-    if (!firstName || !lastName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.push(`Row ${rowIndex + 1}: Skipped row due to missing name or valid email.`);
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if ((email && !validEmail) || (!validEmail && phone.replace(/\D/g, '').length < 7)) {
+      if (errors.length < 20) {
+        errors.push(`Row ${rowIndex + 1}: Skipped row due to missing valid email or phone.`);
+      }
       continue;
     }
     const consentValue = consentIdx === -1 ? '' : (cols[consentIdx] || '').toLowerCase();
 
-    leads.push({
+    const lead: Omit<ContactLead, 'id' | 'createdAt'> = {
       firstName,
       lastName,
       leadSource: 'CSV Upload',
@@ -139,10 +158,26 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
       country: country || getLeadCountry(phone),
       status: 'Cold',
       marketingConsent: ['yes', 'true', '1', 'opted in'].includes(consentValue),
-    });
+    };
+    const identity = validEmail
+      ? `email:${email}`
+      : `phone:${phone.replace(/\D/g, '')}:${firstName.toLowerCase()}:${lastName.toLowerCase()}`;
+    const existing = leadByIdentity.get(identity);
+    if (!existing) {
+      leadByIdentity.set(identity, lead);
+    } else {
+      leadByIdentity.set(identity, {
+        ...existing,
+        firstName: existing.firstName || lead.firstName,
+        lastName: existing.lastName || lead.lastName,
+        phone: existing.phone || lead.phone,
+        country: existing.country || lead.country,
+        marketingConsent: existing.marketingConsent || lead.marketingConsent,
+      });
+    }
   }
 
-  return { leads, errors, totalParsed: leads.length };
+  return { leads: Array.from(leadByIdentity.values()), errors, totalParsed: leadByIdentity.size };
 }
 
 /**

@@ -67,6 +67,7 @@ export interface ContactLead {
   lastName: string;
   email: string;
   phone: string;
+  contactCompleteness?: LeadContactCompleteness;
   country?: string;
   leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo' | 'Live chat';
   createdAt: string;
@@ -80,6 +81,15 @@ export interface ContactLead {
   assignedStaffId?: number | null;
   assignedStaffName?: string | null;
 }
+
+export type LeadContactCompleteness =
+  | 'full_contact'
+  | 'email_phone'
+  | 'email_name'
+  | 'email_only'
+  | 'phone_name'
+  | 'phone_only'
+  | 'incomplete';
 
 export type ContactLeadInput = Pick<
   ContactLead,

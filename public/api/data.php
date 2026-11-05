@@ -137,8 +137,9 @@ function data_ensure_schema(PDO $db): void
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             first_name VARCHAR(100) NOT NULL,
             last_name VARCHAR(100) NOT NULL,
-            email VARCHAR(254) NOT NULL,
+            email VARCHAR(254) NULL,
             phone VARCHAR(40) NOT NULL DEFAULT '',
+            import_key CHAR(64) NULL,
             country VARCHAR(100) NOT NULL DEFAULT '',
             lead_source VARCHAR(24) NOT NULL,
             status VARCHAR(24) NOT NULL DEFAULT 'Cold',
@@ -149,6 +150,28 @@ function data_ensure_schema(PDO $db): void
             UNIQUE KEY leads_email (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $databaseName = (string) $db->query('SELECT DATABASE()')->fetchColumn();
+    $leadEmailColumn = $db->prepare(
+        'SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+    );
+    $leadEmailColumn->execute([$databaseName, 'leads', 'email']);
+    if ($leadEmailColumn->fetchColumn() === 'NO') {
+        $db->exec('ALTER TABLE leads MODIFY email VARCHAR(254) NULL');
+    }
+    $leadImportKeyColumn = $db->prepare(
+        'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+    );
+    $leadImportKeyColumn->execute([$databaseName, 'leads', 'import_key']);
+    if ((int) $leadImportKeyColumn->fetchColumn() === 0) {
+        $db->exec('ALTER TABLE leads ADD COLUMN import_key CHAR(64) NULL AFTER phone');
+    }
+    $leadImportKeyIndex = $db->prepare(
+        'SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?'
+    );
+    $leadImportKeyIndex->execute([$databaseName, 'leads', 'leads_import_key']);
+    if ((int) $leadImportKeyIndex->fetchColumn() === 0) {
+        $db->exec('ALTER TABLE leads ADD UNIQUE INDEX leads_import_key (import_key)');
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS lead_activities (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -2239,10 +2262,22 @@ function data_contact_detail_types(string $text): array
 
 function data_lead_row(array $row): array
 {
-    $email = (string) $row['email'];
+    $email = (string) ($row['email'] ?? '');
     $phone = (string) ($row['phone'] ?? '');
+    $hasEmail = filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    $hasPhone = strlen(preg_replace('/\D/', '', $phone) ?? '') >= 7;
+    $hasFullName = trim((string) ($row['first_name'] ?? '')) !== ''
+        && trim((string) ($row['last_name'] ?? '')) !== '';
+    $hasName = trim((string) ($row['first_name'] ?? '')) !== ''
+        || trim((string) ($row['last_name'] ?? '')) !== '';
+    $contactCompleteness = $hasEmail && $hasPhone && $hasFullName ? 'full_contact'
+        : ($hasEmail && $hasPhone ? 'email_phone'
+            : ($hasEmail && $hasName ? 'email_name'
+                : ($hasEmail ? 'email_only'
+                    : ($hasPhone && $hasName ? 'phone_name'
+                        : ($hasPhone ? 'phone_only' : 'incomplete')))));
     if (($_SESSION['admin_role'] ?? '') !== 'admin') {
-        $email = data_mask_contact_email($email);
+        $email = $email === '' ? '' : data_mask_contact_email($email);
         $phone = $phone === '' ? '' : data_mask_contact_phone($phone);
     }
     $lead = [
@@ -2251,6 +2286,7 @@ function data_lead_row(array $row): array
         'lastName' => $row['last_name'],
         'email' => $email,
         'phone' => $phone,
+        'contactCompleteness' => $contactCompleteness,
         'country' => $row['country'] ?? '',
         'leadSource' => $row['lead_source'],
         'createdAt' => $row['created_at'],
@@ -6325,27 +6361,29 @@ if ($method === 'POST' && $resource === 'leads') {
     $canEditContactDetails = ($_SESSION['admin_role'] ?? '') === 'admin';
     $assignedStaffId = $canEditContactDetails ? null : (int) ($_SESSION['staff_id'] ?? 0);
     $insert = $db->prepare(
-        'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at, assigned_staff_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL), ?)
-         ON DUPLICATE KEY UPDATE first_name = IF(? = 1, VALUES(first_name), first_name),
-           last_name = IF(? = 1, VALUES(last_name), last_name),
-           phone = IF(? = 1, VALUES(phone), phone),
+        'INSERT INTO leads (first_name, last_name, email, phone, country, lead_source, marketing_consent, marketing_consent_at, assigned_staff_id, import_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?, IF(? = 1, CURRENT_TIMESTAMP, NULL), ?, ?)
+         ON DUPLICATE KEY UPDATE first_name = IF(? = 1 AND VALUES(first_name) <> \'\', VALUES(first_name), first_name),
+           last_name = IF(? = 1 AND VALUES(last_name) <> \'\', VALUES(last_name), last_name),
+           phone = IF(? = 1 AND VALUES(phone) <> \'\', VALUES(phone), phone),
            country = IF(? = 1 AND VALUES(country) <> \'\', VALUES(country), country),
            marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
            marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at),
            assigned_staff_id = IF(assigned_staff_id IS NULL, VALUES(assigned_staff_id), assigned_staff_id)'
     );
-    $find = $db->prepare(
-        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+    $findSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
                 l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
                 (SELECT COUNT(*) FROM lead_activities la WHERE la.lead_id = l.id AND la.activity_type = \'call\') AS call_count
          FROM leads l LEFT JOIN orders o ON o.email = l.email
-         WHERE l.email = ? GROUP BY l.id LIMIT 1'
-    );
-    $existingOwner = $db->prepare('SELECT assigned_staff_id FROM leads WHERE email = ?');
-    $priorConsent = $db->prepare('SELECT marketing_consent FROM leads WHERE email = ?');
+         WHERE ';
+    $findByEmail = $db->prepare($findSql . 'l.email = ? GROUP BY l.id LIMIT 1');
+    $findByImportKey = $db->prepare($findSql . 'l.import_key = ? GROUP BY l.id LIMIT 1');
+    $existingOwnerByEmail = $db->prepare('SELECT assigned_staff_id FROM leads WHERE email = ?');
+    $existingOwnerByImportKey = $db->prepare('SELECT assigned_staff_id FROM leads WHERE import_key = ?');
+    $priorConsentByEmail = $db->prepare('SELECT marketing_consent FROM leads WHERE email = ?');
+    $priorConsentByImportKey = $db->prepare('SELECT marketing_consent FROM leads WHERE import_key = ?');
     $saved = [];
     $db->beginTransaction();
     try {
@@ -6353,32 +6391,55 @@ if ($method === 'POST' && $resource === 'leads') {
             if (!is_array($lead)) {
                 data_respond(400, ['error' => 'invalid_lead', 'message' => 'A submitted lead is invalid.']);
             }
-            $firstName = data_string($lead, 'firstName', 100);
-            $lastName = data_string($lead, 'lastName', 100);
-            $email = strtolower(data_string($lead, 'email', 254));
+            $firstName = data_string($lead, 'firstName', 100, false);
+            $lastName = data_string($lead, 'lastName', 100, false);
+            $email = strtolower(data_string($lead, 'email', 254, false));
             $phone = data_string($lead, 'phone', 40, false);
             $country = data_string($lead, 'country', 100, false);
             $marketingConsent = $lead['marketingConsent'] ?? false;
             if (!is_bool($marketingConsent)) {
                 data_respond(400, ['error' => 'invalid_consent', 'message' => 'Marketing consent must be explicitly true or false.']);
             }
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                data_respond(400, ['error' => 'invalid_email', 'message' => 'A lead has an invalid email address.']);
+            if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL))
+                || ($email === '' && strlen(preg_replace('/\D/', '', $phone) ?? '') < 7)) {
+                data_respond(400, ['error' => 'invalid_contact', 'message' => 'Each lead must have a valid email address or a phone number with at least seven digits.']);
             }
-            $priorConsent->execute([$email]);
-            $wasOptedIn = (bool) $priorConsent->fetchColumn();
+            $importKey = $email === ''
+                ? hash('sha256', strtolower(trim($firstName)) . '|' . strtolower(trim($lastName)) . '|' . (preg_replace('/\D/', '', $phone) ?? ''))
+                : null;
+            $identityValue = $email === '' ? $importKey : $email;
+            $priorConsentQuery = $email === '' ? $priorConsentByImportKey : $priorConsentByEmail;
+            $priorConsentQuery->execute([$identityValue]);
+            $wasOptedIn = (bool) $priorConsentQuery->fetchColumn();
             $source = in_array($lead['leadSource'] ?? '', ['CSV Upload', 'Manual Entry'], true)
                 ? $lead['leadSource']
                 : 'Manual Entry';
-            $existingOwner->execute([$email]);
-            $ownerId = $existingOwner->fetchColumn();
+            $existingOwnerQuery = $email === '' ? $existingOwnerByImportKey : $existingOwnerByEmail;
+            $existingOwnerQuery->execute([$identityValue]);
+            $ownerId = $existingOwnerQuery->fetchColumn();
             if ($ownerId !== false && !$canEditContactDetails && $ownerId !== null && (int) $ownerId !== $assignedStaffId) {
                 data_respond(404, ['error' => 'lead_not_found', 'message' => 'A submitted contact lead is not available to this agent.']);
             }
             $canEditValue = (int) $canEditContactDetails;
-            $insert->execute([$firstName, $lastName, $email, $phone, $country, $source, (int) $marketingConsent, (int) $marketingConsent, $assignedStaffId, $canEditValue, $canEditValue, $canEditValue, $canEditValue]);
-            $find->execute([$email]);
-            $savedLead = $find->fetch();
+            $insert->execute([
+                $firstName,
+                $lastName,
+                $email === '' ? null : $email,
+                $phone,
+                $country,
+                $source,
+                (int) $marketingConsent,
+                (int) $marketingConsent,
+                $assignedStaffId,
+                $importKey,
+                $canEditValue,
+                $canEditValue,
+                $canEditValue,
+                $canEditValue,
+            ]);
+            $findQuery = $email === '' ? $findByImportKey : $findByEmail;
+            $findQuery->execute([$identityValue]);
+            $savedLead = $findQuery->fetch();
             if (!$canEditContactDetails && (!$savedLead || (int) $savedLead['assigned_staff_id'] !== $assignedStaffId)) {
                 data_respond(404, ['error' => 'lead_not_found', 'message' => 'A submitted contact lead is not available to this agent.']);
             }
@@ -6415,8 +6476,8 @@ if ($method === 'PATCH' && $resource === 'leads') {
     $lastNameProvided = array_key_exists('lastName', $body);
     $lastName = $lastNameProvided ? data_string($body, 'lastName', 100) : null;
     $emailProvided = array_key_exists('email', $body);
-    $email = $emailProvided ? strtolower(data_string($body, 'email', 254)) : null;
-    if ($emailProvided && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $email = $emailProvided ? strtolower(data_string($body, 'email', 254, false)) : null;
+    if ($emailProvided && $email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         data_respond(400, ['error' => 'invalid_email', 'message' => 'Provide a valid email address.']);
     }
     $phoneProvided = array_key_exists('phone', $body);
@@ -6469,18 +6530,33 @@ if ($method === 'PATCH' && $resource === 'leads') {
             $db->rollBack();
             data_respond(404, ['error' => 'lead_not_found', 'message' => 'The contact lead was not found.']);
         }
-        if ($emailProvided && $email !== $current['email']) {
-            $duplicate = $db->prepare('SELECT id FROM leads WHERE email = ? AND id <> ? LIMIT 1 FOR UPDATE');
-            $duplicate->execute([$email, $id]);
-            if ($duplicate->fetchColumn()) {
-                $db->rollBack();
-                data_respond(409, ['error' => 'lead_email_in_use', 'message' => 'Another lead already uses this email address.']);
-            }
-            $existingOrder = $db->prepare('SELECT id FROM orders WHERE email = ? LIMIT 1 FOR UPDATE');
-            $existingOrder->execute([$email]);
-            if ($existingOrder->fetchColumn()) {
-                $db->rollBack();
-                data_respond(409, ['error' => 'lead_email_has_orders', 'message' => 'This email address is already associated with other order history.']);
+        $emailValue = $emailProvided ? ($email === '' ? null : $email) : $current['email'];
+        $phoneValue = $phoneProvided ? $phone : (string) ($current['phone'] ?? '');
+        if ($emailValue === null && strlen(preg_replace('/\D/', '', $phoneValue) ?? '') < 7) {
+            $db->rollBack();
+            data_respond(400, ['error' => 'invalid_contact', 'message' => 'A lead must have a valid email address or a phone number with at least seven digits.']);
+        }
+        if ($emailProvided && $emailValue !== $current['email']) {
+            if ($emailValue !== null) {
+                $duplicate = $db->prepare('SELECT id FROM leads WHERE email = ? AND id <> ? LIMIT 1 FOR UPDATE');
+                $duplicate->execute([$emailValue, $id]);
+                if ($duplicate->fetchColumn()) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'lead_email_in_use', 'message' => 'Another lead already uses this email address.']);
+                }
+                $existingOrder = $db->prepare('SELECT id FROM orders WHERE email = ? LIMIT 1 FOR UPDATE');
+                $existingOrder->execute([$emailValue]);
+                if ($existingOrder->fetchColumn()) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'lead_email_has_orders', 'message' => 'This email address is already associated with other order history.']);
+                }
+            } elseif ($current['email'] !== null) {
+                $existingOrder = $db->prepare('SELECT id FROM orders WHERE email = ? LIMIT 1 FOR UPDATE');
+                $existingOrder->execute([$current['email']]);
+                if ($existingOrder->fetchColumn()) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'lead_email_has_orders', 'message' => 'An email address linked to order history cannot be removed.']);
+                }
             }
         }
         $updates = [];
@@ -6496,11 +6572,34 @@ if ($method === 'PATCH' && $resource === 'leads') {
             $parameters[] = $lastName;
             $changedContactFields[] = 'lastName';
         }
-        if ($emailProvided && $email !== $current['email']) {
+        if ($emailProvided && $emailValue !== $current['email']) {
             $updates[] = 'email = ?';
-            $parameters[] = $email;
+            $parameters[] = $emailValue;
             $changedContactFields[] = 'email';
-            $db->prepare('UPDATE orders SET email = ? WHERE email = ?')->execute([$email, $current['email']]);
+            if ($emailValue !== null && $current['email'] !== null) {
+                $db->prepare('UPDATE orders SET email = ? WHERE email = ?')->execute([$emailValue, $current['email']]);
+            }
+            if ($emailValue !== null) {
+                $updates[] = 'import_key = NULL';
+            }
+        }
+        if ($emailValue === null && ($firstNameProvided || $lastNameProvided || $phoneProvided || $emailProvided)) {
+            $finalFirstName = $firstNameProvided ? $firstName : (string) $current['first_name'];
+            $finalLastName = $lastNameProvided ? $lastName : (string) $current['last_name'];
+            $finalImportKey = hash(
+                'sha256',
+                strtolower(trim($finalFirstName)) . '|'
+                    . strtolower(trim($finalLastName)) . '|'
+                    . (preg_replace('/\D/', '', $phoneValue) ?? '')
+            );
+            $duplicateKey = $db->prepare('SELECT id FROM leads WHERE import_key = ? AND id <> ? LIMIT 1 FOR UPDATE');
+            $duplicateKey->execute([$finalImportKey, $id]);
+            if ($duplicateKey->fetchColumn()) {
+                $db->rollBack();
+                data_respond(409, ['error' => 'lead_contact_in_use', 'message' => 'Another phone-only contact already has these details.']);
+            }
+            $updates[] = 'import_key = ?';
+            $parameters[] = $finalImportKey;
         }
         if ($status !== null && $status !== $current['status']) {
             $updates[] = 'status = ?';

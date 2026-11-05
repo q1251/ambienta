@@ -674,21 +674,34 @@ export default function App() {
   };
 
   const handleSaveLeads = async (newLeads: ContactLeadInput[]) => {
-    const response = await fetch('/api/data.php?resource=leads', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ leads: newLeads }),
-    });
-    const result = await response.json() as { leads?: ContactLead[]; message?: string };
-    if (!response.ok || !Array.isArray(result.leads)) {
-      throw new Error(result.message || 'The contact leads could not be saved.');
+    const saved: ContactLead[] = [];
+    for (let offset = 0; offset < newLeads.length; offset += 500) {
+      const batch = newLeads.slice(offset, offset + 500);
+      try {
+        const response = await fetch('/api/data.php?resource=leads', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ leads: batch }),
+        });
+        const result = await response.json() as { leads?: ContactLead[]; message?: string };
+        if (!response.ok || !Array.isArray(result.leads)) {
+          throw new Error(result.message || 'The contact leads could not be saved.');
+        }
+        saved.push(...result.leads);
+        setLeads((previous) => {
+          const merged = new Map(previous.map((lead) => [lead.id, lead]));
+          for (const lead of saved) merged.set(lead.id, lead);
+          return [...merged.values()].sort((a, b) => b.id - a.id);
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'The contact leads could not be saved.';
+        if (saved.length > 0) {
+          throw new Error(`Imported ${saved.length} of ${newLeads.length} contacts before the next batch failed: ${detail}`);
+        }
+        throw error;
+      }
     }
-    setLeads((previous) => {
-      const merged = new Map(previous.map((lead) => [lead.email.toLowerCase(), lead]));
-      for (const lead of result.leads || []) merged.set(lead.email.toLowerCase(), lead);
-      return [...merged.values()].sort((a, b) => b.id - a.id);
-    });
   };
 
   const handleLoadLeadProfile = async (leadId: number): Promise<LeadProfile> => {

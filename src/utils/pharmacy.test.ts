@@ -7,6 +7,7 @@ import {
   interpolateEmailTemplate,
   filterPatientsByHealthCategory,
   getLeadCountry,
+  classifyLeadContact,
   parseLeadsCsv,
   evaluateDueReminders,
   sortContactLeads,
@@ -105,6 +106,35 @@ test('parseLeadsCsv keeps explicit country values and infers one from phone when
   assert.equal(parsed.errors.length, 0);
   assert.equal(parsed.leads[0].country, 'Canada');
   assert.equal(parsed.leads[1].country, 'United Kingdom');
+});
+
+test('contact classification distinguishes completeness without inferring marketing consent', () => {
+  assert.equal(classifyLeadContact({ firstName: 'Ava', lastName: 'Stone', email: 'ava@example.com', phone: '+1 213 373 4253' }), 'full_contact');
+  assert.equal(classifyLeadContact({ firstName: '', lastName: '', email: 'ava@example.com', phone: '+1 213 373 4253' }), 'email_phone');
+  assert.equal(classifyLeadContact({ firstName: 'Ava', lastName: 'Stone', email: 'ava@example.com', phone: '' }), 'email_name');
+  assert.equal(classifyLeadContact({ firstName: '', lastName: '', email: 'ava@example.com', phone: '' }), 'email_only');
+  assert.equal(classifyLeadContact({ firstName: 'Ava', lastName: 'Stone', email: '', phone: '+1 213 373 4253' }), 'phone_name');
+  assert.equal(classifyLeadContact({ firstName: '', lastName: '', email: '', phone: '+1 213 373 4253' }), 'phone_only');
+});
+
+test('parseLeadsCsv imports email-only and phone-only contacts and merges duplicates', () => {
+  const parsed = parseLeadsCsv([
+    'first_name,last_name,email,phone,marketing_consent,medication_name',
+    ',,only@example.com,,,ignored',
+    'Ava,Stone,ava@example.com,+1 213 373 4253,no,ignored',
+    'Ava,Stone,AVA@example.com,+1 213 373 4253,,,',
+    'Jordan,Reed,,555-1234,,ignored',
+    'Jordan,Reed,,555-1234,,ignored',
+  ].join('\n'));
+
+  assert.equal(parsed.errors.length, 0);
+  assert.equal(parsed.leads.length, 3);
+  assert.equal(parsed.leads[0].firstName, '');
+  assert.equal(parsed.leads[0].marketingConsent, false);
+  assert.equal(parsed.leads[1].firstName, 'Ava');
+  assert.equal(parsed.leads[2].firstName, 'Jordan');
+  assert.equal(parsed.leads[2].email, '');
+  assert.equal('medicationName' in parsed.leads[2], false);
 });
 
 test('filterPatientsByHealthCategory isolates requested segments', () => {
