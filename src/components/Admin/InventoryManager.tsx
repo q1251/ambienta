@@ -16,11 +16,10 @@ import {
   FileSpreadsheet,
   Layers,
   ArrowUpDown,
+  ArrowLeft,
   Eye,
   EyeOff,
   Star,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { CatalogItem } from '../../types/pharmacy';
 import { generateProductTemplateCsv, parseProductsCsv } from '../../utils/productCsv';
@@ -66,8 +65,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
-  const [previewItem, setPreviewItem] = useState<CatalogItem | null>(null);
-  const [previewImageIndex, setPreviewImageIndex] = useState(0);
+  const [viewingItem, setViewingItem] = useState<CatalogItem | null>(null);
   const [isBulkPriceModalOpen, setIsBulkPriceModalOpen] = useState(false);
   const [isProductCsvOpen, setIsProductCsvOpen] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('All');
@@ -391,10 +389,68 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const previewImages = previewItem ? getProductImages(previewItem) : [];
-  const activePreviewImage = previewImages[Math.min(previewImageIndex, Math.max(0, previewImages.length - 1))];
+  const openEditItem = (item: CatalogItem) => {
+    clearPendingProductImages(editingProductImages, setEditingProductImages);
+    setEditingItem({ ...item, images: getProductImages(item) });
+  };
 
   return (
+    viewingItem ? (
+      <section className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setViewingItem(null)} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" aria-label="Back to products">
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Product details</p>
+              <h1 className="text-xl font-bold text-slate-900">{viewingItem.name}</h1>
+              <p className="text-xs text-slate-500">SKU: {viewingItem.sku}</p>
+            </div>
+          </div>
+          <button type="button" onClick={() => { openEditItem(viewingItem); setViewingItem(null); }} className="inline-flex items-center gap-2 rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900">
+            <Edit2 className="h-4 w-4" /> Edit product
+          </button>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
+          <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start gap-4">
+              {getProductImages(viewingItem)[0] ? (
+                <img src={getProductImages(viewingItem)[0]} alt={viewingItem.name} className="h-28 w-28 rounded-xl border border-slate-200 object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="flex h-28 w-28 items-center justify-center rounded-xl bg-teal-50 text-teal-800"><Package className="h-10 w-10" /></div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">{viewingItem.category}</span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${viewingItem.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>{viewingItem.isActive === false ? 'Hidden from storefront' : 'Published'}</span>
+                  {viewingItem.isFeatured && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Featured</span>}
+                  {viewingItem.rxRequired && <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">Prescription required</span>}
+                </div>
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{viewingItem.description || 'No product description has been added.'}</p>
+              </div>
+            </div>
+            <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+              <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dosage / formulation</p><p className="mt-1 text-sm font-medium text-slate-800">{viewingItem.dosage || 'Not specified'}</p></div>
+              <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">NDC code</p><p className="mt-1 font-mono text-sm text-slate-800">{viewingItem.ndcCode || 'Not specified'}</p></div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Retail price</p><p className="mt-1 text-xl font-bold text-slate-900">${viewingItem.price.toFixed(2)}</p></div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">Copay</p><p className="mt-1 text-xl font-bold text-slate-900">{viewingItem.copayPrice && viewingItem.copayPrice > 0 ? `$${viewingItem.copayPrice.toFixed(2)}` : '—'}</p></div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold text-slate-500">Inventory</p>
+              <p className={`mt-1 text-2xl font-bold ${viewingItem.stockCount <= 0 ? 'text-rose-700' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'text-amber-700' : 'text-slate-900'}`}>{viewingItem.stockCount} units</p>
+              <p className="mt-1 text-xs text-slate-500">Low stock threshold: {viewingItem.minStockThreshold}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    ) : (
     <div className="space-y-4">
       {catalogError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{catalogError}</p>}
       {/* Top Controls Bar */}
@@ -574,7 +630,17 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 const isOut = item.stockCount <= 0;
 
                 return (
-                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                  <tr
+                    key={item.id}
+                    tabIndex={0}
+                    onClick={() => openEditItem(item)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+                      event.preventDefault();
+                      openEditItem(item);
+                    }}
+                    className="cursor-pointer hover:bg-slate-50/70 focus:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-700 transition-colors"
+                  >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         {item.image ? (
@@ -639,7 +705,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-md border border-slate-200">
                         <button
                           disabled={isSaving}
-                          onClick={() => handleStockAdjust(item, -10)}
+                          onClick={(event) => { event.stopPropagation(); void handleStockAdjust(item, -10); }}
                           title="Decrease 10"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
                         >
@@ -647,7 +713,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         </button>
                         <button
                           disabled={isSaving}
-                          onClick={() => handleStockAdjust(item, -1)}
+                          onClick={(event) => { event.stopPropagation(); void handleStockAdjust(item, -1); }}
                           title="Decrease 1"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
                         >
@@ -655,7 +721,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         </button>
                         <button
                           disabled={isSaving}
-                          onClick={() => handleStockAdjust(item, 1)}
+                          onClick={(event) => { event.stopPropagation(); void handleStockAdjust(item, 1); }}
                           title="Increase 1"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
                         >
@@ -663,7 +729,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         </button>
                         <button
                           disabled={isSaving}
-                          onClick={() => handleStockAdjust(item, 10)}
+                          onClick={(event) => { event.stopPropagation(); void handleStockAdjust(item, 10); }}
                           title="Increase 10"
                           className="px-2 py-0.5 text-[11px] font-mono font-bold bg-white text-slate-700 hover:bg-slate-200 rounded shadow-2xs"
                         >
@@ -691,7 +757,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         <button
                           type="button"
                           disabled={isSaving}
-                          onClick={() => void handleToggleListing(item, 'isFeatured')}
+                          onClick={(event) => { event.stopPropagation(); void handleToggleListing(item, 'isFeatured'); }}
                           title={item.isFeatured ? 'Remove from featured products' : 'Feature this product'}
                           aria-label={item.isFeatured ? `Unfeature ${item.name}` : `Feature ${item.name}`}
                           aria-pressed={item.isFeatured === true}
@@ -702,7 +768,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         <button
                           type="button"
                           disabled={isSaving}
-                          onClick={() => void handleToggleListing(item, 'isActive')}
+                          onClick={(event) => { event.stopPropagation(); void handleToggleListing(item, 'isActive'); }}
                           title={item.isActive === false ? 'Show on storefront' : 'Hide from storefront'}
                           aria-label={item.isActive === false ? `Show ${item.name} on storefront` : `Hide ${item.name} from storefront`}
                           aria-pressed={item.isActive !== false}
@@ -723,23 +789,17 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => {
-                          setPreviewImageIndex(0);
-                          setPreviewItem(item);
-                        }}
+                        onClick={(event) => { event.stopPropagation(); setViewingItem(item); }}
                         className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-800"
-                        title="Preview storefront card"
-                        aria-label={`Preview ${item.name} storefront card`}
+                        title="View product page"
+                        aria-label={`View ${item.name} product page`}
                       >
                         <Eye className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => {
-                          clearPendingProductImages(editingProductImages, setEditingProductImages);
-                          setEditingItem({ ...item, images: getProductImages(item) });
-                        }}
+                        onClick={(event) => { event.stopPropagation(); openEditItem(item); }}
                         className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded-md transition-colors"
                         title="Edit Price & Details"
                       >
@@ -748,7 +808,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       <button
                         type="button"
                         disabled={isSaving}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           if (window.confirm(`Archive "${item.name}"? It will disappear from the storefront, but old order records will remain.`)) {
                             setActionError('');
                             setIsSaving(true);
@@ -777,59 +838,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           </div>
         )}
       </div>
-
-      {previewItem && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label={`${previewItem.name} storefront preview`} onClick={() => setPreviewItem(null)}>
-          <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-              <div>
-                <h3 className="font-semibold text-slate-900">Storefront preview</h3>
-                <p className="text-xs text-slate-500">Product card appearance</p>
-              </div>
-              <button type="button" onClick={() => setPreviewItem(null)} aria-label="Close preview" className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="p-5">
-              <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-2xl bg-slate-100">
-                {activePreviewImage ? (
-                  <img src={activePreviewImage} alt={previewItem.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-slate-400"><Package className="h-12 w-12" /></div>
-                )}
-                {previewImages.length > 1 && (
-                  <>
-                    <button type="button" aria-label="Previous preview image" onClick={() => setPreviewImageIndex((index) => (index - 1 + previewImages.length) % previewImages.length)} className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm">
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button type="button" aria-label="Next preview image" onClick={() => setPreviewImageIndex((index) => (index + 1) % previewImages.length)} className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-sm">
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </>
-                )}
-                {previewItem.isFeatured && <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-amber-700 shadow-sm"><Star className="h-3 w-3 fill-current" /> Featured</span>}
-                {previewItem.isActive === false && <span className="absolute right-3 top-3 rounded-full bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold text-white">Hidden</span>}
-              </div>
-              {previewImages.length > 1 && (
-                <div className="mb-4 flex gap-2 overflow-x-auto">
-                  {previewImages.map((image, index) => (
-                    <button key={`${image}-${index}`} type="button" onClick={() => setPreviewImageIndex(index)} aria-label={`Preview image ${index + 1}`} aria-pressed={index === previewImageIndex} className={`h-12 w-12 shrink-0 overflow-hidden rounded-lg border-2 ${index === previewImageIndex ? 'border-teal-700' : 'border-transparent'}`}>
-                      <img src={image} alt="" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs font-medium text-teal-800">{previewItem.category}{previewItem.rxRequired ? ' · Prescription required' : ''}</p>
-              <h4 className="mt-1 text-lg font-semibold leading-snug text-slate-900">{previewItem.name}</h4>
-              <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600">{previewItem.description || 'Product description will appear here.'}</p>
-              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-                <span className="text-lg font-semibold text-slate-900">${previewItem.price.toFixed(2)}</span>
-                <span className="text-xs text-slate-500">{previewItem.dosage || 'Product details'}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {isProductCsvOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="product-csv-title">
@@ -1450,5 +1458,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
         </div>
       )}
     </div>
+    )
   );
 };
