@@ -257,7 +257,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                   </div>
                 </div>
 
-                {/* Card Footer: Price & Add to Cart */}
+                {/* Card Footer: Price & Add to Order */}
                 <div className="flex items-center justify-between border-t border-blue-50 bg-[#f8fbff] px-5 py-4">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider block">
@@ -274,7 +274,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                     className="flex items-center gap-1.5 rounded-full bg-[#174c80] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#123b68] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>{isOutOfStock ? 'Sold Out' : 'Add to Cart'}</span>
+                    <span>{isOutOfStock ? 'Sold Out' : 'Add to Order'}</span>
                   </button>
                 </div>
               </div>

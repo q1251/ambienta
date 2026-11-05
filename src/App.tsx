@@ -955,7 +955,7 @@ export default function App() {
                 onClick={() => setIsCartOpen(true)}
                 className="text-blue-200 transition-colors hover:text-white"
               >
-                View Cart ({totalCartCount})
+                View Order ({totalCartCount})
               </button>
             </div>
           </div>

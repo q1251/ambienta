@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Minus, Plus, ShoppingBag, Trash2, X } from 'lucide-react';
+import { ArrowRight, ClipboardList, Minus, Plus, Trash2, X } from 'lucide-react';
 import { CartItem } from '../types/pharmacy';
 
 interface CartDrawerProps {
@@ -37,17 +37,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       <aside
         role="dialog"
         aria-modal="true"
-        aria-label="Shopping cart"
+        aria-label="Order summary"
         onClick={(event) => event.stopPropagation()}
         className="flex h-full w-full max-w-[460px] flex-col bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-[#e7e8e1] px-6 py-5">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e8f2fb] text-[#174c80]">
-              <ShoppingBag className="h-5 w-5" />
+              <ClipboardList className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="text-base font-semibold tracking-tight text-slate-900">Your bag</h2>
+              <h2 className="text-base font-semibold tracking-tight text-slate-900">Order summary</h2>
               <p className="text-xs text-slate-500">{itemCount} {itemCount === 1 ? 'item' : 'items'}</p>
             </div>
           </div>
@@ -64,11 +64,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {cartItems.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#e8f2fb] text-[#174c80]">
-              <ShoppingBag className="h-7 w-7" />
+              <ClipboardList className="h-7 w-7" />
             </span>
-            <h3 className="mt-5 text-lg font-semibold tracking-tight text-slate-900">Your bag is waiting</h3>
+            <h3 className="mt-5 text-lg font-semibold tracking-tight text-slate-900">No items selected</h3>
             <p className="mt-2 max-w-xs text-sm leading-6 text-slate-500">
-              Explore everyday wellness essentials and add something that feels right for you.
+              Browse the store and add the products you want to order.
             </p>
             <button
               type="button"
@@ -147,7 +147,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 onClick={handleCheckout}
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-[#174c80] px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#123b68]"
               >
-                Continue to checkout
+                Review order and checkout
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
