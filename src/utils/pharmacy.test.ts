@@ -8,6 +8,7 @@ import {
   filterPatientsByHealthCategory,
   getLeadCountry,
   classifyLeadContact,
+  calculateLeadProfileCompleteness,
   parseLeadsCsv,
   evaluateDueReminders,
   sortContactLeads,
@@ -344,6 +345,19 @@ test('sortContactLeads sorts alphabetically, by stage priority, by orders, and b
   const sortedByOrders = sortContactLeads(sampleLeads, 'orders', 'desc');
   assert.equal(sortedByOrders[0].orderCount, 5);
   assert.equal(sortedByOrders[2].orderCount, 0);
+});
+
+test('lead profile completeness counts populated contact details and sorts fullest profiles first', () => {
+  const sampleLeads: any[] = [
+    { id: 1, firstName: 'Ava', lastName: '', email: 'ava@example.com', phone: '', country: '', address: '', postalCode: '' },
+    { id: 2, firstName: 'Noah', lastName: 'Reed', email: 'noah@example.com', phone: '+1 213 373 4253', country: 'United States', address: '12 Oak Street', postalCode: '90210' },
+    { id: 3, firstName: '', lastName: '', email: '', phone: '', country: '', address: '', postalCode: '' },
+  ];
+
+  assert.equal(calculateLeadProfileCompleteness(sampleLeads[0]), 2);
+  assert.equal(calculateLeadProfileCompleteness(sampleLeads[1]), 7);
+  assert.equal(calculateLeadProfileCompleteness(sampleLeads[2]), 0);
+  assert.deepEqual(sortContactLeads(sampleLeads, 'completeness', 'desc').map((lead) => lead.id), [2, 1, 3]);
 });
 
 test('sortOrders sorts by total amount and order date accurately', () => {

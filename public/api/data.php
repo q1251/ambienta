@@ -2346,6 +2346,18 @@ function data_lead_row(array $row): array
         $email = $email === '' ? '' : data_mask_contact_email($email);
         $phone = $phone === '' ? '' : data_mask_contact_phone($phone);
     }
+    $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
+        || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
+    $profileCompletenessScore = (int) (trim((string) ($row['first_name'] ?? '')) !== '')
+        + (int) (trim((string) ($row['last_name'] ?? '')) !== '')
+        + (int) $hasEmail
+        + (int) $hasPhone
+        + (int) (trim((string) ($row['country'] ?? '')) !== ''
+            && strtolower(trim((string) ($row['country'] ?? ''))) !== 'not specified');
+    if ($canViewOrders) {
+        $profileCompletenessScore += (int) (trim((string) ($row['address'] ?? '')) !== '')
+            + (int) (trim((string) ($row['postal_code'] ?? '')) !== '');
+    }
     $lead = [
         'id' => (int) $row['id'],
         'firstName' => $row['first_name'],
@@ -2353,6 +2365,8 @@ function data_lead_row(array $row): array
         'email' => $email,
         'phone' => $phone,
         'contactCompleteness' => $contactCompleteness,
+        'profileCompletenessScore' => $profileCompletenessScore,
+        'profileCompletenessMaxScore' => $canViewOrders ? 7 : 5,
         'country' => $row['country'] ?? '',
         'leadSource' => $row['lead_source'],
         'createdAt' => $row['created_at'],
@@ -2360,8 +2374,6 @@ function data_lead_row(array $row): array
         'marketingConsent' => (bool) ($row['marketing_consent'] ?? false),
         'marketingConsentAt' => $row['marketing_consent_at'] ?? null,
     ];
-    $canViewOrders = ($_SESSION['admin_role'] ?? '') === 'admin'
-        || in_array('orders', $_SESSION['admin_permissions'] ?? [], true);
     if ($canViewOrders) {
         $lead['address'] = (string) ($row['address'] ?? '');
         $lead['postalCode'] = (string) ($row['postal_code'] ?? '');

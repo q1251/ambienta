@@ -417,7 +417,7 @@ export function evaluateDueReminders(
   return matches;
 }
 
-export type LeadSortField = 'name' | 'stage' | 'country' | 'email' | 'orders' | 'createdAt';
+export type LeadSortField = 'name' | 'stage' | 'country' | 'email' | 'orders' | 'createdAt' | 'completeness';
 export type OrderSortField = 'orderNumber' | 'placedAt' | 'patientName' | 'totalAmount' | 'status';
 
 const STAGE_ORDER: Record<string, number> = {
@@ -440,6 +440,11 @@ export function sortContactLeads(
   const multiplier = order === 'asc' ? 1 : -1;
   return [...leads].sort((a, b) => {
     switch (field) {
+      case 'completeness': {
+        const scoreA = a.profileCompletenessScore ?? calculateLeadProfileCompleteness(a);
+        const scoreB = b.profileCompletenessScore ?? calculateLeadProfileCompleteness(b);
+        return (scoreA - scoreB) * multiplier;
+      }
       case 'name': {
         const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
         const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
@@ -472,6 +477,20 @@ export function sortContactLeads(
         return 0;
     }
   });
+}
+
+export function calculateLeadProfileCompleteness(
+  lead: Pick<ContactLead, 'firstName' | 'lastName' | 'email' | 'phone' | 'country' | 'address' | 'postalCode'>
+): number {
+  return [
+    Boolean(lead.firstName.trim()),
+    Boolean(lead.lastName.trim()),
+    isValidLeadEmail(lead.email.trim()),
+    lead.phone.replace(/\D/g, '').length >= 7,
+    Boolean(lead.country?.trim() && lead.country.trim().toLowerCase() !== 'not specified'),
+    Boolean(lead.address?.trim()),
+    Boolean(lead.postalCode?.trim()),
+  ].filter(Boolean).length;
 }
 
 /**

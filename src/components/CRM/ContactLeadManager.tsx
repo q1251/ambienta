@@ -49,6 +49,7 @@ import {
 import {
   generateSampleCsv,
   classifyLeadContact,
+  calculateLeadProfileCompleteness,
   isValidLeadEmail,
   parseLeadsCsv,
   sortContactLeads,
@@ -173,7 +174,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [contactTypeFilter, setContactTypeFilter] = useState<'All' | LeadContactCompleteness>('All');
   const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
   const [leadPage, setLeadPage] = useState(1);
-  const [sortField, setSortField] = useState<LeadSortField>('createdAt');
+  const [sortField, setSortField] = useState<LeadSortField>('completeness');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const handleToggleSort = (field: LeadSortField) => {
@@ -2014,6 +2015,21 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       )}
                     </button>
                   </th>
+                  <th className="px-4 py-3.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSort('completeness')}
+                      title="Sort by populated name, contact, country, and address fields"
+                      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wider text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <span>Details</span>
+                      {sortField === 'completeness' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-4 py-3.5">Phone</th>
                   <th className="px-4 py-3.5">Address</th>
                   <th className="px-4 py-3.5">
@@ -2107,6 +2123,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </div>
                       </td>
 
+                      <td className="px-4 py-3 font-medium tabular-nums text-slate-600" aria-label={`${lead.profileCompletenessScore ?? calculateLeadProfileCompleteness(lead)} of ${lead.profileCompletenessMaxScore ?? 7} profile details`}>
+                        {lead.profileCompletenessScore ?? calculateLeadProfileCompleteness(lead)}/{lead.profileCompletenessMaxScore ?? 7}
+                      </td>
+
                       <td className="px-4 py-3">
                         {lead.phone ? (
                           <div className="flex items-center text-slate-800">
@@ -2187,7 +2207,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                 {!visibleLeads.length && (
                   <tr>
-                    <td colSpan={isSuperadmin ? 12 : 11} className="px-6 py-12 text-center text-slate-400">
+                    <td colSpan={isSuperadmin ? 13 : 12} className="px-6 py-12 text-center text-slate-400">
                       No contacts match the current filters or search query.
                     </td>
                   </tr>

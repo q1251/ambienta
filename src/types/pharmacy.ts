@@ -70,6 +70,8 @@ export interface ContactLead {
   address?: string;
   postalCode?: string;
   contactCompleteness?: LeadContactCompleteness;
+  profileCompletenessScore?: number;
+  profileCompletenessMaxScore?: number;
   country?: string;
   leadSource: 'Manual Entry' | 'CSV Upload' | 'Online Order' | 'Synthetic Demo' | 'Live chat';
   createdAt: string;
