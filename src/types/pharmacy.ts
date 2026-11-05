@@ -203,6 +203,18 @@ export interface LeadProfile {
   activities: LeadActivity[];
 }
 
+export interface LeadAssignment {
+  leadId: number;
+  assignedStaffId: number | null;
+  assignedStaffName: string | null;
+}
+
+export interface LeadAssignmentResult {
+  processedCount: number;
+  assignedCount: number;
+  assignments: LeadAssignment[];
+}
+
 export type PaymentMethod =
   | 'Credit / Debit Card'
   | 'PayPal'

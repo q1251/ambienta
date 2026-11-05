@@ -15,7 +15,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadHistoryImportInput, LeadProfile, LeadSourceRecordImportInput, OnlineOrder } from '../../types/pharmacy';
+import { CatalogItem, ContactLead, ContactLeadInput, ContactLeadUpdate, LeadActivity, LeadActivityInput, LeadAssignmentResult, LeadHistoryImportInput, LeadProfile, LeadSourceRecordImportInput, OnlineOrder } from '../../types/pharmacy';
 import type { ProductCsvItem } from '../../utils/productCsv';
 import { AuditLogView } from './AuditLogView';
 import { HostingerMailIntegration } from './HostingerMailIntegration';
@@ -71,6 +71,7 @@ interface AdminLayoutProps {
   ) => Promise<void>;
   onLoadLeadProfile: (leadId: number) => Promise<LeadProfile>;
   onUpdateLead: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
+  onAssignLeads: (leadIds: number[], mode: 'manual' | 'least_loaded', assignedStaffId?: number | null) => Promise<LeadAssignmentResult>;
   onAddLeadActivity: (leadId: number, activity: LeadActivityInput) => Promise<LeadActivity>;
   categories: string[];
   catalogItems: CatalogItem[];
@@ -503,12 +504,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
                   canAddContacts={props.permissions.includes('add_leads')}
                   canImportContacts={props.permissions.includes('import_leads')}
                   canExportContacts={props.permissions.includes('export_leads')}
+                  canViewNewLeads={props.permissions.includes('new_leads')}
                   leads={props.leads}
                   dataError={props.leadDataError}
                   onOpenEmailCampaigns={props.role === 'admin' || props.permissions.includes('email_campaigns') ? openEmailCampaigns : undefined}
                   onSaveLeads={props.onSaveLeads}
                   onLoadLeadProfile={props.onLoadLeadProfile}
                   onUpdateLead={props.onUpdateLead}
+                  onAssignLeads={props.onAssignLeads}
                   onAddLeadActivity={props.onAddLeadActivity}
                 />
               </Suspense>

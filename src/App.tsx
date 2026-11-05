@@ -18,6 +18,7 @@ import {
   ContactLeadUpdate,
   LeadActivity,
   LeadActivityInput,
+  LeadAssignmentResult,
   LeadHistoryImportInput,
   LeadProfile,
   LeadSourceRecordImportInput,
@@ -778,6 +779,51 @@ export default function App() {
     return updatedLead;
   };
 
+  const handleAssignLeads = async (
+    leadIds: number[],
+    mode: 'manual' | 'least_loaded',
+    assignedStaffId?: number | null,
+  ): Promise<LeadAssignmentResult> => {
+    const batchSize = 250;
+    const assignments: LeadAssignmentResult['assignments'] = [];
+    let assignedCount = 0;
+    for (let offset = 0; offset < leadIds.length; offset += batchSize) {
+      const body: { leadIds: number[]; mode: 'manual' | 'least_loaded'; assignedStaffId?: number | null } = {
+        leadIds: leadIds.slice(offset, offset + batchSize),
+        mode,
+      };
+      if (mode === 'manual') body.assignedStaffId = assignedStaffId ?? null;
+      try {
+        const response = await fetch('/api/data.php?resource=lead-assignments', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const result = await response.json() as LeadAssignmentResult & { message?: string };
+        if (!response.ok || !Array.isArray(result.assignments)) {
+          throw new Error(result.message || 'The selected leads could not be assigned.');
+        }
+        assignments.push(...result.assignments);
+        assignedCount += result.assignedCount;
+        const assignmentByLeadId = new Map(result.assignments.map((assignment) => [assignment.leadId, assignment]));
+        setLeads((previous) => previous.map((lead) => {
+          const assignment = assignmentByLeadId.get(lead.id);
+          return assignment
+            ? { ...lead, assignedStaffId: assignment.assignedStaffId, assignedStaffName: assignment.assignedStaffName }
+            : lead;
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'The selected leads could not be assigned.';
+        if (offset > 0) {
+          throw new Error(`Assigned ${assignments.length} of ${leadIds.length} leads before the remaining batch failed: ${message}`);
+        }
+        throw error;
+      }
+    }
+    return { processedCount: assignments.length, assignedCount, assignments };
+  };
+
   const handleAddLeadActivity = async (leadId: number, activity: LeadActivityInput) => {
     const response = await fetch('/api/data.php?resource=lead-activities', {
       method: 'POST',
@@ -881,6 +927,7 @@ export default function App() {
         onSaveLeads={handleSaveLeads}
         onLoadLeadProfile={handleLoadLeadProfile}
         onUpdateLead={handleUpdateLead}
+        onAssignLeads={handleAssignLeads}
         onAddLeadActivity={handleAddLeadActivity}
         categories={categories}
         catalogItems={catalogItems}

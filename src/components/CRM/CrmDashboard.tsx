@@ -15,7 +15,7 @@ import {
   Clock,
   Pill,
 } from 'lucide-react';
-import { ContactLead, LeadHistoryImportInput, LeadSourceRecordImportInput, Patient, HostingerConfig, EmailLog, ReminderRule, HealthCategory } from '../../types/pharmacy';
+import { ContactLead, LeadAssignmentResult, LeadHistoryImportInput, LeadSourceRecordImportInput, Patient, HostingerConfig, EmailLog, ReminderRule, HealthCategory } from '../../types/pharmacy';
 import { calculateDaysRemaining } from '../../utils/pharmacyLogic';
 import { ContactLeadManager } from './ContactLeadManager';
 import { AutomatedRemindersView } from './AutomatedRemindersView';
@@ -32,6 +32,7 @@ interface CrmDashboardProps {
     historicalOrders?: LeadHistoryImportInput[],
     sourceRecords?: LeadSourceRecordImportInput[],
   ) => Promise<void>;
+  onAssignLeads: (leadIds: number[], mode: 'manual' | 'least_loaded', assignedStaffId?: number | null) => Promise<LeadAssignmentResult>;
   hostingerConfig: HostingerConfig;
   onUpdateHostingerConfig: (config: HostingerConfig) => void;
   emailLogs: EmailLog[];
@@ -48,6 +49,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
   leads,
   leadDataError,
   onSaveLeads,
+  onAssignLeads,
   hostingerConfig,
   onUpdateHostingerConfig,
   emailLogs,
@@ -419,6 +421,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           leads={leads}
           dataError={leadDataError}
           onSaveLeads={onSaveLeads}
+          onAssignLeads={onAssignLeads}
         />
       )}
 

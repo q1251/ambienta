@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUp,
   ArrowUpDown,
+  Bell,
   Calendar,
   Check,
   CheckSquare,
@@ -39,6 +40,7 @@ import {
   ContactLeadInput,
   ContactLeadUpdate,
   LeadActivityInput,
+  LeadAssignmentResult,
   LeadContactCompleteness,
   LeadHistoryImportInput,
   LeadProfile,
@@ -66,6 +68,7 @@ interface ContactLeadManagerProps {
   canAddContacts?: boolean;
   canImportContacts?: boolean;
   canExportContacts?: boolean;
+  canViewNewLeads?: boolean;
   leads: ContactLead[];
   dataError?: string;
   onOpenEmailCampaigns?: () => void;
@@ -76,6 +79,7 @@ interface ContactLeadManagerProps {
   ) => Promise<void>;
   onLoadLeadProfile?: (leadId: number) => Promise<LeadProfile>;
   onUpdateLead?: (leadId: number, update: ContactLeadUpdate) => Promise<ContactLead>;
+  onAssignLeads: (leadIds: number[], mode: 'manual' | 'least_loaded', assignedStaffId?: number | null) => Promise<LeadAssignmentResult>;
   onAddLeadActivity?: (leadId: number, activity: LeadActivityInput) => Promise<LeadProfile['activities'][number]>;
 }
 
@@ -85,6 +89,17 @@ interface AgentOption {
   display_name: string;
   is_active: boolean;
   permissions: string[];
+  assigned_lead_count?: number;
+}
+
+interface LeadAssignmentNotification {
+  id: number;
+  leadId: number;
+  firstName: string;
+  lastName: string;
+  status: LeadStatus;
+  assignedByName: string;
+  assignedAt: string;
 }
 
 const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; border: string }> = [
@@ -127,12 +142,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   canAddContacts = false,
   canImportContacts = false,
   canExportContacts = false,
+  canViewNewLeads = false,
   leads,
   dataError,
   onOpenEmailCampaigns,
   onSaveLeads,
   onLoadLeadProfile,
   onUpdateLead,
+  onAssignLeads,
   onAddLeadActivity,
 }) => {
   // View mode: 'table' vs 'kanban'
@@ -174,7 +191,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [countryFilter, setCountryFilter] = useState('All');
   const [contactTypeFilter, setContactTypeFilter] = useState<'All' | LeadContactCompleteness>('All');
-  const [leadTab, setLeadTab] = useState<'all' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
+  const [leadTab, setLeadTab] = useState<'all' | 'unassigned' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
   const [pageSize, setPageSize] = useState<number>(50);
   const [tableFilters, setTableFilters] = useState({
     name: '',
@@ -235,6 +252,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [assignmentNotifications, setAssignmentNotifications] = useState<LeadAssignmentNotification[]>([]);
   const [profileSaving, setProfileSaving] = useState(false);
   const [contactDetailsEditing, setContactDetailsEditing] = useState(false);
   const [profileActiveTab, setProfileActiveTab] = useState<'overview' | 'orders' | 'timeline' | 'source'>('overview');
@@ -273,7 +291,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
           throw new Error(result.message || 'Agent accounts could not be loaded for lead assignment.');
         }
         if (active) {
-          setAgents(result.staff.filter((agent) => agent.is_active && agent.permissions.includes('leads')));
+          setAgents(result.staff
+            .filter((agent) => agent.is_active && agent.permissions.includes('leads'))
+            .sort((left, right) =>
+              (left.assigned_lead_count ?? 0) - (right.assigned_lead_count ?? 0)
+              || left.display_name.localeCompare(right.display_name)
+            ));
         }
       })
       .catch((error: unknown) => {
@@ -285,6 +308,34 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       active = false;
     };
   }, [isSuperadmin]);
+
+  useEffect(() => {
+    if (role !== 'operator') return;
+    let active = true;
+    const loadNotifications = async () => {
+      try {
+        const response = await fetch('/api/data.php?resource=lead-assignment-notifications', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json() as { notifications?: LeadAssignmentNotification[]; message?: string };
+        if (!response.ok || !Array.isArray(result.notifications)) {
+          throw new Error(result.message || 'Lead assignment notifications could not be loaded.');
+        }
+        if (active) setAssignmentNotifications(result.notifications);
+      } catch (error) {
+        if (active) {
+          setRequestError(error instanceof Error ? error.message : 'Lead assignment notifications could not be loaded.');
+        }
+      }
+    };
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [role]);
 
   // Keyboard handlers for modals
   useEffect(() => {
@@ -301,6 +352,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
   // Computed summary metrics
   const totalLeadsCount = leads.length;
+  const unassignedLeadCount = leads.filter((lead) => lead.assignedStaffId == null).length;
   const customersCount = leads.filter((l) => (l.orderCount ?? 0) > 0 || l.status === 'Customer').length;
   const eligibleMarketingCount = leads.filter((l) => l.marketingConsent).length;
   const needsFollowupCount = leads.filter((l) => ['Cold', 'Contacted', 'Qualified'].includes(l.status)).length;
@@ -369,6 +421,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         matchesTab = lead.marketingConsent;
       } else if (leadTab === 'needs_followup') {
         matchesTab = ['Cold', 'Contacted', 'Qualified'].includes(lead.status);
+      } else if (leadTab === 'unassigned') {
+        matchesTab = lead.assignedStaffId == null;
       }
 
       return matchesStage && matchesCountry && matchesContactType && matchesSearch && matchesTab;
@@ -429,6 +483,23 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setSelectedLeadIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   };
 
+  const refreshAgentCounts = (assignments: LeadAssignmentResult['assignments']) => {
+    const leadsById = new Map(leads.map((lead) => [lead.id, lead]));
+    setAgents((current) => current.map((agent) => {
+      let assignedLeadCount = agent.assigned_lead_count ?? 0;
+      for (const assignment of assignments) {
+        const previousLead = leadsById.get(assignment.leadId);
+        const previousAgentId = previousLead?.assignedStaffId ?? null;
+        if (previousAgentId === agent.id && previousAgentId !== assignment.assignedStaffId) assignedLeadCount--;
+        if (assignment.assignedStaffId === agent.id && previousAgentId !== assignment.assignedStaffId) assignedLeadCount++;
+      }
+      return { ...agent, assigned_lead_count: Math.max(0, assignedLeadCount) };
+    }).sort((left, right) =>
+      (left.assigned_lead_count ?? 0) - (right.assigned_lead_count ?? 0)
+      || left.display_name.localeCompare(right.display_name)
+    ));
+  };
+
   const handleBatchStageUpdate = async (newStage: LeadStatus) => {
     if (!onUpdateLead || !selectedLeadIds.length) return;
     setBatchUpdating(true);
@@ -445,18 +516,61 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   };
 
   const handleBatchAgentAssign = async (agentIdStr: string) => {
-    if (!onUpdateLead || !selectedLeadIds.length) return;
+    if (!selectedLeadIds.length) return;
     setBatchUpdating(true);
     setRequestError('');
     try {
+      const autoAssign = agentIdStr === 'least_loaded';
       const assignedStaffId = agentIdStr ? Number(agentIdStr) : null;
-      await Promise.all(selectedLeadIds.map((id) => onUpdateLead(id, { assignedStaffId })));
-      setSuccess(`Updated assignment for ${selectedLeadIds.length} contact${selectedLeadIds.length === 1 ? '' : 's'}.`);
+      const result = await onAssignLeads(
+        selectedLeadIds,
+        autoAssign ? 'least_loaded' : 'manual',
+        autoAssign ? undefined : assignedStaffId,
+      );
+      refreshAgentCounts(result.assignments);
+      setSuccess(autoAssign
+        ? `Assigned ${result.assignedCount} selected lead${result.assignedCount === 1 ? '' : 's'} to the least-loaded eligible agent${result.assignedCount === 1 ? '' : 's'}.`
+        : `Updated assignment for ${result.assignedCount} selected lead${result.assignedCount === 1 ? '' : 's'}.`);
       setSelectedLeadIds([]);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : 'Batch agent assignment failed.');
     } finally {
       setBatchUpdating(false);
+    }
+  };
+
+  const handleAutoAssignQueue = async () => {
+    const unassignedIds = tableFilteredLeads.filter((lead) => lead.assignedStaffId == null).map((lead) => lead.id);
+    if (!unassignedIds.length) return;
+    setBatchUpdating(true);
+    setRequestError('');
+    setSuccess('');
+    try {
+      const result = await onAssignLeads(unassignedIds, 'least_loaded');
+      refreshAgentCounts(result.assignments);
+      setSuccess(`Assigned ${result.assignedCount} of ${unassignedIds.length} unassigned leads to the least-loaded eligible agents.`);
+      setSelectedLeadIds([]);
+      setLeadPage(1);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'Unassigned leads could not be distributed.');
+    } finally {
+      setBatchUpdating(false);
+    }
+  };
+
+  const handleSingleAgentAssign = async (leadId: number, value: string) => {
+    if (!onUpdateLead) return;
+    setRequestError('');
+    try {
+      const updatedLead = await onUpdateLead(leadId, { assignedStaffId: value ? Number(value) : null });
+      refreshAgentCounts([{
+        leadId,
+        assignedStaffId: updatedLead.assignedStaffId ?? null,
+        assignedStaffName: updatedLead.assignedStaffName ?? null,
+      }]);
+      setSuccess('Lead assignment updated.');
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'Lead assignment could not be updated.');
     }
   };
 
@@ -651,16 +765,57 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setActivitySaving(false);
   };
 
+  const acknowledgeAssignmentNotification = async (notificationId: number) => {
+    try {
+      const response = await fetch('/api/data.php?resource=lead-assignment-notifications', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ ids: [notificationId] }),
+      });
+      const result = await response.json() as { message?: string };
+      if (!response.ok) {
+        throw new Error(result.message || 'The assignment notification could not be acknowledged.');
+      }
+      setAssignmentNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'The assignment notification could not be acknowledged.');
+    }
+  };
+
+  const openAssignmentNotification = async (notification: LeadAssignmentNotification) => {
+    await acknowledgeAssignmentNotification(notification.id);
+    await openProfile({
+      id: notification.leadId,
+      firstName: notification.firstName,
+      lastName: notification.lastName,
+      email: '',
+      phone: '',
+      leadSource: 'Manual Entry',
+      createdAt: notification.assignedAt,
+      status: notification.status,
+      marketingConsent: false,
+    });
+  };
+
   const updateProfile = async (update: ContactLeadUpdate): Promise<boolean> => {
     if (!profile || !canEditSelectedLead || !onUpdateLead) return false;
     const requestId = profileRequestId.current;
     const leadId = profile.lead.id;
+    const previousAssignedStaffId = profile.lead.assignedStaffId ?? null;
     setProfileSaving(true);
     setProfileError('');
     try {
       const lead = await onUpdateLead(leadId, update);
       if (requestId !== profileRequestId.current) return false;
       setProfile((current) => (current?.lead.id === leadId ? { ...current, lead } : current));
+      if (update.assignedStaffId !== undefined) {
+        refreshAgentCounts([{
+          leadId,
+          assignedStaffId: lead.assignedStaffId ?? null,
+          assignedStaffName: lead.assignedStaffName ?? null,
+        }]);
+      }
       if (update.firstName !== undefined) setProfileFirstName(lead.firstName);
       if (update.lastName !== undefined) setProfileLastName(lead.lastName);
       if (update.email !== undefined) setProfileEmail(lead.email);
@@ -1702,6 +1857,31 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       {dataError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
       {requestError && <p role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
       {success && <p role="status" className="rounded-xl border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">{success}</p>}
+      {role === 'operator' && assignmentNotifications.length > 0 && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50/80 p-4 shadow-sm" role="status">
+          <div className="flex items-center gap-2 text-sm font-bold text-blue-950">
+            <Bell className="h-4 w-4" />
+            <span>{assignmentNotifications.length} new lead assignment{assignmentNotifications.length === 1 ? '' : 's'}</span>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {assignmentNotifications.slice(0, 5).map((notification) => (
+              <li key={notification.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-white px-3 py-2">
+                <span className="text-xs text-slate-700">
+                  <strong>{`${notification.firstName} ${notification.lastName}`.trim() || 'A lead'}</strong>
+                  {' '}was assigned by {notification.assignedByName} · {notification.status}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void openAssignmentNotification(notification)}
+                  className="rounded-lg bg-blue-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-900"
+                >
+                  Open lead
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* TOP KPI COMMAND CENTER */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1769,6 +1949,23 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             >
               All contacts ({leads.length})
             </button>
+            {(isSuperadmin || canViewNewLeads) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLeadTab('unassigned');
+                  setLeadPage(1);
+                  setSelectedLeadIds([]);
+                }}
+                className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                  leadTab === 'unassigned'
+                    ? 'bg-blue-800 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                }`}
+              >
+                Unassigned ({unassignedLeadCount})
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -1815,6 +2012,17 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
           {/* Action Buttons: Add, Import, Export, View Toggle */}
           <div className="flex flex-wrap items-center gap-2">
+            {isSuperadmin && leadTab === 'unassigned' && (
+              <button
+                type="button"
+                onClick={() => void handleAutoAssignQueue()}
+                disabled={batchUpdating || !tableFilteredLeads.length}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-800 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Users className="h-3.5 w-3.5" />
+                {batchUpdating ? 'Assigning…' : `Auto-assign ${tableFilteredLeads.length} unassigned`}
+              </button>
+            )}
             {canAddContactsForRole && <button
               type="button"
               onClick={() => {
@@ -2002,9 +2210,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       Assign staff
                     </option>
                     <option value="">Unassigned</option>
+                    <option value="least_loaded">Least-loaded eligible agent</option>
                     {agents.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.display_name || a.email}
+                        {a.display_name || a.email} · {a.assigned_lead_count ?? 0} leads
                       </option>
                     ))}
                   </select>
@@ -2357,15 +2566,13 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           <select
                             aria-label={`Assign ${lead.firstName} ${lead.lastName}`}
                             value={lead.assignedStaffId ?? ''}
-                            onChange={(e) => {
-                              if (onUpdateLead) void onUpdateLead(lead.id, { assignedStaffId: e.target.value ? Number(e.target.value) : null });
-                            }}
+                            onChange={(e) => void handleSingleAgentAssign(lead.id, e.target.value)}
                             className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700"
                           >
                             <option value="">Unassigned</option>
                             {agents.map((agent) => (
                               <option key={agent.id} value={agent.id}>
-                                {agent.display_name || agent.email}
+                                {agent.display_name || agent.email} · {agent.assigned_lead_count ?? 0} leads
                               </option>
                             ))}
                           </select>

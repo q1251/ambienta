@@ -204,6 +204,17 @@ function data_ensure_schema(PDO $db): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
     $db->exec(
+        "CREATE TABLE IF NOT EXISTS lead_assignment_notifications (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            staff_id BIGINT UNSIGNED NOT NULL,
+            lead_id BIGINT UNSIGNED NOT NULL,
+            assigned_by_name VARCHAR(120) NOT NULL,
+            assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            read_at DATETIME NULL,
+            KEY lead_assignment_notifications_staff (staff_id, read_at, id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
         "CREATE TABLE IF NOT EXISTS lead_order_history (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             lead_id BIGINT UNSIGNED NOT NULL,
@@ -842,6 +853,15 @@ function data_staff_permissions($permissions): ?array
         $permissions = array_merge($permissions, ['add_leads', 'import_leads', 'export_leads']);
     }
     return $permissions;
+}
+
+function data_staff_can_handle_leads(array $staff): bool
+{
+    $permissions = data_staff_permissions(json_decode((string) ($staff['permissions'] ?? ''), true));
+    return ($staff['role'] ?? '') === 'operator'
+        && (bool) ($staff['is_active'] ?? false)
+        && $permissions !== null
+        && in_array('leads', $permissions, true);
 }
 
 function data_chat_admin_online(PDO $db): bool
@@ -4394,6 +4414,7 @@ if ($method === 'DELETE' && $resource === 'staff') {
 
         $unassignedLeads = 0;
         $unassignLeads = $db->prepare('UPDATE leads SET assigned_staff_id = NULL WHERE assigned_staff_id = ?');
+        $clearLeadNotifications = $db->prepare('DELETE FROM lead_assignment_notifications WHERE staff_id = ?');
         $findChats = $db->prepare(
             "SELECT id, owner_staff_id FROM chat_conversations WHERE owner_type = 'agent' AND owner_staff_id IN ($placeholders) AND status = 'open' FOR UPDATE"
         );
@@ -4413,6 +4434,7 @@ if ($method === 'DELETE' && $resource === 'staff') {
             $staffNames[$staffId] = trim((string) $staffRow['display_name']) ?: 'the assigned agent';
             $unassignLeads->execute([$staffId]);
             $unassignedLeads += $unassignLeads->rowCount();
+            $clearLeadNotifications->execute([$staffId]);
             $db->prepare('DELETE FROM staff_presence WHERE staff_id = ?')->execute([$staffId]);
         }
         foreach ($openChats as $chat) {
@@ -4765,6 +4787,32 @@ if ($method === 'GET') {
             $rows = $db->query($listSql . ' GROUP BY l.id ORDER BY l.id DESC')->fetchAll();
         }
         data_respond(200, ['leads' => array_map('data_lead_row', $rows)]);
+    }
+    if ($resource === 'lead-assignment-notifications') {
+        data_require_permission('leads');
+        $staffId = (int) ($_SESSION['staff_id'] ?? 0);
+        if (($_SESSION['admin_role'] ?? '') !== 'operator' || $staffId < 1) {
+            data_respond(200, ['notifications' => []]);
+        }
+        $query = $db->prepare(
+            'SELECT n.id, n.lead_id, n.assigned_by_name, n.assigned_at,
+                    l.first_name, l.last_name, l.status
+             FROM lead_assignment_notifications n
+             INNER JOIN leads l ON l.id = n.lead_id
+             WHERE n.staff_id = ? AND n.read_at IS NULL AND l.assigned_staff_id = n.staff_id
+             ORDER BY n.id DESC LIMIT 50'
+        );
+        $query->execute([$staffId]);
+        $notifications = array_map(static fn (array $row): array => [
+            'id' => (int) $row['id'],
+            'leadId' => (int) $row['lead_id'],
+            'firstName' => (string) $row['first_name'],
+            'lastName' => (string) $row['last_name'],
+            'status' => (string) $row['status'],
+            'assignedByName' => (string) $row['assigned_by_name'],
+            'assignedAt' => (string) $row['assigned_at'],
+        ], $query->fetchAll());
+        data_respond(200, ['notifications' => $notifications]);
     }
     if ($resource === 'categories') {
         data_require_permission('products');
@@ -6986,6 +7034,188 @@ if ($method === 'POST' && $resource === 'lead-source-records') {
     data_respond(201, ['imported' => count($normalizedRecords)]);
 }
 
+if ($method === 'POST' && $resource === 'lead-assignment-notifications') {
+    data_require_permission('leads');
+    if (($_SESSION['admin_role'] ?? '') !== 'operator' || (int) ($_SESSION['staff_id'] ?? 0) < 1) {
+        data_respond(403, ['error' => 'agent_required', 'message' => 'Only an active agent can acknowledge lead assignment notifications.']);
+    }
+    $body = data_read_json(8192);
+    $rawIds = $body['ids'] ?? null;
+    if (!is_array($rawIds) || count($rawIds) < 1 || count($rawIds) > 50) {
+        data_respond(400, ['error' => 'invalid_notification_ids', 'message' => 'Select between 1 and 50 valid notifications.']);
+    }
+    $notificationIds = [];
+    foreach ($rawIds as $rawId) {
+        $notificationId = filter_var($rawId, FILTER_VALIDATE_INT);
+        if ($notificationId === false || $notificationId < 1) {
+            data_respond(400, ['error' => 'invalid_notification_ids', 'message' => 'The notification identifiers are invalid.']);
+        }
+        $notificationIds[] = (int) $notificationId;
+    }
+    $notificationIds = array_values(array_unique($notificationIds));
+    $placeholders = implode(', ', array_fill(0, count($notificationIds), '?'));
+    $db = data_db();
+    $update = $db->prepare(
+        "UPDATE lead_assignment_notifications SET read_at = UTC_TIMESTAMP()
+         WHERE staff_id = ? AND read_at IS NULL AND id IN ({$placeholders})"
+    );
+    $update->execute([(int) $_SESSION['staff_id'], ...$notificationIds]);
+    data_respond(200, ['markedRead' => $update->rowCount()]);
+}
+
+if ($method === 'POST' && $resource === 'lead-assignments') {
+    data_require_admin('admin');
+    $body = data_read_json(262144);
+    $rawIds = $body['leadIds'] ?? null;
+    $mode = $body['mode'] ?? null;
+    if (!is_array($rawIds) || count($rawIds) < 1 || count($rawIds) > 500
+        || !in_array($mode, ['manual', 'least_loaded'], true)) {
+        data_respond(400, ['error' => 'invalid_lead_assignments', 'message' => 'Provide up to 500 lead IDs and a valid assignment mode.']);
+    }
+    $leadIds = [];
+    foreach ($rawIds as $rawId) {
+        $leadId = filter_var($rawId, FILTER_VALIDATE_INT);
+        if ($leadId === false || $leadId < 1) {
+            data_respond(400, ['error' => 'invalid_lead_assignments', 'message' => 'One or more lead identifiers are invalid.']);
+        }
+        $leadIds[] = (int) $leadId;
+    }
+    $leadIds = array_values(array_unique($leadIds));
+    sort($leadIds);
+    if ($mode === 'manual') {
+        $assignedStaffId = $body['assignedStaffId'] ?? null;
+        if ($assignedStaffId !== null && (!is_int($assignedStaffId) || $assignedStaffId < 1)) {
+            data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent or leave the leads unassigned.']);
+        }
+    } else {
+        $assignedStaffId = null;
+    }
+
+    $db = data_db();
+    $db->beginTransaction();
+    try {
+        $staffRows = $db->query(
+            'SELECT id, email, display_name, role, is_active, permissions
+             FROM staff_users WHERE role = \'operator\' AND is_active = 1 ORDER BY id FOR UPDATE'
+        )->fetchAll();
+        $eligibleAgents = [];
+        foreach ($staffRows as $staffRow) {
+            if (data_staff_can_handle_leads($staffRow)) {
+                $staffId = (int) $staffRow['id'];
+                $eligibleAgents[$staffId] = [
+                    'id' => $staffId,
+                    'displayName' => trim((string) $staffRow['display_name']) ?: (string) $staffRow['email'],
+                    'email' => (string) $staffRow['email'],
+                ];
+            }
+        }
+        if ($mode === 'least_loaded' && $eligibleAgents === []) {
+            $db->rollBack();
+            data_respond(409, ['error' => 'no_eligible_lead_agents', 'message' => 'No active agent with Leads permission is available for assignment.']);
+        }
+        if ($mode === 'manual' && $assignedStaffId !== null && !isset($eligibleAgents[$assignedStaffId])) {
+            $db->rollBack();
+            data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent with Leads permission or leave the leads unassigned.']);
+        }
+
+        $leadPlaceholders = implode(', ', array_fill(0, count($leadIds), '?'));
+        $findLeads = $db->prepare(
+            "SELECT l.id, l.assigned_staff_id, s.display_name AS previous_staff_name, s.email AS previous_staff_email
+             FROM leads l LEFT JOIN staff_users s ON s.id = l.assigned_staff_id
+             WHERE l.id IN ({$leadPlaceholders}) ORDER BY l.id FOR UPDATE"
+        );
+        $findLeads->execute($leadIds);
+        $leadRows = $findLeads->fetchAll();
+        if (count($leadRows) !== count($leadIds)) {
+            $db->rollBack();
+            data_respond(404, ['error' => 'lead_not_found', 'message' => 'One or more selected leads no longer exist. Refresh the table and try again.']);
+        }
+        if ($mode === 'least_loaded') {
+            foreach ($leadRows as $leadRow) {
+                if ($leadRow['assigned_staff_id'] !== null) {
+                    $db->rollBack();
+                    data_respond(409, ['error' => 'lead_already_assigned', 'message' => 'Least-loaded assignment only accepts unassigned leads. Refresh the unassigned queue and try again.']);
+                }
+            }
+            $agentIds = array_keys($eligibleAgents);
+            $agentPlaceholders = implode(', ', array_fill(0, count($agentIds), '?'));
+            $loadQuery = $db->prepare(
+                "SELECT assigned_staff_id, COUNT(*) AS lead_count FROM leads
+                 WHERE assigned_staff_id IN ({$agentPlaceholders}) GROUP BY assigned_staff_id"
+            );
+            $loadQuery->execute($agentIds);
+            $workload = array_fill_keys($agentIds, 0);
+            foreach ($loadQuery->fetchAll() as $load) {
+                $workload[(int) $load['assigned_staff_id']] = (int) $load['lead_count'];
+            }
+        } else {
+            $workload = [];
+        }
+
+        $updateLead = $db->prepare('UPDATE leads SET assigned_staff_id = ? WHERE id = ?');
+        $notifyAgent = $db->prepare(
+            'INSERT INTO lead_assignment_notifications (staff_id, lead_id, assigned_by_name)
+             VALUES (?, ?, ?)'
+        );
+        $clearStaleNotifications = $db->prepare(
+            'DELETE FROM lead_assignment_notifications WHERE lead_id = ? AND read_at IS NULL AND staff_id <> ?'
+        );
+        $actorName = trim((string) ($_SESSION['admin_display_name'] ?? ''));
+        if ($actorName === '') $actorName = (string) ($_SESSION['admin_email'] ?? 'Administrator');
+        $assignments = [];
+        $changedCount = 0;
+        foreach ($leadRows as $leadRow) {
+            $leadId = (int) $leadRow['id'];
+            $previousStaffId = $leadRow['assigned_staff_id'] === null ? null : (int) $leadRow['assigned_staff_id'];
+            if ($mode === 'least_loaded') {
+                $minimumLoad = min($workload);
+                $candidateIds = array_keys(array_filter($workload, static fn (int $load): bool => $load === $minimumLoad));
+                sort($candidateIds);
+                $nextStaffId = (int) $candidateIds[0];
+                $workload[$nextStaffId]++;
+            } else {
+                $nextStaffId = $assignedStaffId;
+            }
+            $changed = $previousStaffId !== $nextStaffId;
+            if ($changed) {
+                $updateLead->execute([$nextStaffId, $leadId]);
+                $changedCount++;
+                $previousName = $previousStaffId === null
+                    ? null
+                    : (trim((string) $leadRow['previous_staff_name']) ?: (string) $leadRow['previous_staff_email']);
+                $nextName = $nextStaffId === null ? null : $eligibleAgents[$nextStaffId]['displayName'];
+                data_audit($db, 'lead.assignment_changed', 'lead', (string) $leadId, [
+                    'previousStaffId' => $previousStaffId,
+                    'previousStaffName' => $previousName,
+                    'assignedStaffId' => $nextStaffId,
+                    'assignedStaffName' => $nextName,
+                    'strategy' => $mode,
+                    'actorName' => $actorName,
+                ]);
+                $clearStaleNotifications->execute([$leadId, $nextStaffId ?? 0]);
+                if ($nextStaffId !== null) {
+                    $notifyAgent->execute([$nextStaffId, $leadId, $actorName]);
+                }
+            }
+            $assignments[] = [
+                'leadId' => $leadId,
+                'assignedStaffId' => $nextStaffId,
+                'assignedStaffName' => $nextStaffId === null ? null : $eligibleAgents[$nextStaffId]['displayName'],
+            ];
+        }
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        error_log('Ambients bulk lead assignment failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'lead_assignment_failed', 'message' => 'No selected leads were assigned. Please try again.']);
+    }
+    data_respond(200, [
+        'assignedCount' => $changedCount,
+        'processedCount' => count($assignments),
+        'assignments' => $assignments,
+    ]);
+}
+
 if ($method === 'PATCH' && $resource === 'leads') {
     data_require_permission('leads');
     $body = data_read_json();
@@ -7047,14 +7277,21 @@ if ($method === 'PATCH' && $resource === 'leads') {
     $db->beginTransaction();
     try {
         if ($assignedStaffProvided && $assignedStaffId !== null) {
-            $activeStaff = $db->prepare('SELECT id FROM staff_users WHERE id = ? AND role = ? AND is_active = 1 FOR UPDATE');
-            $activeStaff->execute([$assignedStaffId, 'operator']);
-            if (!$activeStaff->fetchColumn()) {
+            $activeStaff = $db->prepare('SELECT id, email, display_name, role, is_active, permissions FROM staff_users WHERE id = ? FOR UPDATE');
+            $activeStaff->execute([$assignedStaffId]);
+            $staffRow = $activeStaff->fetch();
+            if (!is_array($staffRow) || !data_staff_can_handle_leads($staffRow)) {
                 $db->rollBack();
-                data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent or leave the lead unassigned.']);
+                data_respond(400, ['error' => 'invalid_lead_assignment', 'message' => 'Choose an active agent with Leads permission or leave the lead unassigned.']);
             }
         }
-        $find = $db->prepare('SELECT id, first_name, last_name, email, phone, country, address, postal_code, status, marketing_consent, assigned_staff_id FROM leads WHERE id = ? FOR UPDATE');
+        $find = $db->prepare(
+            'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code,
+                    l.status, l.marketing_consent, l.assigned_staff_id,
+                    s.display_name AS assigned_staff_name, s.email AS assigned_staff_email
+             FROM leads l LEFT JOIN staff_users s ON s.id = l.assigned_staff_id
+             WHERE l.id = ? FOR UPDATE'
+        );
         $find->execute([$id]);
         $current = $find->fetch();
         if (!$current) {
@@ -7186,9 +7423,39 @@ if ($method === 'PATCH' && $resource === 'leads') {
             data_audit($db, $marketingConsent ? 'lead.marketing_opt_in' : 'lead.marketing_opt_out', 'lead', (string) $id);
         }
         if ($assignedStaffProvided) {
-            $updates[] = 'assigned_staff_id = ?';
-            $parameters[] = $assignedStaffId;
-            data_audit($db, 'lead.assignment_changed', 'lead', (string) $id, ['assignedStaffId' => $assignedStaffId]);
+            $previousStaffId = $current['assigned_staff_id'] === null ? null : (int) $current['assigned_staff_id'];
+            if ($previousStaffId !== $assignedStaffId) {
+                $updates[] = 'assigned_staff_id = ?';
+                $parameters[] = $assignedStaffId;
+                $previousName = $previousStaffId === null
+                    ? null
+                    : (trim((string) $current['assigned_staff_name']) ?: (string) $current['assigned_staff_email']);
+                $nextName = null;
+                if ($assignedStaffId !== null) {
+                    $nextName = trim((string) ($staffRow['display_name'] ?? '')) ?: (string) ($staffRow['email'] ?? '');
+                }
+                data_audit($db, 'lead.assignment_changed', 'lead', (string) $id, [
+                    'previousStaffId' => $previousStaffId,
+                    'previousStaffName' => $previousName,
+                    'assignedStaffId' => $assignedStaffId,
+                    'assignedStaffName' => $nextName,
+                    'strategy' => 'manual',
+                    'actorName' => (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Administrator'),
+                ]);
+                $db->prepare(
+                    'DELETE FROM lead_assignment_notifications WHERE lead_id = ? AND read_at IS NULL AND staff_id <> ?'
+                )->execute([(int) $id, $assignedStaffId ?? 0]);
+                if ($assignedStaffId !== null) {
+                    $db->prepare(
+                        'INSERT INTO lead_assignment_notifications (staff_id, lead_id, assigned_by_name)
+                         VALUES (?, ?, ?)'
+                    )->execute([
+                        $assignedStaffId,
+                        (int) $id,
+                        (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Administrator'),
+                    ]);
+                }
+            }
         }
         if ($updates) {
             $parameters[] = $id;
