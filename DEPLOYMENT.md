@@ -115,6 +115,8 @@ also include `order_number`, `order_date`, `items`, `tracking_number`, and
 provenance. Multiple email addresses or phone numbers can be separated by
 semicolons. Imports accept up to 20,000 data rows per CSV; contacts, order
 history, and source rows are sent to the API in bounded batches.
+For contacts without email or phone, a full address is used before postal code
+to avoid treating everyone in the same ZIP code as one contact.
 
 Country is saved on the lead and shown in both the table and profile; when
 omitted, the CRM can infer it from an international phone prefix. Imported

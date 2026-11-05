@@ -909,6 +909,21 @@ function data_string(array $source, string $key, int $maxLength, bool $required 
     return $value;
 }
 
+function data_lead_import_identity_suffix(string $phone, string $address, string $postalCode): string
+{
+    $phoneDigits = preg_replace('/\D/', '', $phone) ?? '';
+    if (strlen($phoneDigits) >= 7) return $phoneDigits;
+
+    $address = strtolower(trim($address));
+    if ($address !== '') return 'address:' . $address;
+
+    $postalCode = trim($postalCode);
+    if (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCode) === 1) {
+        return preg_replace('/\D/', '', $postalCode) ?? '';
+    }
+    return 'address:' . strtolower($postalCode);
+}
+
 function data_chat_rate_limit(PDO $db, string $scope, int $limit, int $windowSeconds, ?string $identity = null): void
 {
     $clientAddress = $identity ?? (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
@@ -6512,6 +6527,13 @@ if ($method === 'POST' && $resource === 'leads') {
          WHERE ';
     $findByEmail = $db->prepare($findSql . 'l.email = ? GROUP BY l.id LIMIT 1');
     $findByImportKey = $db->prepare($findSql . 'l.import_key = ? GROUP BY l.id LIMIT 1');
+    $findAddressOnlyContact = $db->prepare(
+        'SELECT id, import_key FROM leads
+         WHERE email IS NULL AND phone = ? AND LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)
+           AND LOWER(address) = LOWER(?) LIMIT 1 FOR UPDATE'
+    );
+    $findImportKeyOwner = $db->prepare('SELECT id FROM leads WHERE import_key = ? LIMIT 1 FOR UPDATE');
+    $updateAddressOnlyImportKey = $db->prepare('UPDATE leads SET import_key = ? WHERE id = ?');
     $existingOwnerByEmail = $db->prepare('SELECT assigned_staff_id FROM leads WHERE email = ?');
     $existingOwnerByImportKey = $db->prepare('SELECT assigned_staff_id FROM leads WHERE import_key = ?');
     $priorConsentByEmail = $db->prepare('SELECT marketing_consent FROM leads WHERE email = ?');
@@ -6560,12 +6582,20 @@ if ($method === 'POST' && $resource === 'leads') {
             $importKey = null;
             if ($email === '') {
                 $nameKey = strtolower(trim($firstName)) . '|' . strtolower(trim($lastName)) . '|';
-                $identitySuffix = strlen($phoneDigits) >= 7
-                    ? $phoneDigits
-                    : (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCodeInput) === 1
-                        ? (preg_replace('/\D/', '', $postalCodeInput) ?? '')
-                        : 'address:' . strtolower(trim($address !== '' ? $address : $postalCodeInput)));
+                $identitySuffix = data_lead_import_identity_suffix($phone, $address, $postalCodeInput);
                 $importKey = hash('sha256', $nameKey . $identitySuffix);
+
+                if (strlen($phoneDigits) < 7 && $address !== '') {
+                    $findAddressOnlyContact->execute([$phone, $firstName, $lastName, $address]);
+                    $existingAddressContact = $findAddressOnlyContact->fetch();
+                    if (is_array($existingAddressContact) && $existingAddressContact['import_key'] !== $importKey) {
+                        $findImportKeyOwner->execute([$importKey]);
+                        $importKeyOwner = $findImportKeyOwner->fetchColumn();
+                        if ($importKeyOwner === false || (int) $importKeyOwner === (int) $existingAddressContact['id']) {
+                            $updateAddressOnlyImportKey->execute([$importKey, (int) $existingAddressContact['id']]);
+                        }
+                    }
+                }
             }
             $identityValue = $email === '' ? $importKey : $email;
             $priorConsentQuery = $email === '' ? $priorConsentByImportKey : $priorConsentByEmail;
@@ -6736,9 +6766,11 @@ if ($method === 'POST' && $resource === 'lead-history') {
                 }
             }
             if (!$lead && $record['email'] === '' && strlen(preg_replace('/\D/', '', $record['phone']) ?? '') < 7) {
-                $identitySuffix = preg_match('/^\d{5}(?:-\d{4})?$/', $record['postalCode']) === 1
-                    ? (preg_replace('/\D/', '', $record['postalCode']) ?? '')
-                    : 'address:' . strtolower(trim($record['deliveryAddress'] !== '' ? $record['deliveryAddress'] : $record['postalCode']));
+                $identitySuffix = data_lead_import_identity_suffix(
+                    $record['phone'],
+                    $record['deliveryAddress'],
+                    $record['postalCode']
+                );
                 $importKey = hash(
                     'sha256',
                     strtolower(trim($record['firstName'])) . '|'
@@ -6895,9 +6927,11 @@ if ($method === 'POST' && $resource === 'lead-source-records') {
                 }
             }
             if (!$lead && $record['email'] === '' && strlen($phoneDigits) < 7) {
-                $identitySuffix = preg_match('/^\d{5}(?:-\d{4})?$/', $record['postalCode']) === 1
-                    ? (preg_replace('/\D/', '', $record['postalCode']) ?? '')
-                    : 'address:' . strtolower(trim($record['address'] !== '' ? $record['address'] : $record['postalCode']));
+                $identitySuffix = data_lead_import_identity_suffix(
+                    $record['phone'],
+                    $record['address'],
+                    $record['postalCode']
+                );
                 $importKey = hash(
                     'sha256',
                     strtolower(trim($record['firstName'])) . '|'
@@ -7082,11 +7116,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
         }
         if ($emailValue === null && ($firstNameProvided || $lastNameProvided || $phoneProvided || $emailProvided || $addressProvided || $postalCodeProvided)) {
             $phoneDigits = preg_replace('/\D/', '', $phoneValue) ?? '';
-            $identitySuffix = strlen($phoneDigits) >= 7
-                ? $phoneDigits
-                : (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCodeValue) === 1
-                    ? (preg_replace('/\D/', '', $postalCodeValue) ?? '')
-                    : 'address:' . strtolower(trim($addressValue !== '' ? $addressValue : $postalCodeValue)));
+            $identitySuffix = data_lead_import_identity_suffix($phoneValue, $addressValue, $postalCodeValue);
             $finalImportKey = hash('sha256', strtolower(trim($finalFirstName)) . '|' . strtolower(trim($finalLastName)) . '|' . $identitySuffix);
             $duplicateKey = $db->prepare('SELECT id FROM leads WHERE import_key = ? AND id <> ? LIMIT 1 FOR UPDATE');
             $duplicateKey->execute([$finalImportKey, $id]);
