@@ -2374,6 +2374,17 @@ function data_order_row(PDO $db, array $row): array
     ];
 }
 
+function data_staff_order_row(PDO $db, array $row): array
+{
+    $order = data_order_row($db, $row);
+    if (($_SESSION['admin_role'] ?? '') === 'admin') return $order;
+
+    $order['email'] = data_mask_contact_email((string) $order['email']);
+    $phone = (string) $order['phone'];
+    $order['phone'] = $phone === '' ? '' : data_mask_contact_phone($phone);
+    return $order;
+}
+
 function data_stripe_authorize_order(PDO $db, string $orderId, string $sessionId, string $paymentIntentId, int $amountCapturable): bool
 {
     $db->beginTransaction();
@@ -4128,15 +4139,7 @@ if ($method === 'GET') {
             if ($canViewOrders) {
                 $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
                 $orderQuery->execute([$lead['email']]);
-                $orders = array_map(static fn (array $row): array => data_order_row($db, $row), $orderQuery->fetchAll());
-                if (($_SESSION['admin_role'] ?? '') !== 'admin') {
-                    foreach ($orders as &$order) {
-                        $order['email'] = data_mask_contact_email((string) $order['email']);
-                        $orderPhone = (string) $order['phone'];
-                        $order['phone'] = $orderPhone === '' ? '' : data_mask_contact_phone($orderPhone);
-                    }
-                    unset($order);
-                }
+                $orders = array_map(static fn (array $row): array => data_staff_order_row($db, $row), $orderQuery->fetchAll());
             }
             data_respond(200, [
                 'lead' => data_lead_row($lead),
@@ -4179,7 +4182,7 @@ if ($method === 'GET') {
             if (!$order) {
                 data_respond(404, ['error' => 'order_not_found', 'message' => 'The order was not found.']);
             }
-            data_respond(200, ['order' => data_order_row($db, $order)]);
+            data_respond(200, ['order' => data_staff_order_row($db, $order)]);
         }
         $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
         $limit = filter_var($_GET['limit'] ?? '100', FILTER_VALIDATE_INT);
@@ -4214,7 +4217,7 @@ if ($method === 'GET') {
         $rowsQuery->execute();
         $rows = $rowsQuery->fetchAll();
         data_respond(200, [
-            'orders' => array_map(static fn (array $row): array => data_order_row($db, $row), $rows),
+            'orders' => array_map(static fn (array $row): array => data_staff_order_row($db, $row), $rows),
             'pagination' => ['page' => $page, 'limit' => $limit, 'total' => $total, 'pages' => (int) ceil($total / $limit)],
         ]);
     }
@@ -4360,7 +4363,7 @@ if ($method === 'GET') {
                 'stockCount' => (int) $row['stock_count'],
                 'minStockThreshold' => (int) $row['min_stock_threshold'],
             ], $lowStock),
-            'recentOrders' => array_map(static fn (array $row): array => data_order_row($db, $row), $recent),
+            'recentOrders' => array_map(static fn (array $row): array => data_staff_order_row($db, $row), $recent),
         ]);
     }
     data_respond(404, ['error' => 'not_found', 'message' => 'The requested resource was not found.']);
