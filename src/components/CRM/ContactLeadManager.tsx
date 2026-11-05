@@ -375,6 +375,10 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   };
 
   const downloadContacts = (contactsToExport = filteredLeads) => {
+    if (!canAddContacts) {
+      setRequestError('You do not have permission to export contacts.');
+      return;
+    }
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = [
       ['first_name', 'last_name', 'email', 'phone', 'country', 'lead_source', 'status', 'marketing_consent', 'created_at'],
@@ -1539,14 +1543,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             >
               <Upload className="h-4 w-4" /> Import CSV
             </button>}
-            <button
+            {canAddContacts && <button
               type="button"
               onClick={() => downloadContacts(filteredLeads)}
               disabled={!filteredLeads.length}
               className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-40"
             >
               <Download className="h-4 w-4" /> Export CSV
-            </button>
+            </button>}
 
             {/* View switcher: Table vs Kanban */}
             <div className="ml-2 flex rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -1697,7 +1701,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </label>
               )}
 
-              <button
+              {canAddContacts && <button
                 type="button"
                 onClick={() => {
                   const selectedContacts = leads.filter((l) => selectedLeadIds.includes(l.id));
@@ -1706,7 +1710,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 className="rounded-lg border border-blue-300 bg-white px-2.5 py-1 font-semibold text-blue-800 hover:bg-blue-50"
               >
                 Export selected
-              </button>
+              </button>}
 
               <button
                 type="button"

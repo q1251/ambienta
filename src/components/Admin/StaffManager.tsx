@@ -4,7 +4,7 @@ import { ArrowLeft, CalendarDays, KeyRound, LogIn, UserPlus, Users, UserX } from
 const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
   { id: 'new_leads', label: 'View unassigned new leads' },
-  { id: 'create_leads', label: 'Add/import contacts' },
+  { id: 'create_leads', label: 'Add/import/export contacts' },
   { id: 'orders', label: 'Orders' },
   { id: 'products', label: 'Products & stock' },
   { id: 'integrations', label: 'Integrations' },
