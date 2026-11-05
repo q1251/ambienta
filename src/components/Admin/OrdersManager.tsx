@@ -27,7 +27,7 @@ interface OrdersManagerProps {
   orders: OnlineOrder[];
   pagination: OrderPagination;
   isLoading: boolean;
-  onLoadOrders: (search: OrderSearch) => void;
+  onLoadOrders: (search: OrderSearch, options?: { silent?: boolean }) => void;
   onUpdateOrderStatus: (order: OnlineOrder, newStatus: OnlineOrder['status']) => Promise<void>;
   onUpdateOrderTracking: (orderId: string, carrier: string, trackingNumber: string) => Promise<void>;
   onAddOrderInternalNote: (orderId: string, note: string) => Promise<string>;
@@ -231,6 +231,18 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   }, [searchQuery, statusFilter, currentPage, reloadCounter, onLoadOrders]);
 
   useEffect(() => {
+    const refreshOrders = () => {
+      if (document.visibilityState !== 'visible') return;
+      onLoadOrders(
+        { query: searchQuery.trim(), status: statusFilter, page: currentPage },
+        { silent: true },
+      );
+    };
+    const timer = window.setInterval(refreshOrders, 15000);
+    return () => window.clearInterval(timer);
+  }, [searchQuery, statusFilter, currentPage, onLoadOrders]);
+
+  useEffect(() => {
     if (!orderPageId) return;
     let isCurrent = true;
     setOrderPageLoading(true);
@@ -251,6 +263,34 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     });
     return () => { isCurrent = false; };
   }, [orderPageId]);
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    let isCurrent = true;
+    const refreshSelectedOrder = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const response = await fetch(`/api/data.php?resource=orders&id=${encodeURIComponent(selectedOrder.id)}`, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json() as { order?: OnlineOrder; message?: string };
+        if (!response.ok || !result.order) {
+          throw new Error(result.message || 'The latest order details could not be loaded.');
+        }
+        if (isCurrent) setSelectedOrder(result.order);
+      } catch (error) {
+        if (isCurrent) {
+          setOrderSaveError(error instanceof Error ? error.message : 'The latest order details could not be loaded.');
+        }
+      }
+    };
+    const timer = window.setInterval(() => void refreshSelectedOrder(), 15000);
+    return () => {
+      isCurrent = false;
+      window.clearInterval(timer);
+    };
+  }, [selectedOrder?.id]);
 
   useEffect(() => {
     setPaymentLinkInput(selectedOrder?.paymentLinkUrl || '');
@@ -658,6 +698,9 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
             </div>
             <p className="text-xs text-slate-500">
               Search and filter saved orders across all pages. Administrators can email provider payment links from order details.
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-blue-800" role="status">
+              Live updates check for new orders and order notes every 15 seconds while this tab is open.
             </p>
           </div>
 

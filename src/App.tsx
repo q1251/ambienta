@@ -260,9 +260,9 @@ export default function App() {
     };
   }, [currentPath, adminAuthStatus, mustChangePassword, adminRole, adminPermissions]);
 
-  const handleLoadOrders = useCallback(async (search: OrderSearch) => {
+  const handleLoadOrders = useCallback(async (search: OrderSearch, options: { silent?: boolean } = {}) => {
     const requestId = ++orderRequestId.current;
-    setOrdersLoading(true);
+    if (!options.silent) setOrdersLoading(true);
     try {
       const parameters = new URLSearchParams({
         page: String(search.page),
