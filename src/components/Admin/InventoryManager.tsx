@@ -554,8 +554,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
       {/* Inventory & Price Adjustments Table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="hidden overflow-x-auto 2xl:block">
-          <table className="w-full text-left text-xs">
+        <div className="hidden overflow-x-auto xl:block">
+          <table className="w-full min-w-[1100px] text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
               <tr>
                 <th className="py-3 px-4">Product &amp; SKU</th>
@@ -771,7 +771,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           </table>
         </div>
 
-        <div className="grid gap-3 p-3 2xl:hidden sm:grid-cols-2 sm:p-4">
+        <div className="grid gap-3 p-3 xl:hidden sm:grid-cols-2 sm:p-4">
           {filteredProducts.map((item) => {
             const isLow = item.stockCount <= item.minStockThreshold && item.stockCount > 0;
             const isOut = item.stockCount <= 0;
