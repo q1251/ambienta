@@ -926,7 +926,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center md:text-left">
-              <span className="font-bold text-lg text-white block">Ambients Pharmacy &amp; Wellness</span>
+              <span className="font-bold text-lg text-white block">Ambient Pharmacy &amp; Wellness</span>
               <p className="text-xs text-slate-400">
                 Thoughtfully selected wellness essentials · Care team support · Convenient delivery
               </p>
@@ -955,13 +955,13 @@ export default function App() {
                 onClick={() => setIsCartOpen(true)}
                 className="text-blue-200 transition-colors hover:text-white"
               >
-                View Order ({totalCartCount})
+                View Cart ({totalCartCount})
               </button>
             </div>
           </div>
 
           <div className="flex flex-col items-center justify-between gap-2 border-t border-white/15 pt-6 text-[11px] text-blue-100/70 sm:flex-row">
-            <span>© 2026 Ambients. All rights reserved.</span>
+            <span>© 2026 Ambient. All rights reserved.</span>
           </div>
           <p className="text-center text-[10px] leading-4 text-blue-100/60">
             We use first-party session activity (pages visited and referral domain) to improve support. Visitor session records do not store IP addresses.

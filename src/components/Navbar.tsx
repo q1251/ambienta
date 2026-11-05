@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
 import { StoreCategory } from '../types/pharmacy';
 
 interface NavbarProps {
@@ -46,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <img src="/ambients-mark.svg" alt="" className="h-10 w-10 rounded-[14px] shadow-sm" />
               <div>
                 <span                 className="block whitespace-nowrap text-lg font-semibold leading-tight tracking-[-0.04em] text-slate-900 sm:text-xl">
-                  Ambients
+                  Ambient
                 </span>
                 <span                                 className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-[#356a9e]">
                 Pharmacy &amp; wellness
@@ -80,10 +80,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={openCart}
               className="relative flex items-center gap-2 rounded-full bg-[#174c80] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#123b68]"
-              aria-label="View order"
+              aria-label="View cart"
             >
-              <ClipboardList className="h-4 w-4 text-blue-100" />
-              <span>Order</span>
+              <ShoppingCart className="h-4 w-4 text-blue-100" />
+              <span>Cart</span>
               {cartCount > 0 ? (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 font-mono text-[11px] font-bold text-[#123b68]">
                   {cartCount}
