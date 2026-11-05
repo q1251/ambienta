@@ -219,17 +219,29 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     update(current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
   };
 
-  const createAccount = async (event: React.FormEvent) => {
+  const createAccount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
     setMessage('');
+    const formData = new FormData(event.currentTarget);
+    const formDisplayName = String(formData.get('displayName') ?? '').trim();
+    const formEmail = String(formData.get('email') ?? '').trim();
+    const formTemporaryPassword = String(formData.get('temporaryPassword') ?? '');
+    setDisplayName(formDisplayName);
+    setEmail(formEmail);
+    setTemporaryPassword(formTemporaryPassword);
     setSaving(true);
     try {
       const response = await fetch('/api/data.php?resource=staff', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ displayName, email, temporaryPassword, permissions }),
+        body: JSON.stringify({
+          displayName: formDisplayName,
+          email: formEmail,
+          temporaryPassword: formTemporaryPassword,
+          permissions,
+        }),
       });
       const result = await response.json() as { message?: string };
       if (!response.ok) throw new Error(result.message || 'The agent account could not be created.');
@@ -805,14 +817,15 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
               {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block text-sm font-medium text-slate-700">Display name
-                  <input required autoFocus maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                  <input required name="displayName" autoFocus maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
                 </label>
                 <label className="block text-sm font-medium text-slate-700">Sign-in email
-                  <input required type="email" autoComplete="off" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                  <input required name="email" type="email" autoComplete="off" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
                 </label>
               </div>
               <label className="block text-sm font-medium text-slate-700">Temporary password
-                <input required type="password" minLength={12} maxLength={1024} autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                <input required name="temporaryPassword" type="password" minLength={12} maxLength={1024} autoComplete="new-password" value={temporaryPassword} onChange={(event) => setTemporaryPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+                <span className="mt-1 block text-xs font-normal text-slate-500">Use at least 12 characters. The agent will be asked to change it at first sign-in.</span>
               </label>
               <fieldset>
                 <legend className="text-sm font-semibold text-slate-800">Operational permissions</legend>
@@ -829,7 +842,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
               <p className="text-xs leading-5 text-slate-500">The password is stored as a secure hash, and the agent will be required to change it at first sign-in. Share the temporary password out-of-band.</p>
               <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" disabled={saving} onClick={() => setCreateModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={saving || !displayName.trim() || !email.trim() || temporaryPassword.length < 12} className="rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
+                <button type="submit" disabled={saving} className="rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
               </footer>
             </form>
           </section>
