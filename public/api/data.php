@@ -1255,7 +1255,8 @@ function data_mail_send(
     array $bccRecipients = [],
     array $threadHeaders = [],
     array $attachments = [],
-    ?string $htmlBody = null
+    ?string $htmlBody = null,
+    array $inlineAttachments = []
 ): string
 {
     $recipients = array_values(array_unique(array_merge([$recipient], $ccRecipients, $bccRecipients)));
@@ -1298,10 +1299,11 @@ function data_mail_send(
             }
         }
         $bodyPart = '';
+        $bodyContentType = 'text/plain; charset=UTF-8';
         if ($htmlBody !== null) {
             $alternativeBoundary = 'ambienta_alt_' . bin2hex(random_bytes(16));
-            $bodyPart = 'Content-Type: multipart/alternative; boundary="' . $alternativeBoundary . "\"\r\n\r\n"
-                . '--' . $alternativeBoundary . "\r\n"
+            $bodyContentType = 'multipart/alternative; boundary="' . $alternativeBoundary . '"';
+            $bodyPart = '--' . $alternativeBoundary . "\r\n"
                 . "Content-Type: text/plain; charset=UTF-8\r\n"
                 . "Content-Transfer-Encoding: base64\r\n\r\n"
                 . chunk_split(base64_encode($body), 76, "\r\n")
@@ -1311,31 +1313,44 @@ function data_mail_send(
                 . chunk_split(base64_encode($htmlBody), 76, "\r\n")
                 . '--' . $alternativeBoundary . "--\r\n";
         } else {
-            $bodyPart = "Content-Type: text/plain; charset=UTF-8\r\n"
-                . "Content-Transfer-Encoding: base64\r\n\r\n"
+            $bodyPart = "Content-Transfer-Encoding: base64\r\n\r\n"
                 . chunk_split(base64_encode($body), 76, "\r\n");
         }
-        if ($attachments === [] && $htmlBody === null) {
-            $headers[] = 'Content-Type: text/plain; charset=UTF-8';
-            $headers[] = 'Content-Transfer-Encoding: base64';
-            $content = chunk_split(base64_encode($body), 76, "\r\n");
-        } elseif ($attachments === []) {
-            $boundary = 'ambienta_alt_' . bin2hex(random_bytes(16));
-            $headers[] = 'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
-            $content = '--' . $boundary . "\r\n"
-                . "Content-Type: text/plain; charset=UTF-8\r\n"
-                . "Content-Transfer-Encoding: base64\r\n\r\n"
-                . chunk_split(base64_encode($body), 76, "\r\n")
-                . '--' . $boundary . "\r\n"
-                . "Content-Type: text/html; charset=UTF-8\r\n"
-                . "Content-Transfer-Encoding: base64\r\n\r\n"
-                . chunk_split(base64_encode($htmlBody ?? ''), 76, "\r\n")
-                . '--' . $boundary . "--\r\n";
+        if ($inlineAttachments !== []) {
+            if ($htmlBody === null) {
+                throw new RuntimeException('inline_attachment_requires_html_body');
+            }
+            $relatedBoundary = 'ambienta_related_' . bin2hex(random_bytes(16));
+            $relatedParts = [
+                '--' . $relatedBoundary . "\r\n"
+                    . 'Content-Type: ' . $bodyContentType . "\r\n\r\n"
+                    . $bodyPart,
+            ];
+            foreach ($inlineAttachments as $attachment) {
+                $relatedParts[] = '--' . $relatedBoundary . "\r\n"
+                    . 'Content-Type: ' . $attachment['contentType'] . '; name="' . addcslashes($attachment['name'], "\\\"") . "\"\r\n"
+                    . "Content-Transfer-Encoding: base64\r\n"
+                    . 'Content-ID: <' . $attachment['contentId'] . ">\r\n"
+                    . 'Content-Disposition: inline; filename="' . addcslashes($attachment['name'], "\\\"") . "\"\r\n\r\n"
+                    . chunk_split(base64_encode($attachment['content']), 76, "\r\n");
+            }
+            $relatedParts[] = '--' . $relatedBoundary . "--\r\n";
+            $bodyPart = implode('', $relatedParts);
+            $bodyContentType = 'multipart/related; boundary="' . $relatedBoundary . '"';
+        }
+        if ($attachments === []) {
+            $headers[] = 'Content-Type: ' . $bodyContentType;
+            if ($bodyContentType === 'text/plain; charset=UTF-8') {
+                $headers[] = 'Content-Transfer-Encoding: base64';
+            }
+            $content = $bodyPart;
         } else {
             $boundary = 'ambienta_' . bin2hex(random_bytes(16));
             $headers[] = 'Content-Type: multipart/mixed; boundary="' . $boundary . '"';
             $parts = [
-                '--' . $boundary . "\r\n" . $bodyPart,
+                '--' . $boundary . "\r\n"
+                    . 'Content-Type: ' . $bodyContentType . "\r\n\r\n"
+                    . $bodyPart,
             ];
             foreach ($attachments as $attachment) {
                 $parts[] = '--' . $boundary . "\r\n"
@@ -5260,6 +5275,24 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         data_respond(400, ['error' => 'invalid_email_template', 'message' => 'Choose a supported payment email template.']);
     }
     $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
+    $qrCodeDataUrl = data_string($body, 'qrCodeDataUrl', 100000);
+    if (!preg_match('/^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/', $qrCodeDataUrl, $qrMatch)) {
+        data_respond(400, ['error' => 'invalid_payment_qr', 'message' => 'A valid payment QR code could not be generated.']);
+    }
+    $qrCodeImage = base64_decode($qrMatch[1], true);
+    $qrDimensions = is_string($qrCodeImage) && strlen($qrCodeImage) >= 24
+        ? unpack('Nwidth/Nheight', substr($qrCodeImage, 16, 8))
+        : false;
+    if (!is_string($qrCodeImage)
+        || substr($qrCodeImage, 0, 8) !== "\x89PNG\r\n\x1a\n"
+        || !is_array($qrDimensions)
+        || $qrDimensions['width'] < 100
+        || $qrDimensions['width'] > 512
+        || $qrDimensions['height'] < 100
+        || $qrDimensions['height'] > 512
+    ) {
+        data_respond(400, ['error' => 'invalid_payment_qr', 'message' => 'The payment QR code image is invalid.']);
+    }
 
     $settings = data_mail_settings();
     if ($settings === [] || empty($settings['verified'])) {
@@ -5328,31 +5361,37 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         }
 
         $template = $paymentEmailTemplates[$emailTemplate];
-        $paymentLinkLabel = $paymentLinkType === 'custom'
+        $paymentLinkLabel = $previewOnly
+            ? 'Demo preview link (not for payment)'
+            : ($paymentLinkType === 'custom'
             ? trim($paymentLinkName)
             : ($paymentLinkType === 'crypto_wallet'
                 ? $paymentCryptoAsset . ' wallet address (' . $paymentCryptoNetwork . ')'
                 : ($paymentLinkType === 'paypal'
                     ? 'PayPal payment link'
-                    : ($paymentLinkType === 'provider' ? 'Payment provider link' : 'Custom link')));
-        $emailPaymentMethod = $paymentLinkType === 'crypto_wallet'
+                    : ($paymentLinkType === 'provider' ? 'Payment provider link' : 'Custom link'))));
+        $emailPaymentMethod = $previewOnly
+            ? 'Demo preview only'
+            : ($paymentLinkType === 'crypto_wallet'
             ? $paymentCryptoAsset . ' on ' . $paymentCryptoNetwork
             : ($paymentLinkType === 'paypal'
                 ? 'PayPal'
-                : ($paymentLinkType === 'custom' ? trim($paymentLinkName) : $order['payment_method']));
+                : ($paymentLinkType === 'custom' ? trim($paymentLinkName) : $order['payment_method'])));
         $subject = ($previewOnly ? '[DEMO PREVIEW] ' : '')
             . $template['subject'] . ' for Ambient order ' . $order['order_number'];
-        $paymentInstructions = match ($paymentLinkType) {
-            'crypto_wallet' => "Send only {$paymentCryptoAsset} on {$paymentCryptoNetwork}. Verify the asset, network, and full wallet address before confirming a transfer.",
-            'paypal' => 'Use the PayPal link below and confirm the order total before approving payment.',
-            'custom' => 'Use the custom payment link below. Check the link name and destination before completing payment.',
-            default => match ($order['payment_method']) {
-                'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
-                'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
-                'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
-                default => '',
-            },
-        };
+        $paymentInstructions = $previewOnly
+            ? 'This is a demo-only preview. The included invalid link and QR code cannot accept payment.'
+            : match ($paymentLinkType) {
+                'crypto_wallet' => "Send only {$paymentCryptoAsset} on {$paymentCryptoNetwork}. The QR code contains the wallet destination only; the order total is shown in USD, so confirm the exact crypto amount before sending. Verify the asset, network, and full wallet address.",
+                'paypal' => 'Use the PayPal link below and confirm the order total before approving payment.',
+                'custom' => 'Use the custom payment link below. Check the link name and destination before completing payment.',
+                default => match ($order['payment_method']) {
+                    'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
+                    'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
+                    'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
+                    default => '',
+                },
+            };
         $intro = sprintf($template['intro'], $order['order_number']);
         $closing = $template['closing'];
         $plainBody = "Hello {$order['customer_name']},\n\n"
@@ -5387,20 +5426,41 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $safeLink = htmlspecialchars($paymentLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safePaymentLinkLabel = htmlspecialchars($paymentLinkLabel, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeAdditionalMessage = htmlspecialchars($additionalMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $htmlPaymentLink = $isHttpsPaymentLink
-            ? '<a href="' . $safeLink . '">' . $safePaymentLinkLabel . '</a>'
-            : '<strong>' . $safePaymentLinkLabel . ':</strong><br><code style="overflow-wrap:anywhere">' . $safeLink . '</code>';
-        $htmlBody = '<p>Hello ' . $safeName . ',</p><p>' . $safeIntro . '</p>'
-            . '<div style="padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">'
-            . '<strong>Order summary</strong><br>Order: ' . $safeOrderNumber
-            . '<br>Payment method: ' . htmlspecialchars($emailPaymentMethod, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '<br>Total due: <strong>$'
-            . number_format((float) $order['total_amount'], 2) . '</strong></div>'
-            . '<p>' . $safeInstructions . '</p>'
-            . '<p>' . $htmlPaymentLink . '</p>'
-            . ($safeAdditionalMessage !== '' ? '<p>' . nl2br($safeAdditionalMessage, false) . '</p>' : '')
-            . '<p>' . $safeClosing . '</p><p>Warm regards,<br>Ambient</p>';
+        $safeEmailPaymentMethod = htmlspecialchars($emailPaymentMethod, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeTotal = number_format((float) $order['total_amount'], 2);
+        $htmlBody = '<div style="margin:0;padding:28px 12px;background:#f1f5f4;font-family:Arial,Helvetica,sans-serif;color:#173b35">'
+            . '<div style="max-width:560px;margin:0 auto;overflow:hidden;border:1px solid #dce8e4;border-radius:18px;background:#ffffff">'
+            . '<div style="padding:24px 28px;background:#123b36;color:#ffffff">'
+            . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#c4ddd4">AMBIENT · ORDER PAYMENT</p>'
+            . '<h1 style="margin:12px 0 0;font-size:23px;line-height:1.3;color:#ffffff">Payment details</h1>'
+            . '</div><div style="padding:26px 28px">'
+            . '<p style="margin:0 0 10px;font-size:15px;line-height:1.6">Hello ' . $safeName . ',</p>'
+            . '<p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#475f59">' . $safeIntro . '</p>'
+            . '<div style="margin:0 0 20px;padding:17px 18px;border:1px solid #e0e9e6;border-radius:12px;background:#f7faf9">'
+            . '<p style="margin:0 0 10px;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#55716a">Order summary</p>'
+            . '<table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.6">'
+            . '<tr><td style="padding:3px 0;color:#647873">Order</td><td style="padding:3px 0;text-align:right;font-weight:bold;color:#173b35">' . $safeOrderNumber . '</td></tr>'
+            . '<tr><td style="padding:3px 0;color:#647873">Payment</td><td style="padding:3px 0;text-align:right;color:#173b35">' . $safeEmailPaymentMethod . '</td></tr>'
+            . '<tr><td style="padding:8px 0 0;color:#647873">Total due</td><td style="padding:8px 0 0;text-align:right;font-size:18px;font-weight:bold;color:#123b36">$' . $safeTotal . '</td></tr>'
+            . '</table></div>'
+            . '<p style="margin:0 0 16px;font-size:13px;line-height:1.65;color:#405852">' . $safeInstructions . '</p>'
+            . '<div style="margin:0 0 20px;padding:20px;border:1px solid #dce8e4;border-radius:14px;text-align:center;background:#ffffff">'
+            . '<p style="margin:0 0 12px;font-size:12px;font-weight:bold;color:#173b35">' . $safePaymentLinkLabel . '</p>'
+            . '<img src="cid:ambienta-payment-qr" width="180" height="180" alt="QR code for ' . $safePaymentLinkLabel . '" style="display:block;width:180px;height:180px;margin:0 auto 12px;border:0">'
+            . '<p style="margin:0;font-size:11px;line-height:1.5;color:#647873">Scan to open the payment link or copy the payment details below.</p>'
+            . '<div style="margin-top:14px;padding:11px 12px;border-radius:8px;background:#f7faf9;font-size:12px;line-height:1.6;overflow-wrap:anywhere">'
+            . ($isHttpsPaymentLink
+                ? '<a href="' . $safeLink . '" style="display:inline-block;padding:11px 20px;border-radius:8px;background:#123b36;color:#ffffff;font-weight:bold;text-decoration:none">' . ($previewOnly ? 'Open demo link' : 'Continue to payment') . '</a><br><a href="' . $safeLink . '" style="display:inline-block;margin-top:10px;color:#0f766e;text-decoration:underline">' . $safePaymentLinkLabel . '</a>'
+                : '<code style="font-family:Consolas,monospace;color:#173b35">' . $safeLink . '</code>')
+            . '</div></div>'
+            . ($safeAdditionalMessage !== '' ? '<div style="margin:0 0 20px;padding:14px 16px;border-left:3px solid #85b8a8;background:#f7faf9;font-size:13px;line-height:1.65;color:#405852">' . nl2br($safeAdditionalMessage, false) . '</div>' : '')
+            . '<p style="margin:0 0 10px;font-size:13px;line-height:1.65;color:#405852">' . $safeClosing . '</p>'
+            . '<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#173b35">Warm regards,<br><strong>Ambient</strong></p>'
+            . '</div><div style="padding:15px 28px;border-top:1px solid #e8efed;background:#fbfdfc;font-size:10px;line-height:1.5;color:#71837e">'
+            . 'Please verify the order, amount, payment destination, and crypto network before confirming payment. Never share card details or wallet recovery phrases by email.'
+            . '</div></div></div>';
         if ($previewOnly) {
-            $htmlBody = '<p><strong>DEMO PREVIEW ONLY</strong> — sent to the signed-in administrator, not the customer. This is not a payment request. Do not use the example.invalid link to pay.</p>' . $htmlBody;
+            $htmlBody = '<div style="max-width:560px;margin:12px auto;padding:12px 16px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-family:Arial,Helvetica,sans-serif;font-size:13px"><strong>DEMO PREVIEW ONLY</strong> — sent to the signed-in administrator, not the customer. Do not use the example.invalid link to pay.</div>' . $htmlBody;
         }
 
         $db->prepare(
@@ -5417,7 +5477,24 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         ]);
         $activityId = $db->lastInsertId();
         try {
-            $messageId = data_mail_send($settings, $recipient, $subject, $plainBody, null, [], [], [], [], $htmlBody);
+            $messageId = data_mail_send(
+                $settings,
+                $recipient,
+                $subject,
+                $plainBody,
+                null,
+                [],
+                [],
+                [],
+                [],
+                $htmlBody,
+                [[
+                    'contentType' => 'image/png',
+                    'name' => 'payment-qr.png',
+                    'contentId' => 'ambienta-payment-qr',
+                    'content' => $qrCodeImage,
+                ]]
+            );
         } catch (Throwable $error) {
             $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Failed', $activityId]);
             $db->commit();

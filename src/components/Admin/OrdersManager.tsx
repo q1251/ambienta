@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import QRCode from 'qrcode';
 import {
   ArrowDown,
   ArrowLeft,
@@ -174,6 +175,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [paymentLinkName, setPaymentLinkName] = useState('');
   const [paymentCryptoAsset, setPaymentCryptoAsset] = useState<CryptoAsset>('BTC');
   const [paymentCryptoNetwork, setPaymentCryptoNetwork] = useState<CryptoNetwork>('Bitcoin');
+  const [paymentQrPreview, setPaymentQrPreview] = useState('');
   const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<PaymentEmailTemplate>('payment_request');
   const [paymentEmailNote, setPaymentEmailNote] = useState('');
   const [isPaymentEmailModalOpen, setIsPaymentEmailModalOpen] = useState(false);
@@ -278,6 +280,29 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [isPaymentEmailModalOpen, isSendingPaymentLink]);
+
+  useEffect(() => {
+    let active = true;
+    const payload = paymentLinkInput.trim();
+    if (!isPaymentEmailModalOpen || !payload) {
+      setPaymentQrPreview('');
+      return () => { active = false; };
+    }
+    void QRCode.toDataURL(payload, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 220,
+      color: { dark: '#102d2a', light: '#ffffff' },
+    }).then((dataUrl) => {
+      if (active) setPaymentQrPreview(dataUrl);
+    }).catch((error: unknown) => {
+      if (active) {
+        setPaymentQrPreview('');
+        setPaymentEmailError(error instanceof Error ? error.message : 'The payment QR code could not be generated.');
+      }
+    });
+    return () => { active = false; };
+  }, [isPaymentEmailModalOpen, paymentLinkInput]);
 
   useEffect(() => {
     const syncOrderPage = () => {
@@ -410,6 +435,13 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     setPaymentLinkSuccess('');
     setIsSendingPaymentLink(true);
     try {
+      const qrPayload = previewOnly ? 'https://example.invalid/demo-payment' : paymentLinkInput.trim();
+      const qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 240,
+        color: { dark: '#102d2a', light: '#ffffff' },
+      });
       const response = await fetch('/api/data.php?resource=order-payment-link', {
         method: 'POST',
         credentials: 'same-origin',
@@ -421,6 +453,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           paymentLinkName: paymentLinkName.trim(),
           paymentCryptoAsset,
           paymentCryptoNetwork,
+          qrCodeDataUrl,
           emailTemplate: paymentEmailTemplate,
           additionalMessage: paymentEmailNote.trim(),
           previewOnly,
@@ -1328,17 +1361,18 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           }}
         >
           <section
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="order-payment-email-title"
           >
-            <header className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-              <div>
-                <h2 id="order-payment-email-title" className="text-lg font-semibold text-slate-950">
+            <header className="flex items-start justify-between bg-gradient-to-br from-[#123b36] to-[#1d5b50] px-5 py-5 text-white">
+              <div className="min-w-0">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-teal-100">Order payment</p>
+                <h2 id="order-payment-email-title" className="text-lg font-semibold text-white">
                   Email payment instructions
                 </h2>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 truncate text-xs text-teal-50/90">
                   Order {selectedOrder.orderNumber} · {selectedOrder.email} · ${selectedOrder.totalAmount.toFixed(2)}
                 </p>
               </div>
@@ -1347,12 +1381,12 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 aria-label="Close email modal"
                 onClick={() => setIsPaymentEmailModalOpen(false)}
                 disabled={isSendingPaymentLink}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                className="rounded-lg p-1 text-teal-100 hover:bg-white/10 hover:text-white disabled:opacity-50"
               >
                 <X className="h-5 w-5" />
               </button>
             </header>
-            <div className="space-y-4 p-5">
+            <div className="space-y-4 bg-slate-50/70 p-5">
               <label htmlFor="order-payment-link-type" className="block text-xs font-semibold text-slate-800">
                 Payment link type
                 <select
@@ -1428,6 +1462,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   </label>
                 </div>
               )}
+              {paymentLinkType === 'crypto_wallet' && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-900">
+                  The QR code encodes the wallet destination only. The order total is in USD; confirm the exact crypto amount before sending.
+                </p>
+              )}
               <label htmlFor="order-payment-link" className="block text-xs font-semibold text-slate-800">
                 {paymentLinkType === 'crypto_wallet' ? `${paymentCryptoAsset} wallet address` : 'Payment link'}
                 <input
@@ -1488,7 +1527,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       <p>Total due: ${selectedOrder.totalAmount.toFixed(2)}</p>
                     </div>
                     <p>{paymentLinkType === 'crypto_wallet'
-                      ? `Send only ${paymentCryptoAsset} on ${paymentCryptoNetwork}. Verify the asset, network, and full wallet address before confirming a transfer.`
+                      ? `Send only ${paymentCryptoAsset} on ${paymentCryptoNetwork}. The QR code contains the wallet destination only; confirm the exact crypto amount before sending. Verify the asset, network, and full wallet address.`
                       : paymentLinkType === 'paypal'
                         ? 'Continue to PayPal using the link below and confirm the order total before approving payment.'
                         : paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
@@ -1501,6 +1540,16 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                             : `${paymentLinkType === 'paypal' ? 'PayPal link' : 'Payment provider link'}: ${paymentLinkInput.trim()}`
                         : '[Payment link or wallet address appears here]'}
                     </p>
+                    {paymentQrPreview && (
+                      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <img src={paymentQrPreview} alt="Locally generated payment QR preview" className="h-20 w-20 rounded-md border border-slate-200 bg-white p-1" />
+                        <p className="text-[11px] leading-5 text-slate-600">
+                          {paymentLinkType === 'crypto_wallet'
+                            ? 'Wallet destination QR · scan with the selected wallet/network'
+                            : 'Payment-link QR · scan to open the payment page'}
+                        </p>
+                      </div>
+                    )}
                     {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}
                     <p>{paymentEmailTemplates[paymentEmailTemplate].closing}</p>
                     <p>Warm regards,<br />Ambient</p>
