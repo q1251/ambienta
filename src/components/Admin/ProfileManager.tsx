@@ -65,11 +65,38 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
   return (
     <div className="flex min-h-[calc(100vh-11rem)] w-full flex-col gap-6">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Account settings</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{role === 'admin' ? 'Profile & security' : 'Agent profile & security'}</h1>
-        <p className="mt-2 text-sm text-slate-600">Update the name and email shown for your {role === 'admin' ? 'administrator' : 'agent'} account, or set a new password.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">{role === 'admin' ? 'Account settings' : 'Account profile'}</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{role === 'admin' ? 'Profile & security' : 'Agent profile'}</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          {role === 'admin'
+            ? 'Update the name and email shown for your administrator account, or set a new password.'
+            : 'View your account details. Contact an administrator if your information needs to be updated.'}
+        </p>
       </header>
 
+      {role === 'operator' ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7 lg:p-8">
+          <div className="mb-4 flex items-center gap-2">
+            <UserRound className="h-5 w-5 text-blue-800" />
+            <h2 className="font-semibold text-slate-900">Account details</h2>
+          </div>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <dt className="text-sm font-medium text-slate-500">Display name</dt>
+              <dd className="mt-1 break-words text-sm font-semibold text-slate-900">{initialDisplayName}</dd>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <dt className="text-sm font-medium text-slate-500">Sign-in email</dt>
+              <dd className="mt-1 break-all text-sm font-semibold text-slate-900">{initialEmail}</dd>
+            </div>
+          </dl>
+          <p className="mt-5 flex gap-2 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-blue-800" />
+            Account details are managed by an administrator.
+          </p>
+        </section>
+      ) : (
+      <>
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
       {message && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{message}</p>}
 
@@ -110,6 +137,8 @@ export const ProfileManager: React.FC<ProfileManagerProps> = ({
           <button type="submit" disabled={saving} className="shrink-0 rounded-xl bg-blue-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-900 disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
         </div>
       </form>
+      </>
+      )}
     </div>
   );
 };

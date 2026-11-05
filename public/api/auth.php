@@ -460,6 +460,9 @@ if ($action === 'update-profile' && $method === 'POST') {
     ) {
         respond(401, ['authenticated' => false, 'message' => 'Sign in again before updating your profile.']);
     }
+    if ($_SESSION['admin_role'] !== 'admin') {
+        respond(403, ['message' => 'Agent account details are managed by an administrator.']);
+    }
 
     $displayName = isset($input['displayName']) && is_string($input['displayName']) ? trim($input['displayName']) : '';
     $email = isset($input['email']) && is_string($input['email']) ? strtolower(trim($input['email'])) : '';

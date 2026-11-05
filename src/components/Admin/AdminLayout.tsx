@@ -123,6 +123,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     const validTabs: AdminTab[] = ['overview', 'orders', 'inventory', 'leads', 'chat', 'email', 'integrations', 'profile', 'staff', 'audit'];
     if (!requestedTab || !validTabs.includes(requestedTab as AdminTab)) return 'overview';
     if (props.role !== 'admin' && (requestedTab === 'staff' || requestedTab === 'audit'
+      || requestedTab === 'integrations'
       || (requestedTab === 'leads' && !props.permissions.includes('leads'))
       || (requestedTab === 'chat' && !props.permissions.includes('chat'))
       || (requestedTab === 'email' && !props.permissions.includes('integrations'))
@@ -145,6 +146,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     const presenceSection = props.role !== 'admin' && (
       activeTab === 'staff'
       || activeTab === 'audit'
+      || activeTab === 'integrations'
       || (presencePermission !== null && !props.permissions.includes(presencePermission))
     ) ? 'overview' : activeTab;
     const heartbeat = async () => {
@@ -193,6 +195,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     if (props.role !== 'admin' && (
       tab === 'staff'
       || tab === 'audit'
+      || tab === 'integrations'
       || (neededPermission !== null && !props.permissions.includes(neededPermission))
     )) return;
     const url = new URL(window.location.href);
@@ -211,7 +214,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   const visibleNavigation = useMemo(() => navigation.filter((item) => {
     const requiredPermission = permissionForTab[item.id];
     return props.role === 'admin'
-      || (item.id !== 'staff' && item.id !== 'audit' && (!requiredPermission || permissionsKey.split(',').includes(requiredPermission)));
+      || (item.id !== 'staff' && item.id !== 'audit' && item.id !== 'integrations'
+        && (!requiredPermission || permissionsKey.split(',').includes(requiredPermission)));
   }), [props.role, permissionsKey]);
   useEffect(() => {
     if (visibleNavigation.some((item) => item.id === activeTab)) return;
