@@ -628,7 +628,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          recipientEmail: profile.lead.email,
+          leadId: profile.lead.id,
           subject: emailSubject.trim(),
           body: emailBody.trim(),
         }),

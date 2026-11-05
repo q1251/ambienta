@@ -2079,14 +2079,37 @@ function data_imap_delete_message(array $settings, string $uid): void
     }
 }
 
+function data_mask_contact_email(string $email): string
+{
+    $separator = strpos($email, '@');
+    if ($separator === false) return str_repeat('*', 5);
+
+    return substr($email, 0, 1) . str_repeat('*', max(5, $separator - 1)) . substr($email, $separator);
+}
+
+function data_mask_contact_phone(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if (strlen($digits) <= 4) return str_repeat('*', 5);
+
+    $prefix = str_starts_with($phone, '+') ? '+' : '';
+    return $prefix . substr($digits, 0, 2) . str_repeat('*', max(5, strlen($digits) - 4)) . substr($digits, -2);
+}
+
 function data_lead_row(array $row): array
 {
+    $email = (string) $row['email'];
+    $phone = (string) ($row['phone'] ?? '');
+    if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+        $email = data_mask_contact_email($email);
+        $phone = $phone === '' ? '' : data_mask_contact_phone($phone);
+    }
     $lead = [
         'id' => (int) $row['id'],
         'firstName' => $row['first_name'],
         'lastName' => $row['last_name'],
-        'email' => $row['email'],
-        'phone' => $row['phone'],
+        'email' => $email,
+        'phone' => $phone,
         'country' => $row['country'] ?? '',
         'leadSource' => $row['lead_source'],
         'createdAt' => $row['created_at'],
@@ -3287,7 +3310,21 @@ if (in_array($resource, [
     if ($method === 'POST' && $resource === 'email-send') {
         data_require_permission('integrations');
         $body = data_read_json(6 * 1024 * 1024);
-        $recipient = strtolower(data_string($body, 'recipientEmail', 254));
+        $db = data_db();
+        $leadIdValue = $body['leadId'] ?? null;
+        if ($leadIdValue !== null) {
+            $leadId = filter_var($leadIdValue, FILTER_VALIDATE_INT);
+            if ($leadId === false || $leadId < 1) {
+                data_respond(400, ['error' => 'invalid_lead_id', 'message' => 'The contact lead identifier is invalid.']);
+            }
+            data_require_permission('leads');
+            data_require_lead_access($db, (int) $leadId, true);
+            $leadRecipient = $db->prepare('SELECT email FROM leads WHERE id = ?');
+            $leadRecipient->execute([$leadId]);
+            $recipient = strtolower((string) $leadRecipient->fetchColumn());
+        } else {
+            $recipient = strtolower(data_string($body, 'recipientEmail', 254));
+        }
         $subject = data_string($body, 'subject', 180);
         $emailDesign = data_string($body, 'emailDesign', 16, false);
         if ($emailDesign === '') {
@@ -3328,7 +3365,6 @@ if (in_array($resource, [
         if ($settings === [] || empty($settings['verified'])) {
             data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Configure and test the Hostinger connection before sending email.']);
         }
-        $db = data_db();
         $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
             $recipient,
             $subject,
@@ -4093,6 +4129,14 @@ if ($method === 'GET') {
                 $orderQuery = $db->prepare('SELECT * FROM orders WHERE email = ? ORDER BY placed_at DESC LIMIT 100');
                 $orderQuery->execute([$lead['email']]);
                 $orders = array_map(static fn (array $row): array => data_order_row($db, $row), $orderQuery->fetchAll());
+                if (($_SESSION['admin_role'] ?? '') !== 'admin') {
+                    foreach ($orders as &$order) {
+                        $order['email'] = data_mask_contact_email((string) $order['email']);
+                        $orderPhone = (string) $order['phone'];
+                        $order['phone'] = $orderPhone === '' ? '' : data_mask_contact_phone($orderPhone);
+                    }
+                    unset($order);
+                }
             }
             data_respond(200, [
                 'lead' => data_lead_row($lead),
