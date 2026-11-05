@@ -5255,21 +5255,24 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
             default => '',
         };
-        $intro = $previewOnly
-            ? 'DEMO PREVIEW ONLY. This is not a real payment request. The example.invalid link cannot accept payments.'
-            : ($isReminder
-                ? "This is a reminder that payment is still due for your reviewed order {$order['order_number']}."
-                : "Your order {$order['order_number']} has been received and reviewed. Payment instructions for your selected method are below.");
+        $intro = $isReminder
+            ? "This is a friendly reminder that payment for order {$order['order_number']} is still outstanding."
+            : "Thank you for your order. We have reviewed order {$order['order_number']}; please complete payment to continue.";
+        $closing = $isReminder
+            ? 'If you have already paid, please disregard this reminder or reply to this email so our team can assist.'
+            : 'If you have questions, reply to this email and our team will be happy to help.';
         $plainBody = "Hello {$order['customer_name']},\n\n"
             . $intro . "\n\n"
+            . "ORDER SUMMARY\n"
+            . "Order: {$order['order_number']}\n"
             . "Payment method: {$order['payment_method']}\n"
-            . "Order total: $" . number_format((float) $order['total_amount'], 2) . "\n\n"
+            . "Total due: $" . number_format((float) $order['total_amount'], 2) . "\n\n"
             . $paymentInstructions . "\n\n"
-            . "Secure payment link:\n{$paymentLink}\n";
+            . "Complete secure payment:\n{$paymentLink}\n";
         if ($additionalMessage !== '') {
             $plainBody .= "\nMessage from Ambient:\n{$additionalMessage}\n";
         }
-        $plainBody .= "\nIf you have questions, reply to this email.\n\nAmbient";
+        $plainBody .= "\n{$closing}\n\nWarm regards,\nAmbient";
         $recipient = (string) $order['email'];
         if ($previewOnly) {
             $adminEmail = strtolower((string) ($_SESSION['admin_email'] ?? ''));
@@ -5286,16 +5289,19 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $safeOrderNumber = htmlspecialchars((string) $order['order_number'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeMethod = htmlspecialchars((string) $order['payment_method'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeIntro = htmlspecialchars($intro, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeClosing = htmlspecialchars($closing, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeInstructions = htmlspecialchars($paymentInstructions, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeLink = htmlspecialchars($paymentLink, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeAdditionalMessage = htmlspecialchars($additionalMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $htmlBody = '<p>Hello ' . $safeName . ',</p><p>' . $safeIntro . '</p>'
-            . '<p>Payment method: <strong>' . $safeMethod . '</strong><br>Order total: <strong>$'
-            . number_format((float) $order['total_amount'], 2) . '</strong></p>'
+            . '<div style="padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">'
+            . '<strong>Order summary</strong><br>Order: ' . $safeOrderNumber
+            . '<br>Payment method: ' . $safeMethod . '<br>Total due: <strong>$'
+            . number_format((float) $order['total_amount'], 2) . '</strong></div>'
             . '<p>' . $safeInstructions . '</p>'
-            . '<p><a href="' . $safeLink . '">Pay for order ' . $safeOrderNumber . '</a></p>'
+            . '<p><a href="' . $safeLink . '">Complete secure payment</a></p>'
             . ($safeAdditionalMessage !== '' ? '<p>' . nl2br($safeAdditionalMessage, false) . '</p>' : '')
-            . '<p>If you have questions, reply to this email.</p><p>Ambient</p>';
+            . '<p>' . $safeClosing . '</p><p>Warm regards,<br>Ambient</p>';
         if ($previewOnly) {
             $htmlBody = '<p><strong>DEMO PREVIEW ONLY</strong> — sent to the signed-in administrator, not the customer. This is not a payment request. Do not use the example.invalid link to pay.</p>' . $htmlBody;
         }
