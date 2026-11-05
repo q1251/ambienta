@@ -6425,7 +6425,7 @@ if ($method === 'POST' && $resource === 'leads') {
            phone = IF(? = 1 AND (phone REGEXP \'^[0-9]{5}(-[0-9]{4})?$\' OR VALUES(phone) <> \'\'), VALUES(phone), phone),
            country = IF(? = 1 AND VALUES(country) <> \'\', VALUES(country), country),
            address = IF(? = 1 AND address = \'\', VALUES(address), address),
-           postal_code = IF(? = 1 AND postal_code = \'\', VALUES(postal_code), postal_code),
+           postal_code = IF(? = 1 AND (postal_code = \'\' OR postal_code REGEXP \'^[0-9]{1,9}[.]0+$\'), VALUES(postal_code), postal_code),
            marketing_consent = IF(VALUES(marketing_consent) = 1, 1, marketing_consent),
            marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at),
            assigned_staff_id = IF(assigned_staff_id IS NULL, VALUES(assigned_staff_id), assigned_staff_id)'
@@ -6456,7 +6456,20 @@ if ($method === 'POST' && $resource === 'leads') {
             $phone = data_string($lead, 'phone', 40, false);
             $country = data_string($lead, 'country', 100, false);
             $address = $canEditContactDetails ? data_string($lead, 'address', 500, false) : '';
-            $postalCode = $canEditContactDetails ? data_string($lead, 'postalCode', 24, false) : '';
+            $postalCodeInput = $canEditContactDetails ? data_string($lead, 'postalCode', 24, false) : '';
+            $postalCode = $postalCodeInput;
+            if (preg_match('/^(\d{1,9})\.0+$/', $postalCodeInput, $postalParts) === 1) {
+                $postalDigits = $postalParts[1];
+                $isUnitedStates = in_array(strtolower($country), ['us', 'usa', 'united states', 'united states of america'], true)
+                    || preg_match('/(?:,\s*|\s+)(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)(?:,|$)/i', $address) === 1;
+                if ($isUnitedStates && strlen($postalDigits) === 9) {
+                    $postalCode = substr($postalDigits, 0, 5) . '-' . substr($postalDigits, 5);
+                } elseif ($isUnitedStates && strlen($postalDigits) < 5) {
+                    $postalCode = str_pad($postalDigits, 5, '0', STR_PAD_LEFT);
+                } else {
+                    $postalCode = $postalDigits;
+                }
+            }
             if (preg_match('/^\d{5}(?:-\d{4})?$/', $phone) === 1) {
                 if ($postalCode === '') $postalCode = $phone;
                 $phone = '';
@@ -6476,9 +6489,9 @@ if ($method === 'POST' && $resource === 'leads') {
                 $nameKey = strtolower(trim($firstName)) . '|' . strtolower(trim($lastName)) . '|';
                 $identitySuffix = strlen($phoneDigits) >= 7
                     ? $phoneDigits
-                    : (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCode) === 1
-                        ? (preg_replace('/\D/', '', $postalCode) ?? '')
-                        : 'address:' . strtolower(trim($address !== '' ? $address : $postalCode)));
+                    : (preg_match('/^\d{5}(?:-\d{4})?$/', $postalCodeInput) === 1
+                        ? (preg_replace('/\D/', '', $postalCodeInput) ?? '')
+                        : 'address:' . strtolower(trim($address !== '' ? $address : $postalCodeInput)));
                 $importKey = hash('sha256', $nameKey . $identitySuffix);
             }
             $identityValue = $email === '' ? $importKey : $email;
