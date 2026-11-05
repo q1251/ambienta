@@ -3908,6 +3908,7 @@ if (in_array($resource, [
     }
 
     if ($method === 'POST' && $resource === 'email-campaign-save') {
+        $db = data_db();
         $campaignStaffId = data_campaign_actor_staff_id();
         $body = data_read_json(32768);
         $name = trim(data_string($body, 'name', 160));
@@ -3938,7 +3939,6 @@ if (in_array($resource, [
         }
         $trackOpens = $body['trackOpens'] ?? false;
         if (!is_bool($trackOpens)) data_respond(400, ['error' => 'invalid_campaign_tracking', 'message' => 'Open tracking must be enabled or disabled.']);
-        $db = data_db();
         $campaignId = $body['id'] ?? null;
         if ($campaignId === null) {
             $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens, created_by_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?)')->execute([
