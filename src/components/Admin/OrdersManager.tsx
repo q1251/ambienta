@@ -991,7 +991,16 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     'Credit / Debit Card',
                     'PayPal',
                     'Cryptocurrency (USDC / BTC / ETH / SOL)',
-                  ].includes(selectedOrder.paymentMethod || '') && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
+                  ].includes(selectedOrder.paymentMethod || '') && (
+                    selectedOrder.status === 'Cancelled' ? (
+                      <p role="status" className="mt-3 border-t border-amber-200 pt-3 text-[11px] leading-5 text-amber-800">
+                        Payment instructions are unavailable because this order is cancelled.
+                      </p>
+                    ) : selectedOrder.paymentStatus === 'Paid' ? (
+                      <p role="status" className="mt-3 border-t border-emerald-200 pt-3 text-[11px] leading-5 text-emerald-800">
+                        This order is marked as paid; no payment email is needed.
+                      </p>
+                    ) : (
                     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
                       <label htmlFor="order-payment-link" className="block font-semibold text-slate-800">
                         Payment link · send with Hostinger email
@@ -1051,6 +1060,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         {isSendingPaymentLink ? 'Sending payment instructions…' : selectedOrder.paymentLinkSentAt ? 'Resend payment email' : 'Send payment instructions'}
                       </button>
                     </div>
+                    )
                   )}
                   {canManagePaymentLinks && selectedOrder.paymentLinkSentAt && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
                     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
