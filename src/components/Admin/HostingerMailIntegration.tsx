@@ -54,6 +54,7 @@ interface MailDraft {
   bcc: string[];
   threadHeaders: { 'In-Reply-To'?: string; References?: string };
   attachments: MailAttachment[];
+  emailDesign: MailEmailDesign;
   updatedAt: string;
 }
 
@@ -80,6 +81,7 @@ interface InboxMessage {
 }
 
 type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history';
+type MailEmailDesign = 'card' | 'plain';
 
 interface MailCampaign {
   id: string;
@@ -262,6 +264,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [recipientEmail, setRecipientEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
+  const [emailDesign, setEmailDesign] = useState<MailEmailDesign>('plain');
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
   const [threadHeaders, setThreadHeaders] = useState<{ 'In-Reply-To'?: string; References?: string }>({});
@@ -556,6 +559,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         recipientEmail,
         subject,
         body: messageBody,
+        emailDesign,
         cc,
         bcc,
         threadHeaders,
@@ -578,6 +582,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setRecipientEmail(draft.recipientEmail);
     setSubject(draft.subject);
     setMessageBody(draft.body);
+    setEmailDesign(draft.emailDesign || 'plain');
     setCc(draft.cc.join(', '));
     setBcc(draft.bcc.join(', '));
     setThreadHeaders(draft.threadHeaders);
@@ -855,6 +860,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         recipientEmail,
         subject,
         body: messageBody,
+        emailDesign,
         cc,
         bcc,
         threadHeaders,
@@ -875,6 +881,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setRecipientEmail('');
       setSubject('');
       setMessageBody('');
+      setEmailDesign('plain');
       setCc('');
       setBcc('');
       setThreadHeaders({});
@@ -1169,6 +1176,23 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
               </div>
               <div>
+                <label htmlFor="mail-email-design" className="mb-1 block text-sm font-medium text-slate-700">Email design</label>
+                <select
+                  id="mail-email-design"
+                  value={emailDesign}
+                  onChange={(event) => setEmailDesign(event.target.value as MailEmailDesign)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                >
+                  <option value="plain">Plain email</option>
+                  <option value="card">Designed card</option>
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  {emailDesign === 'card'
+                    ? 'Adds a clean Ambienta card around your message.'
+                    : 'Sends the message without a card layout.'}
+                </p>
+              </div>
+              <div>
                 <label htmlFor="mail-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
                 <div className="mb-2 flex gap-2">
                   <button type="button" onClick={() => wrapMessageSelection('**')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Bold</button>
@@ -1178,7 +1202,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={9} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                 <details className="mt-2 rounded-lg border border-slate-200 p-3">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">Preview formatted message</summary>
-                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(messageBody) || '(message preview)'}</p>
+                  {emailDesign === 'card' ? (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-teal-800">Ambienta · Customer support</p>
+                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(messageBody) || '(message preview)'}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(messageBody) || '(message preview)'}</p>
+                  )}
                 </details>
                 <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
               </div>

@@ -194,6 +194,7 @@ function data_ensure_schema(PDO $db): void
             bcc MEDIUMTEXT NULL,
             thread_headers MEDIUMTEXT NULL,
             attachments MEDIUMTEXT NULL,
+            email_design VARCHAR(16) NOT NULL DEFAULT 'plain',
             KEY email_drafts_folder (deleted_at, updated_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
@@ -340,6 +341,7 @@ function data_ensure_schema(PDO $db): void
         ['email_drafts', 'bcc', 'MEDIUMTEXT NULL'],
         ['email_drafts', 'thread_headers', 'MEDIUMTEXT NULL'],
         ['email_drafts', 'attachments', 'MEDIUMTEXT NULL'],
+        ['email_drafts', 'email_design', "VARCHAR(16) NOT NULL DEFAULT 'plain'"],
         ['email_campaigns', 'audience_filter', 'MEDIUMTEXT NULL'],
         ['email_campaigns', 'track_opens', 'TINYINT(1) NOT NULL DEFAULT 0'],
         ['email_campaign_recipients', 'open_token_hash', 'CHAR(64) NULL'],
@@ -1501,6 +1503,21 @@ function data_campaign_html(string $message): string
     $html = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $html) ?? $html;
     $html = preg_replace('/\*(.+?)\*/s', '<em>$1</em>', $html) ?? $html;
     return '<!doctype html><html><body>' . nl2br($html) . '</body></html>';
+}
+
+function data_mail_card_html(string $subject, string $message): string
+{
+    $formattedBody = data_campaign_html($message);
+    $bodyContent = substr($formattedBody, strlen('<!doctype html><html><body>'), -strlen('</body></html>'));
+    $safeSubject = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return '<!doctype html><html><body style="margin:0;padding:28px 12px;background:#f1f5f4;font-family:Arial,Helvetica,sans-serif;color:#173b35">'
+        . '<div style="max-width:600px;margin:0 auto;overflow:hidden;border:1px solid #dce8e4;border-radius:16px;background:#ffffff">'
+        . '<div style="padding:20px 26px;background:#123b36;color:#ffffff">'
+        . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#c4ddd4">AMBIENTA · CUSTOMER SUPPORT</p>'
+        . '<h1 style="margin:10px 0 0;font-size:20px;line-height:1.35;color:#ffffff">' . $safeSubject . '</h1>'
+        . '</div><div style="padding:24px 26px;font-size:14px;line-height:1.7;color:#405852">' . $bodyContent . '</div>'
+        . '<div style="padding:13px 26px;border-top:1px solid #e8efed;background:#fbfdfc;font-size:11px;color:#71837e">Ambient Customer Support</div>'
+        . '</div></body></html>';
 }
 
 function data_campaign_process_batch(array $settings, int $limit = 10): array
@@ -3157,7 +3174,7 @@ if (in_array($resource, [
         data_require_permission('integrations');
         $deleted = $resource === 'email-draft-trash';
         $statement = data_db()->prepare(
-            'SELECT id, recipient_email, subject, body, cc, bcc, thread_headers, attachments, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
+            'SELECT id, recipient_email, subject, body, cc, bcc, thread_headers, attachments, email_design, updated_at FROM email_drafts WHERE deleted_at IS ' . ($deleted ? 'NOT NULL' : 'NULL') . ' ORDER BY updated_at DESC LIMIT 100'
         );
         $statement->execute();
         $rows = $statement->fetchAll();
@@ -3170,6 +3187,7 @@ if (in_array($resource, [
             'bcc' => data_mail_decrypt_content($row['bcc']),
             'threadHeaders' => json_decode(data_mail_decrypt_content($row['thread_headers']), true) ?: [],
             'attachments' => json_decode(data_mail_decrypt_content($row['attachments']), true) ?: [],
+            'emailDesign' => in_array($row['email_design'], ['plain', 'card'], true) ? $row['email_design'] : 'plain',
             'updatedAt' => $row['updated_at'],
         ], $rows)]);
     }
@@ -3179,6 +3197,13 @@ if (in_array($resource, [
         $body = data_read_json(6 * 1024 * 1024);
         $recipient = strtolower(data_string($body, 'recipientEmail', 254, false));
         $subject = data_string($body, 'subject', 180, false);
+        $emailDesign = data_string($body, 'emailDesign', 16, false);
+        if ($emailDesign === '') {
+            $emailDesign = 'plain';
+        }
+        if (!in_array($emailDesign, ['plain', 'card'], true)) {
+            data_respond(400, ['error' => 'invalid_email_design', 'message' => 'Choose either the designed card or plain email layout.']);
+        }
         $draftBody = $body['body'] ?? '';
         if (!is_string($draftBody) || strlen($draftBody) > 24000) {
             data_respond(400, ['error' => 'invalid_draft', 'message' => 'The draft message must be 24,000 bytes or less.']);
@@ -3212,8 +3237,8 @@ if (in_array($resource, [
         $encryptedThread = data_mail_encrypt_content(json_encode($threadHeaders, JSON_UNESCAPED_SLASHES) ?: '{}');
         $encryptedAttachments = data_mail_encrypt_content(json_encode($attachments, JSON_UNESCAPED_SLASHES) ?: '[]');
         if ($draftId !== false && $draftId !== null && $draftId > 0) {
-            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, subject = ?, body = ?, cc = ?, bcc = ?, thread_headers = ?, attachments = ? WHERE id = ? AND deleted_at IS NULL');
-            $update->execute([$recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $draftId]);
+            $update = $db->prepare('UPDATE email_drafts SET recipient_email = ?, subject = ?, body = ?, cc = ?, bcc = ?, thread_headers = ?, attachments = ?, email_design = ? WHERE id = ? AND deleted_at IS NULL');
+            $update->execute([$recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $emailDesign, $draftId]);
             if ($update->rowCount() === 0) {
                 $exists = $db->prepare('SELECT id FROM email_drafts WHERE id = ? AND deleted_at IS NULL');
                 $exists->execute([$draftId]);
@@ -3222,14 +3247,14 @@ if (in_array($resource, [
                 }
             }
         } else {
-            $db->prepare('INSERT INTO email_drafts (recipient_email, subject, body, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)')->execute([
-                $recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments,
+            $db->prepare('INSERT INTO email_drafts (recipient_email, subject, body, cc, bcc, thread_headers, attachments, email_design) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
+                $recipient, $subject, $encryptedBody, $encryptedCc, $encryptedBcc, $encryptedThread, $encryptedAttachments, $emailDesign,
             ]);
             $draftId = (int) $db->lastInsertId();
         }
         data_respond(200, ['saved' => true, 'draft' => [
             'id' => (string) $draftId, 'recipientEmail' => $recipient, 'subject' => $subject, 'body' => $draftBody,
-            'cc' => $cc, 'bcc' => $bcc, 'threadHeaders' => $threadHeaders, 'attachments' => $attachments,
+            'cc' => $cc, 'bcc' => $bcc, 'threadHeaders' => $threadHeaders, 'attachments' => $attachments, 'emailDesign' => $emailDesign,
         ]]);
     }
 
@@ -3264,6 +3289,13 @@ if (in_array($resource, [
         $body = data_read_json(6 * 1024 * 1024);
         $recipient = strtolower(data_string($body, 'recipientEmail', 254));
         $subject = data_string($body, 'subject', 180);
+        $emailDesign = data_string($body, 'emailDesign', 16, false);
+        if ($emailDesign === '') {
+            $emailDesign = 'plain';
+        }
+        if (!in_array($emailDesign, ['plain', 'card'], true)) {
+            data_respond(400, ['error' => 'invalid_email_design', 'message' => 'Choose either the designed card or plain email layout.']);
+        }
         $message = $body['body'] ?? null;
         if (!is_string($message) || trim($message) === '' || strlen($message) > 24000) {
             data_respond(400, ['error' => 'invalid_email_content', 'message' => 'Enter a message of 24,000 bytes or less.']);
@@ -3319,7 +3351,7 @@ if (in_array($resource, [
                 $bcc,
                 $threadHeaders,
                 $attachments,
-                data_campaign_html($message)
+                $emailDesign === 'card' ? data_mail_card_html($subject, $message) : data_campaign_html($message)
             );
         } catch (Throwable $error) {
             $settings['verified'] = false;
