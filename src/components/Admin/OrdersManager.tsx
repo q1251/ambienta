@@ -123,6 +123,8 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [paymentLinkInput, setPaymentLinkInput] = useState('');
   const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<'payment_request' | 'payment_reminder'>('payment_request');
   const [paymentEmailNote, setPaymentEmailNote] = useState('');
+  const [isPaymentEmailModalOpen, setIsPaymentEmailModalOpen] = useState(false);
+  const [paymentEmailError, setPaymentEmailError] = useState('');
   const [isSendingPaymentLink, setIsSendingPaymentLink] = useState(false);
   const [isMarkingPaymentPaid, setIsMarkingPaymentPaid] = useState(false);
   const [paymentLinkSuccess, setPaymentLinkSuccess] = useState('');
@@ -196,6 +198,20 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     setPaymentEmailTemplate(selectedOrder?.paymentLinkSentAt ? 'payment_reminder' : 'payment_request');
     setPaymentEmailNote('');
   }, [selectedOrder?.id, selectedOrder?.paymentLinkUrl]);
+
+  useEffect(() => {
+    setIsPaymentEmailModalOpen(false);
+    setPaymentEmailError('');
+  }, [selectedOrder?.id]);
+
+  useEffect(() => {
+    if (!isPaymentEmailModalOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isSendingPaymentLink) setIsPaymentEmailModalOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isPaymentEmailModalOpen, isSendingPaymentLink]);
 
   useEffect(() => {
     const syncOrderPage = () => {
@@ -324,7 +340,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
   const handleSendPaymentLink = async (previewOnly = false) => {
     if (!selectedOrder) return;
-    setOrderSaveError('');
+    setPaymentEmailError('');
     setPaymentLinkSuccess('');
     setIsSendingPaymentLink(true);
     try {
@@ -350,7 +366,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
         : 'Hostinger accepted the payment-link email.'));
       setReloadCounter((counter) => counter + 1);
     } catch (error) {
-      setOrderSaveError(error instanceof Error ? error.message : 'The payment-link email could not be sent.');
+      setPaymentEmailError(error instanceof Error ? error.message : 'The payment-link email could not be sent.');
     } finally {
       setIsSendingPaymentLink(false);
     }
@@ -1004,73 +1020,25 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         This order is marked as paid; no payment email is needed.
                       </p>
                     ) : (
-                    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
-                      <label htmlFor="order-payment-link" className="block font-semibold text-slate-800">
-                        Payment link · send with Hostinger email
-                      </label>
-                      <input
-                        id="order-payment-link"
-                        type="url"
-                        value={paymentLinkInput}
-                        onChange={(event) => setPaymentLinkInput(event.target.value)}
-                        placeholder="https://…"
-                        autoComplete="url"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
-                      />
-                      <label htmlFor="order-payment-email-template" className="block font-semibold text-slate-800">
-                        Email template
-                      </label>
-                      <select
-                        id="order-payment-email-template"
-                        value={paymentEmailTemplate}
-                        onChange={(event) => setPaymentEmailTemplate(event.target.value as 'payment_request' | 'payment_reminder')}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
-                      >
-                        <option value="payment_request">Payment request with order instructions</option>
-                        <option value="payment_reminder">Payment reminder with order instructions</option>
-                      </select>
-                      <label htmlFor="order-payment-email-note" className="block font-semibold text-slate-800">
-                        Additional message <span className="font-normal text-slate-500">(optional)</span>
-                      </label>
-                      <textarea
-                        id="order-payment-email-note"
-                        value={paymentEmailNote}
-                        onChange={(event) => setPaymentEmailNote(event.target.value)}
-                        maxLength={1000}
-                        rows={3}
-                        placeholder="Add a short note for the customer"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
-                      />
-                      <p className="text-[11px] leading-5 text-slate-500">
-                        The email includes the order number, total, payment method, and secure provider link. Never request card numbers, security codes, or wallet credentials by email.
-                      </p>
-                      {selectedOrder.paymentLinkSentAt && (
-                        <p className="text-[11px] text-slate-500">
-                          Last sent {new Date(`${selectedOrder.paymentLinkSentAt.replace(' ', 'T')}Z`).toLocaleString()}
-                        </p>
-                      )}
-                      <p className="text-[11px] leading-5 text-slate-500">
-                        Paste the payment link generated by your chosen provider. Verify the amount and destination before sending. Hostinger acceptance does not confirm delivery.
-                      </p>
-                      {paymentLinkSuccess && <p role="status" className="text-[11px] font-medium text-emerald-700">{paymentLinkSuccess}</p>}
-                      <button
-                        type="button"
-                        onClick={() => void handleSendPaymentLink(false)}
-                        disabled={isSendingPaymentLink || !paymentLinkInput.trim()}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        <Mail className="h-3.5 w-3.5" />
-                        {isSendingPaymentLink ? 'Sending payment instructions…' : selectedOrder.paymentLinkSentAt ? 'Resend payment email' : 'Send payment instructions'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleSendPaymentLink(true)}
-                        disabled={isSendingPaymentLink}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {isSendingPaymentLink ? 'Sending demo preview…' : 'Send demo preview to my email'}
-                      </button>
-                    </div>
+                      <div className="mt-3 space-y-2 border-t border-slate-200 pt-3">
+                        {selectedOrder.paymentLinkSentAt && (
+                          <p className="text-[11px] text-slate-500">
+                            Last sent {new Date(`${selectedOrder.paymentLinkSentAt.replace(' ', 'T')}Z`).toLocaleString()}
+                          </p>
+                        )}
+                        {paymentLinkSuccess && <p role="status" className="text-[11px] font-medium text-emerald-700">{paymentLinkSuccess}</p>}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaymentEmailError('');
+                            setIsPaymentEmailModalOpen(true);
+                          }}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          {selectedOrder.paymentLinkSentAt ? 'Resend payment email' : 'Email payment instructions'}
+                        </button>
+                      </div>
                     )
                   )}
                   {canManagePaymentLinks && selectedOrder.paymentLinkSentAt && selectedOrder.paymentStatus !== 'Paid' && selectedOrder.status !== 'Cancelled' && (
@@ -1278,6 +1246,116 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>}
             </div>
           </div>
+        </div>
+      )}
+
+      {isPaymentEmailModalOpen && selectedOrder && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSendingPaymentLink) setIsPaymentEmailModalOpen(false);
+          }}
+        >
+          <section
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="order-payment-email-title"
+          >
+            <header className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 id="order-payment-email-title" className="text-lg font-semibold text-slate-950">
+                  Email payment instructions
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Order {selectedOrder.orderNumber} · {selectedOrder.email} · ${selectedOrder.totalAmount.toFixed(2)}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close email modal"
+                onClick={() => setIsPaymentEmailModalOpen(false)}
+                disabled={isSendingPaymentLink}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="space-y-4 p-5">
+              <label htmlFor="order-payment-link" className="block text-xs font-semibold text-slate-800">
+                Secure payment link
+                <input
+                  id="order-payment-link"
+                  type="url"
+                  value={paymentLinkInput}
+                  onChange={(event) => setPaymentLinkInput(event.target.value)}
+                  placeholder="https://…"
+                  autoComplete="url"
+                  autoFocus
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                />
+              </label>
+              <label htmlFor="order-payment-email-template" className="block text-xs font-semibold text-slate-800">
+                Email template
+                <select
+                  id="order-payment-email-template"
+                  value={paymentEmailTemplate}
+                  onChange={(event) => setPaymentEmailTemplate(event.target.value as 'payment_request' | 'payment_reminder')}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                >
+                  <option value="payment_request">Payment request</option>
+                  <option value="payment_reminder">Payment reminder</option>
+                </select>
+              </label>
+              <label htmlFor="order-payment-email-note" className="block text-xs font-semibold text-slate-800">
+                Additional message <span className="font-normal text-slate-500">(optional)</span>
+                <textarea
+                  id="order-payment-email-note"
+                  value={paymentEmailNote}
+                  onChange={(event) => setPaymentEmailNote(event.target.value)}
+                  maxLength={1000}
+                  rows={2}
+                  placeholder="Add a short note"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                />
+              </label>
+              <p className="text-[11px] leading-5 text-slate-500">
+                Use a provider-generated link. Never request card or wallet credentials by email. Hostinger acceptance does not confirm delivery.
+              </p>
+              {paymentEmailError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{paymentEmailError}</p>}
+              {paymentLinkSuccess && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{paymentLinkSuccess}</p>}
+              <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => void handleSendPaymentLink(true)}
+                  disabled={isSendingPaymentLink}
+                  className="rounded-lg border border-slate-300 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isSendingPaymentLink ? 'Sending…' : 'Send demo preview to me'}
+                </button>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentEmailModalOpen(false)}
+                    disabled={isSendingPaymentLink}
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSendPaymentLink(false)}
+                    disabled={isSendingPaymentLink || !paymentLinkInput.trim()}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    {isSendingPaymentLink ? 'Sending…' : selectedOrder.paymentLinkSentAt ? 'Resend email' : 'Send email'}
+                  </button>
+                </div>
+              </footer>
+            </div>
+          </section>
         </div>
       )}
 
