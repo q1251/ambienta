@@ -3071,176 +3071,30 @@ if ($resource === 'visitor-session' && $method === 'POST') {
     data_respond(204, []);
 }
 
-if (in_array($resource, ['email-unsubscribe', 'crm-data-cleanup'], true)) {
-    if ($resource === 'email-unsubscribe') {
-        $token = $_GET['token'] ?? ($_POST['token'] ?? '');
-        if ($method === 'POST' && $token === '') {
-            parse_str((string) file_get_contents('php://input'), $postBody);
-            $token = is_array($postBody) ? ($postBody['token'] ?? '') : '';
-        }
-        if (!is_string($token) || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) {
-            data_respond(400, ['error' => 'invalid_unsubscribe_token', 'message' => 'This unsubscribe link is invalid or expired.']);
-        }
-
-        $db = data_db();
-        $lookup = $db->prepare('SELECT id, lead_id, recipient_email FROM email_campaign_recipients WHERE unsubscribe_token_hash = ? LIMIT 1');
-        $lookup->execute([hash('sha256', $token)]);
-        $recipient = $lookup->fetch();
-        if (!is_array($recipient)) {
-            data_respond(404, ['error' => 'unsubscribe_link_not_found', 'message' => 'This unsubscribe link is invalid or expired.']);
-        }
+if ($resource === 'email-unsubscribe') {
+    $token = $_GET['token'] ?? ($_POST['token'] ?? '');
+    if ($method === 'POST' && $token === '') {
+        parse_str((string) file_get_contents('php://input'), $postBody);
+        $token = is_array($postBody) ? ($postBody['token'] ?? '') : '';
+    }
+    if (!is_string($token) || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) {
+        data_respond(400, ['error' => 'invalid_unsubscribe_token', 'message' => 'This unsubscribe link is invalid or expired.']);
     }
 
-    if ($resource === 'crm-data-cleanup' && $method === 'POST') {
-        data_require_admin('admin');
-        $body = data_read_json(2048);
-        if (!in_array($body['action'] ?? null, ['preview', 'execute'], true)) {
-            data_respond(400, ['error' => 'invalid_cleanup_action', 'message' => 'Choose preview or execute for CRM data cleanup.']);
-        }
-        if (($body['action'] ?? null) === 'execute'
-            && ($body['confirmation'] ?? null) !== 'DELETE ALL EMAILS, CHATS, AND DEMO LEADS') {
-            data_respond(400, ['error' => 'cleanup_confirmation_required', 'message' => 'Enter the exact cleanup confirmation phrase before deleting CRM data.']);
-        }
-
-        $settings = data_mail_settings();
-        if ($settings === []) {
-            data_respond(409, ['error' => 'mail_not_configured', 'message' => 'Hostinger mailbox access is required to preview and clear all mailbox folders.']);
-        }
-
-        try {
-            $folders = data_imap_folders($settings);
-            if ($folders === []) {
-                throw new RuntimeException('imap_no_folders_found');
-            }
-            $mailboxFolders = [];
-            foreach ($folders as $folder) {
-                $mailboxFolders[$folder] = [
-                    'name' => $folder,
-                    'total' => data_imap_folder_messages($settings, $folder, 1, '', 1)['total'],
-                ];
-            }
-        } catch (Throwable $error) {
-            error_log('Ambients CRM cleanup mailbox preflight failed: ' . $error->getMessage());
-            data_respond(502, ['error' => 'cleanup_mailbox_unavailable', 'message' => 'All Hostinger mailbox folders must be available before cleanup can proceed. No CRM data was changed.']);
-        }
-
-        $db = data_db();
-        $demoLeadCondition = "(
-            LOWER(lead_source) = 'synthetic demo'
-            OR LOWER(TRIM(email)) LIKE '%@example.com'
-            OR LOWER(CONCAT_WS(' ', first_name, last_name, lead_source, email))
-                REGEXP '(^|[^a-z0-9])(test|qa|demo|smoke)([^a-z0-9]|$)'
-        )";
-        $counts = [
-            'seededLeads' => (int) $db->query("SELECT COUNT(*) FROM leads WHERE LOWER(lead_source) = 'synthetic demo'")->fetchColumn(),
-            'demoAndTestLeads' => (int) $db->query("SELECT COUNT(*) FROM leads WHERE $demoLeadCondition")->fetchColumn(),
-            'emailActivity' => (int) $db->query('SELECT COUNT(*) FROM email_activity')->fetchColumn(),
-            'emailDrafts' => (int) $db->query('SELECT COUNT(*) FROM email_drafts')->fetchColumn(),
-            'campaigns' => (int) $db->query('SELECT COUNT(*) FROM email_campaigns')->fetchColumn(),
-            'campaignRecipients' => (int) $db->query('SELECT COUNT(*) FROM email_campaign_recipients')->fetchColumn(),
-            'chatConversations' => (int) $db->query('SELECT COUNT(*) FROM chat_conversations')->fetchColumn(),
-            'chatMessages' => (int) $db->query('SELECT COUNT(*) FROM chat_messages')->fetchColumn(),
-            'mailboxFolders' => array_map(static fn (array $folder): array => ['total' => $folder['total']], $mailboxFolders),
-        ];
-
-        if (($body['action'] ?? null) === 'preview') {
-            data_respond(200, ['preview' => $counts]);
-        }
-
-        $mailboxDeleted = [];
-        foreach ($mailboxFolders as $kind => $folderInfo) {
-            try {
-                [$socket, $commandNumber] = data_imap_connect($settings);
-                try {
-                    data_imap_command($socket, $commandNumber, 'SELECT ' . data_imap_quote($folderInfo['name']));
-                    $search = data_imap_command($socket, $commandNumber, 'UID SEARCH ALL');
-                    $uidLine = '';
-                    foreach ($search['lines'] as $line) {
-                        if (preg_match('/^\* SEARCH(?:\s+(.*?))?\r?\n$/', $line, $matches) === 1) {
-                            $uidLine = trim($matches[1] ?? '');
-                            break;
-                        }
-                    }
-                    $uids = $uidLine === '' ? [] : preg_split('/\s+/', $uidLine);
-                    $uids = is_array($uids) ? array_values(array_filter($uids, static fn ($uid): bool =>
-                        is_string($uid) && ctype_digit($uid)
-                    )) : [];
-                    foreach (array_chunk($uids, 100) as $uidBatch) {
-                        $uidSet = implode(',', $uidBatch);
-                        data_imap_command($socket, $commandNumber, 'UID STORE ' . $uidSet . ' +FLAGS.SILENT (\\Deleted)');
-                        data_imap_command($socket, $commandNumber, 'UID EXPUNGE ' . $uidSet);
-                    }
-                    data_imap_command($socket, $commandNumber, 'LOGOUT');
-                    $mailboxDeleted[$kind] = count($uids);
-                } finally {
-                    if (is_resource($socket)) fclose($socket);
-                }
-            } catch (Throwable $error) {
-                error_log('Ambients CRM cleanup could not clear the Hostinger ' . $kind . ' folder: ' . $error->getMessage());
-                data_respond(502, [
-                    'error' => 'cleanup_mailbox_incomplete',
-                    'message' => 'The Hostinger mailbox cleanup stopped before CRM records were changed. Some mailbox messages may already have been permanently removed; check Hostinger before retrying.',
-                    'mailboxFoldersCleared' => $mailboxDeleted,
-                ]);
-            }
-        }
-
-        try {
-            $db->beginTransaction();
-            $db->exec('DELETE FROM email_campaigns');
-            $db->exec('DELETE FROM email_activity');
-            $db->exec('DELETE FROM email_drafts');
-            $db->exec('DELETE FROM chat_conversations');
-            $deleteLeads = $db->prepare("DELETE FROM leads WHERE $demoLeadCondition");
-            $deleteLeads->execute();
-            $deletedLeads = $deleteLeads->rowCount();
-            data_audit($db, 'crm.demo_data_purged', 'crm', 'demo-data', [
-                'deletedDemoAndTestLeads' => $deletedLeads,
-                'deletedEmailActivity' => $counts['emailActivity'],
-                'deletedEmailDrafts' => $counts['emailDrafts'],
-                'deletedCampaigns' => $counts['campaigns'],
-                'deletedCampaignRecipients' => $counts['campaignRecipients'],
-                'deletedChatConversations' => $counts['chatConversations'],
-                'deletedChatMessages' => $counts['chatMessages'],
-                'deletedMailboxMessages' => $mailboxDeleted,
-            ]);
-            $db->commit();
-        } catch (Throwable $error) {
-            if ($db->inTransaction()) $db->rollBack();
-            error_log('Ambients CRM cleanup database deletion failed: ' . $error->getMessage());
-            data_respond(500, [
-                'error' => 'cleanup_database_failed',
-                'message' => 'Hostinger mailbox messages were cleared, but CRM records could not all be removed. Check the CRM and audit log before retrying.',
-                'mailboxFoldersCleared' => $mailboxDeleted,
-            ]);
-        }
-
-        data_respond(200, [
-            'deleted' => [
-                'demoAndTestLeads' => $deletedLeads,
-                'emailActivity' => $counts['emailActivity'],
-                'emailDrafts' => $counts['emailDrafts'],
-                'campaigns' => $counts['campaigns'],
-                'campaignRecipients' => $counts['campaignRecipients'],
-                'chatConversations' => $counts['chatConversations'],
-                'chatMessages' => $counts['chatMessages'],
-                'mailboxMessages' => $mailboxDeleted,
-            ],
-            'ordersPreserved' => true,
-            'auditHistoryPreserved' => true,
-        ]);
+    $db = data_db();
+    $lookup = $db->prepare('SELECT id, lead_id, recipient_email FROM email_campaign_recipients WHERE unsubscribe_token_hash = ? LIMIT 1');
+    $lookup->execute([hash('sha256', $token)]);
+    $recipient = $lookup->fetch();
+    if (!is_array($recipient)) {
+        data_respond(404, ['error' => 'unsubscribe_link_not_found', 'message' => 'This unsubscribe link is invalid or expired.']);
     }
 
-    if ($resource === 'email-unsubscribe') {
-        if ($resource === 'crm-data-cleanup') {
-            data_respond(405, ['error' => 'method_not_allowed', 'message' => 'Use POST for CRM data cleanup.']);
-        }
-        if ($method === 'GET') {
-            header('Content-Type: text/html; charset=utf-8');
-            header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'");
-            echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Email preferences</title><body style="font:16px system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:24px;color:#172033"><h1>Unsubscribe from marketing emails</h1><p>Confirm to stop receiving marketing emails from Ambienta.</p><form method="post"><input type="hidden" name="token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '"><button style="background:#5b21b6;color:white;border:0;border-radius:8px;padding:12px 18px;font:inherit;cursor:pointer" type="submit">Unsubscribe</button></form></body></html>';
-            exit;
-        }
+    if ($method === 'GET') {
+        header('Content-Type: text/html; charset=utf-8');
+        header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'");
+        echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Email preferences</title><body style="font:16px system-ui,sans-serif;max-width:560px;margin:12vh auto;padding:24px;color:#172033"><h1>Unsubscribe from marketing emails</h1><p>Confirm to stop receiving marketing emails from Ambienta.</p><form method="post"><input type="hidden" name="token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '"><button style="background:#5b21b6;color:white;border:0;border-radius:8px;padding:12px 18px;font:inherit;cursor:pointer" type="submit">Unsubscribe</button></form></body></html>';
+        exit;
+    }
 
     if ($method === 'POST') {
         parse_str((string) file_get_contents('php://input'), $postBody);
@@ -3267,7 +3121,6 @@ if (in_array($resource, ['email-unsubscribe', 'crm-data-cleanup'], true)) {
         exit;
     }
     data_respond(405, ['error' => 'method_not_allowed', 'message' => 'Use the unsubscribe confirmation form.']);
-}
 }
 
 if ($resource === 'email-open' && $method === 'GET') {
