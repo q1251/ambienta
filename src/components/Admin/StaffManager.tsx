@@ -438,37 +438,40 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   }, [createModalOpen, saving]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className={profileAccountId === null
+      ? 'space-y-6'
+      : 'flex h-[calc(100dvh-11rem)] min-h-0 flex-col sm:h-[calc(100dvh-8rem)]'
+    }>
+      {profileAccountId === null && <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Access control</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{profileAccountId === null ? 'Agent management' : 'Agent profile'}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">{profileAccountId === null ? 'Create accounts and select an agent to view their profile, manage access, update credentials, or enter their workspace.' : 'Review and manage this agent’s account, permissions, credentials, and assigned leads.'}</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Agent management</h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">Create accounts and select an agent to view their profile, manage access, update credentials, or enter their workspace.</p>
         </div>
-      </header>
+      </header>}
 
       {(profileAccountId === null || editingId === null) && error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
       {(profileAccountId === null || editingId === null) && message && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{message}</p>}
 
       {profileAccountId !== null ? (
-        <section className="space-y-6">
-          <button type="button" onClick={() => { setProfileAccountId(null); setSelectedProfile(null); setProfileError(''); setEditingId(null); setResetPasswordReveal(null); }} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+        <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain pr-1">
+          <button type="button" onClick={() => { setProfileAccountId(null); setSelectedProfile(null); setProfileError(''); setEditingId(null); setResetPasswordReveal(null); }} className="sticky top-0 z-10 inline-flex w-fit shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
             <ArrowLeft className="h-4 w-4" />Back to agents
           </button>
           {profileLoading && <p role="status" className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600">Loading agent profile…</p>}
           {profileError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{profileError}</p>}
           {selectedProfile && (
             <>
-              <header className="flex flex-wrap items-end justify-between gap-4">
+              <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Agent profile</p>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{selectedProfile.display_name || selectedProfile.email}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{selectedProfile.email} · {selectedProfile.is_active ? 'Active' : 'Inactive'} agent</p>
+                  <h2 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-950">{selectedProfile.display_name || selectedProfile.email}</h2>
+                  <p className="mt-0.5 text-xs text-slate-600">{selectedProfile.email} · {selectedProfile.is_active ? 'Active' : 'Inactive'} agent</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedProfile.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(selectedProfile)} className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-4 w-4" />Enter account</button>}
-                  <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { resetPassword: true }, 'A new one-time password was generated.')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><KeyRound className="h-4 w-4" />Reset password</button>
-                  <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { isActive: !selectedProfile.is_active }, `Agent ${selectedProfile.is_active ? 'deactivated' : 'activated'}.`)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><UserX className="h-4 w-4" />{selectedProfile.is_active ? 'Deactivate' : 'Activate'}</button>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedProfile.is_active && <button type="button" disabled={saving} onClick={() => void enterAccount(selectedProfile)} className="inline-flex items-center gap-1 rounded-lg bg-violet-700 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:opacity-50"><LogIn className="h-3.5 w-3.5" />Enter</button>}
+                  <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { resetPassword: true }, 'A new one-time password was generated.')} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><KeyRound className="h-3.5 w-3.5" />Reset password</button>
+                  <button type="button" disabled={saving} onClick={() => void updateAccount(selectedProfile, { isActive: !selectedProfile.is_active }, `Agent ${selectedProfile.is_active ? 'deactivated' : 'activated'}.`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><UserX className="h-3.5 w-3.5" />{selectedProfile.is_active ? 'Deactivate' : 'Activate'}</button>
                 </div>
               </header>
 
@@ -488,8 +491,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 </div>
               )}
 
-              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <section className="grid shrink-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current status</p>
                   <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
                     <span className={`h-2.5 w-2.5 rounded-full ${selectedProfile.presence.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -498,7 +501,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   {selectedProfile.presence.online && selectedProfile.presence.currentSection
                     && <p className="mt-1 text-sm capitalize text-slate-500">Currently in {selectedProfile.presence.currentSection}</p>}
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{selectedProfile.presence.online ? 'Online duration' : 'Last session length'}</p>
                   <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
                     <Clock3 className="h-4 w-4 text-blue-800" />
@@ -514,24 +517,24 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                         : 'No authenticated session recorded'}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sent emails</p>
                   <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
                     <Mail className="h-4 w-4 text-blue-800" />{selectedProfile.sentEmails.length}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">Latest 100 tracked messages</p>
+                  <p className="mt-1 text-sm text-slate-500">Latest 500 tracked messages</p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recorded actions</p>
                   <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
                     <Activity className="h-4 w-4 text-blue-800" />{selectedProfile.activity.length}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">Latest 150 activity events</p>
+                  <p className="mt-1 text-sm text-slate-500">Latest 500 activity events</p>
                 </div>
               </section>
 
               <>
-                  <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+                  <section className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
                     <div>
                       <h3 className="font-semibold text-slate-900">Account details & access</h3>
                       <p className="mt-1 text-sm text-slate-600">Edit the agent’s name, sign-in email, and section permissions.</p>
@@ -544,20 +547,20 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                       </div>
                     </div>
                   </section>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="grid shrink-0 gap-3 md:grid-cols-2">
+                    <section className="rounded-xl border border-slate-200 bg-white p-3">
                       <h3 className="font-semibold text-slate-900">Account history</h3>
                       <p className="mt-3 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-blue-800" />Created {formatTimestamp(selectedProfile.created_at)}</p>
                       <p className="mt-2 text-sm text-slate-600">Created by {selectedProfile.created_by}</p>
                       <p className="mt-1 text-sm text-slate-600">Last updated {formatTimestamp(selectedProfile.updated_at)}</p>
                     </section>
-                    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <section className="rounded-xl border border-slate-200 bg-white p-3">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="font-semibold text-slate-900">Assigned leads</h3>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.assignedLeads.length}</span>
                       </div>
                       {selectedProfile.assignedLeads.length ? (
-                        <div className="mt-3 max-h-64 overflow-auto divide-y divide-slate-100">
+                        <div className="mt-2 max-h-[min(28vh,18rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain pr-1">
                           {selectedProfile.assignedLeads.map((lead) => (
                             <div key={lead.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                               <div><p className="text-sm font-medium text-slate-900">{lead.firstName} {lead.lastName}</p><p className="text-xs text-slate-500">{lead.email}</p></div>
@@ -569,8 +572,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                     </section>
                   </div>
 
-                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                  <section className="shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
                       <div>
                         <h3 className="font-semibold text-slate-900">Emails sent</h3>
                         <p className="mt-1 text-sm text-slate-600">Direct messages and campaign deliveries attributed to this agent.</p>
@@ -578,9 +581,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.sentEmails.length}</span>
                     </div>
                     {selectedProfile.sentEmails.length ? (
-                      <div className="max-h-[28rem] divide-y divide-slate-100 overflow-auto">
+                      <div className="max-h-[min(34vh,24rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
                         {selectedProfile.sentEmails.map((email) => (
-                          <article key={email.id} className="px-5 py-4">
+                          <article key={email.id} className="px-4 py-3">
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-semibold text-slate-900">{email.subject || '(no subject)'}</p>
@@ -600,9 +603,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                     )}
                   </section>
 
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                  <div className="grid shrink-0 gap-3 lg:grid-cols-2">
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
                         <div>
                           <h3 className="font-semibold text-slate-900">Orders handled</h3>
                           <p className="mt-1 text-sm text-slate-600">Order actions recorded under this agent’s account.</p>
@@ -610,9 +613,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                         <ShoppingBag className="h-5 w-5 text-slate-500" />
                       </div>
                       {selectedProfile.activity.filter((item) => item.entityType === 'order').length ? (
-                        <div className="max-h-[28rem] divide-y divide-slate-100 overflow-auto">
+                        <div className="max-h-[min(34vh,24rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
                           {selectedProfile.activity.filter((item) => item.entityType === 'order').map((item) => (
-                            <article key={item.id} className="px-5 py-3">
+                            <article key={item.id} className="px-4 py-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-sm font-semibold text-slate-900">{item.order?.orderNumber || `Order ${item.entityId}`}</p>
@@ -627,8 +630,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                       ) : <p className="px-5 py-6 text-sm text-slate-500">No order actions have been recorded for this agent.</p>}
                     </section>
 
-                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
                         <div>
                           <h3 className="font-semibold text-slate-900">Action history</h3>
                           <p className="mt-1 text-sm text-slate-600">Account, lead, chat, and other audited activity.</p>
@@ -636,9 +639,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                         <Activity className="h-5 w-5 text-slate-500" />
                       </div>
                       {selectedProfile.activity.length ? (
-                        <div className="max-h-[28rem] divide-y divide-slate-100 overflow-auto">
+                        <div className="max-h-[min(34vh,24rem)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
                           {selectedProfile.activity.map((item) => (
-                            <article key={`${item.entityType}-${item.id}`} className="px-5 py-3">
+                            <article key={`${item.entityType}-${item.id}`} className="px-4 py-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-sm font-semibold capitalize text-slate-900">{formatActivityAction(item.action)}</p>

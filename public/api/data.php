@@ -4663,7 +4663,7 @@ if ($method === 'GET') {
             ];
             $emailActivity = $db->prepare(
                 'SELECT id, recipient_email, subject, body, status, sent_at
-                 FROM email_activity WHERE sender_staff_id = ? ORDER BY id DESC LIMIT 100'
+                 FROM email_activity WHERE sender_staff_id = ? ORDER BY id DESC LIMIT 500'
             );
             $emailActivity->execute([$staffId]);
             $staffProfile['sentEmails'] = array_map(static function (array $email): array {
@@ -4686,7 +4686,7 @@ if ($method === 'GET') {
                     OR LOWER(CASE WHEN JSON_VALID(a.details)
                         THEN JSON_UNQUOTE(JSON_EXTRACT(a.details, '$.actingAs'))
                         ELSE NULL END) = LOWER(?)
-                 ORDER BY a.id DESC LIMIT 100"
+                 ORDER BY a.id DESC LIMIT 500"
             );
             $staffActivity->execute([(string) $staffProfile['email'], (string) $staffId, (string) $staffProfile['email']]);
             $staffProfile['activity'] = array_map(static function (array $activity): array {
@@ -4707,7 +4707,7 @@ if ($method === 'GET') {
             }, $staffActivity->fetchAll());
             $leadActivities = $db->prepare(
                 'SELECT id, lead_id, activity_type, created_at
-                 FROM lead_activities WHERE LOWER(author_email) = LOWER(?) ORDER BY id DESC LIMIT 100'
+                 FROM lead_activities WHERE LOWER(author_email) = LOWER(?) ORDER BY id DESC LIMIT 500'
             );
             $leadActivities->execute([(string) $staffProfile['email']]);
             foreach ($leadActivities->fetchAll() as $activity) {
@@ -4724,7 +4724,7 @@ if ($method === 'GET') {
             usort($staffProfile['activity'], static fn (array $left, array $right): int =>
                 strcmp((string) $right['createdAt'], (string) $left['createdAt'])
             );
-            $staffProfile['activity'] = array_slice($staffProfile['activity'], 0, 150);
+            $staffProfile['activity'] = array_slice($staffProfile['activity'], 0, 500);
             data_respond(200, ['profile' => $staffProfile]);
         }
         $rows = $db->query(
