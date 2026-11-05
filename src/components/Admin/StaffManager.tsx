@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CalendarDays, KeyRound, LogIn, UserPlus, Users, UserX } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, Clock3, KeyRound, LogIn, Mail, ShoppingBag, UserPlus, Users, UserX } from 'lucide-react';
 
 const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
@@ -35,6 +35,14 @@ interface StaffAccount {
 
 interface AgentProfile extends StaffAccount {
   updated_at: string;
+  presence: {
+    online: boolean;
+    durationSeconds: number;
+    lastSessionDurationSeconds: number;
+    sessionStartedAt: string | null;
+    lastSeenAt: string | null;
+    currentSection: string | null;
+  };
   assignedLeads: Array<{
     id: number;
     firstName: string;
@@ -42,6 +50,28 @@ interface AgentProfile extends StaffAccount {
     email: string;
     status: string;
     createdAt: string;
+  }>;
+  sentEmails: Array<{
+    id: number;
+    recipientEmail: string;
+    subject: string;
+    bodyPreview: string;
+    status: string;
+    sentAt: string;
+  }>;
+  activity: Array<{
+    id: number | string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    details: Record<string, unknown> | null;
+    createdAt: string;
+    order: {
+      orderNumber: string;
+      customerName: string;
+      totalAmount: number;
+      status: string;
+    } | null;
   }>;
 }
 
@@ -73,6 +103,28 @@ interface StaffManagerProps {
 }
 
 const defaultPermissions: StaffPermission[] = ['leads'];
+
+const formatTimestamp = (value: string) => {
+  const timestamp = new Date(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
+  return Number.isNaN(timestamp.getTime()) ? value : timestamp.toLocaleString();
+};
+
+const formatActivityAction = (action: string) => {
+  const labels: Record<string, string> = {
+    'staff.impersonation_started': 'Agent session opened by administrator',
+    'staff.impersonation_ended': 'Agent session ended',
+    'staff.updated': 'Agent account updated',
+    'order.created_manually': 'Order created manually',
+    'order.created': 'Order created',
+    'order.status_changed': 'Order status changed',
+    'order.payment_marked_paid': 'Order marked paid',
+    'order.payment_captured': 'Order payment captured',
+    'chat.replied': 'Replied to live chat',
+    'chat.claimed': 'Claimed a live chat',
+    'security.contact_details_blocked': 'Blocked contact-detail attempt',
+  };
+  return labels[action] || action.replace(/\./g, ' · ').replace(/_/g, ' ');
+};
 
 export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) => {
   const [accounts, setAccounts] = useState<StaffAccount[]>([]);
@@ -305,7 +357,8 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         headers: { Accept: 'application/json' },
       });
       const result = await response.json() as { profile?: AgentProfile; message?: string };
-      if (!response.ok || !result.profile || !Array.isArray(result.profile.assignedLeads)) {
+      if (!response.ok || !result.profile || !Array.isArray(result.profile.assignedLeads)
+        || !result.profile.presence || !Array.isArray(result.profile.sentEmails) || !Array.isArray(result.profile.activity)) {
         throw new Error(result.message || 'The agent profile could not be loaded.');
       }
       setSelectedProfile(result.profile);
@@ -315,6 +368,41 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
       setProfileLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (profileAccountId === null) return;
+    let active = true;
+    let failureReported = false;
+    const refreshProfile = async () => {
+      try {
+        const response = await fetch(`/api/data.php?resource=staff&id=${encodeURIComponent(String(profileAccountId))}`, {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json() as { profile?: AgentProfile; message?: string };
+        if (!response.ok || !result.profile || !Array.isArray(result.profile.assignedLeads)
+          || !result.profile.presence || !Array.isArray(result.profile.sentEmails) || !Array.isArray(result.profile.activity)) {
+          throw new Error(result.message || 'The agent profile could not be refreshed.');
+        }
+        if (!active) return;
+        setSelectedProfile(result.profile);
+        setProfileError('');
+        failureReported = false;
+      } catch (loadError) {
+        if (!active) return;
+        setProfileError(loadError instanceof Error ? loadError.message : 'The agent profile could not be refreshed.');
+        if (!failureReported) {
+          console.error('Ambienta CRM agent profile could not be refreshed.', loadError);
+          failureReported = true;
+        }
+      }
+    };
+    const timer = window.setInterval(() => void refreshProfile(), 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [profileAccountId]);
 
   const startEditing = (account: StaffAccount) => {
     setEditingId(account.id);
@@ -400,6 +488,48 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 </div>
               )}
 
+              <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current status</p>
+                  <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
+                    <span className={`h-2.5 w-2.5 rounded-full ${selectedProfile.presence.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    {selectedProfile.presence.online ? 'Online' : selectedProfile.is_active ? 'Offline' : 'Inactive'}
+                  </p>
+                  {selectedProfile.presence.online && selectedProfile.presence.currentSection
+                    && <p className="mt-1 text-sm capitalize text-slate-500">Currently in {selectedProfile.presence.currentSection}</p>}
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{selectedProfile.presence.online ? 'Online duration' : 'Last session length'}</p>
+                  <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
+                    <Clock3 className="h-4 w-4 text-blue-800" />
+                    {formatDuration(selectedProfile.presence.online
+                      ? selectedProfile.presence.durationSeconds
+                      : selectedProfile.presence.lastSessionDurationSeconds)}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedProfile.presence.online && selectedProfile.presence.sessionStartedAt
+                      ? `Since ${formatTimestamp(selectedProfile.presence.sessionStartedAt)}`
+                      : selectedProfile.presence.lastSeenAt
+                        ? `Last active ${formatTimestamp(selectedProfile.presence.lastSeenAt)}`
+                        : 'No authenticated session recorded'}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sent emails</p>
+                  <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
+                    <Mail className="h-4 w-4 text-blue-800" />{selectedProfile.sentEmails.length}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">Latest 100 tracked messages</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recorded actions</p>
+                  <p className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
+                    <Activity className="h-4 w-4 text-blue-800" />{selectedProfile.activity.length}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">Latest 150 activity events</p>
+                </div>
+              </section>
+
               <>
                   <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
                     <div>
@@ -417,9 +547,9 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <div className="grid gap-4 md:grid-cols-2">
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                       <h3 className="font-semibold text-slate-900">Account history</h3>
-                      <p className="mt-3 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-blue-800" />Created {new Date(selectedProfile.created_at).toLocaleString()}</p>
+                      <p className="mt-3 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-blue-800" />Created {formatTimestamp(selectedProfile.created_at)}</p>
                       <p className="mt-2 text-sm text-slate-600">Created by {selectedProfile.created_by}</p>
-                      <p className="mt-1 text-sm text-slate-600">Last updated {new Date(selectedProfile.updated_at).toLocaleString()}</p>
+                      <p className="mt-1 text-sm text-slate-600">Last updated {formatTimestamp(selectedProfile.updated_at)}</p>
                     </section>
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex items-center justify-between gap-3">
@@ -436,6 +566,91 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                           ))}
                         </div>
                       ) : <p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No leads assigned yet. Assign leads from Contact Leads.</p>}
+                    </section>
+                  </div>
+
+                  <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">Emails sent</h3>
+                        <p className="mt-1 text-sm text-slate-600">Direct messages and campaign deliveries attributed to this agent.</p>
+                      </div>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{selectedProfile.sentEmails.length}</span>
+                    </div>
+                    {selectedProfile.sentEmails.length ? (
+                      <div className="max-h-[28rem] divide-y divide-slate-100 overflow-auto">
+                        {selectedProfile.sentEmails.map((email) => (
+                          <article key={email.id} className="px-5 py-4">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-900">{email.subject || '(no subject)'}</p>
+                                <p className="mt-1 break-all text-xs text-slate-600">To: {email.recipientEmail}</p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${email.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : email.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{email.status}</span>
+                                <p className="mt-1 text-xs text-slate-500">{formatTimestamp(email.sentAt)}</p>
+                              </div>
+                            </div>
+                            {email.bodyPreview && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{email.bodyPreview}{email.bodyPreview.length >= 360 ? '…' : ''}</p>}
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="px-5 py-6 text-sm text-slate-500">No sent emails have been attributed to this agent yet. Email activity tracking begins with messages sent after this update.</p>
+                    )}
+                  </section>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">Orders handled</h3>
+                          <p className="mt-1 text-sm text-slate-600">Order actions recorded under this agent’s account.</p>
+                        </div>
+                        <ShoppingBag className="h-5 w-5 text-slate-500" />
+                      </div>
+                      {selectedProfile.activity.filter((item) => item.entityType === 'order').length ? (
+                        <div className="max-h-[28rem] divide-y divide-slate-100 overflow-auto">
+                          {selectedProfile.activity.filter((item) => item.entityType === 'order').map((item) => (
+                            <article key={item.id} className="px-5 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">{item.order?.orderNumber || `Order ${item.entityId}`}</p>
+                                  <p className="mt-1 text-xs text-slate-600">{formatActivityAction(item.action)}{item.order ? ` · ${item.order.customerName}` : ''}</p>
+                                  {item.order && <p className="mt-1 text-xs text-slate-500">{item.order.status} · ${item.order.totalAmount.toFixed(2)}</p>}
+                                </div>
+                                <time className="shrink-0 text-right text-xs text-slate-500">{formatTimestamp(item.createdAt)}</time>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : <p className="px-5 py-6 text-sm text-slate-500">No order actions have been recorded for this agent.</p>}
+                    </section>
+
+                    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                        <div>
+                          <h3 className="font-semibold text-slate-900">Action history</h3>
+                          <p className="mt-1 text-sm text-slate-600">Account, lead, chat, and other audited activity.</p>
+                        </div>
+                        <Activity className="h-5 w-5 text-slate-500" />
+                      </div>
+                      {selectedProfile.activity.length ? (
+                        <div className="max-h-[28rem] divide-y divide-slate-100 overflow-auto">
+                          {selectedProfile.activity.map((item) => (
+                            <article key={`${item.entityType}-${item.id}`} className="px-5 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold capitalize text-slate-900">{formatActivityAction(item.action)}</p>
+                                  {item.entityType === 'lead' && <p className="mt-1 text-xs text-slate-600">Lead record · {item.entityId}</p>}
+                                  {item.order && <p className="mt-1 text-xs text-slate-600">{item.order.orderNumber} · {item.order.status}</p>}
+                                </div>
+                                <time className="shrink-0 text-right text-xs text-slate-500">{formatTimestamp(item.createdAt)}</time>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : <p className="px-5 py-6 text-sm text-slate-500">No audited actions have been recorded for this agent.</p>}
                     </section>
                   </div>
                 </>

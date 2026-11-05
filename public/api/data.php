@@ -176,6 +176,7 @@ function data_ensure_schema(PDO $db): void
             bcc MEDIUMTEXT NULL,
             thread_headers MEDIUMTEXT NULL,
             attachments MEDIUMTEXT NULL,
+            sender_staff_id BIGINT UNSIGNED NULL,
             message_id VARCHAR(998) NULL,
             thread_root_message_id VARCHAR(998) NULL,
             KEY email_activity_sent_at (sent_at)
@@ -340,6 +341,7 @@ function data_ensure_schema(PDO $db): void
         ['email_activity', 'bcc', 'MEDIUMTEXT NULL'],
         ['email_activity', 'thread_headers', 'MEDIUMTEXT NULL'],
         ['email_activity', 'attachments', 'MEDIUMTEXT NULL'],
+        ['email_activity', 'sender_staff_id', 'BIGINT UNSIGNED NULL'],
         ['email_activity', 'message_id', 'VARCHAR(998) NULL'],
         ['email_activity', 'thread_root_message_id', 'VARCHAR(998) NULL'],
         ['email_drafts', 'cc', 'MEDIUMTEXT NULL'],
@@ -374,6 +376,7 @@ function data_ensure_schema(PDO $db): void
         ['chat_conversations', 'chat_conversations_owner', 'owner_type, owner_staff_id, status, updated_at'],
         ['chat_conversations', 'chat_conversations_visitor', 'visitor_id_hash, updated_at'],
         ['email_campaigns', 'email_campaigns_staff_owner', 'created_by_staff_id, id'],
+        ['email_activity', 'email_activity_sender_staff', 'sender_staff_id, id'],
         ['email_activity', 'email_activity_thread_root', 'thread_root_message_id(190), id'],
     ] as [$table, $index, $columns]) {
         $indexExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?');
@@ -1649,11 +1652,12 @@ function data_campaign_process_batch(array $settings, int $limit = 10, ?int $cam
         $htmlBody = substr(data_campaign_html($formattedMessage), 0, -14) . $openPixel . '</body></html>';
         $activityId = null;
         try {
-            $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status) VALUES (?, ?, ?, ?)')->execute([
+            $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, sender_staff_id) VALUES (?, ?, ?, ?, ?)')->execute([
                 (string) $recipient['recipient_email'],
                 $subject,
                 data_mail_encrypt_content($message . "\n\n---\nTo stop receiving marketing emails, unsubscribe here:\n" . $unsubscribeUrl),
                 'Queued',
+                $recipient['campaign_staff_id'] === null ? null : (int) $recipient['campaign_staff_id'],
             ]);
             $activityId = $db->lastInsertId();
             data_mail_send(
@@ -3635,7 +3639,7 @@ if (in_array($resource, [
         if (count($cc) + count($bcc) > 20) {
             data_respond(400, ['error' => 'too_many_recipients', 'message' => 'Use no more than 20 total CC and BCC addresses.']);
         }
-        $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
+        $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, cc, bcc, thread_headers, attachments, sender_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute([
             $recipient,
             $subject,
             data_mail_encrypt_content($message),
@@ -3644,6 +3648,7 @@ if (in_array($resource, [
             data_mail_encrypt_content(json_encode($bcc, JSON_UNESCAPED_SLASHES) ?: '[]'),
             data_mail_encrypt_content(json_encode($threadHeaders, JSON_UNESCAPED_SLASHES) ?: '{}'),
             data_mail_encrypt_content(json_encode($attachments, JSON_UNESCAPED_SLASHES) ?: '[]'),
+            $isOperator ? (int) ($_SESSION['staff_id'] ?? 0) : null,
         ]);
         $activityId = $db->lastInsertId();
         try {
@@ -4630,6 +4635,96 @@ if ($method === 'GET') {
                 'status' => $lead['status'],
                 'createdAt' => $lead['created_at'],
             ], $assignedLeads->fetchAll());
+            $presenceQuery = $db->prepare(
+                'SELECT session_started_at, last_seen_at, current_section
+                 FROM staff_presence WHERE staff_id = ? LIMIT 1'
+            );
+            $presenceQuery->execute([$staffId]);
+            $presence = $presenceQuery->fetch();
+            $now = time();
+            $sessionStartedAt = is_array($presence) ? (string) $presence['session_started_at'] : null;
+            $lastSeenAt = is_array($presence) ? (string) $presence['last_seen_at'] : null;
+            $sessionStartedTimestamp = $sessionStartedAt !== null ? strtotime($sessionStartedAt . ' UTC') : false;
+            $lastSeenTimestamp = $lastSeenAt !== null ? strtotime($lastSeenAt . ' UTC') : false;
+            $isOnline = (bool) $staffProfile['is_active']
+                && $lastSeenTimestamp !== false
+                && $lastSeenTimestamp >= $now - 90;
+            $staffProfile['presence'] = [
+                'online' => $isOnline,
+                'durationSeconds' => $isOnline && $sessionStartedTimestamp !== false
+                    ? max(0, $now - $sessionStartedTimestamp)
+                    : 0,
+                'lastSessionDurationSeconds' => !$isOnline && $sessionStartedTimestamp !== false && $lastSeenTimestamp !== false
+                    ? max(0, $lastSeenTimestamp - $sessionStartedTimestamp)
+                    : 0,
+                'sessionStartedAt' => $sessionStartedAt,
+                'lastSeenAt' => $lastSeenAt,
+                'currentSection' => $isOnline ? $presence['current_section'] : null,
+            ];
+            $emailActivity = $db->prepare(
+                'SELECT id, recipient_email, subject, body, status, sent_at
+                 FROM email_activity WHERE sender_staff_id = ? ORDER BY id DESC LIMIT 100'
+            );
+            $emailActivity->execute([$staffId]);
+            $staffProfile['sentEmails'] = array_map(static function (array $email): array {
+                return [
+                    'id' => (int) $email['id'],
+                    'recipientEmail' => $email['recipient_email'],
+                    'subject' => $email['subject'],
+                    'bodyPreview' => substr(data_campaign_plain_text(data_mail_decrypt_content($email['body'])), 0, 360),
+                    'status' => $email['status'],
+                    'sentAt' => $email['sent_at'],
+                ];
+            }, $emailActivity->fetchAll());
+            $staffActivity = $db->prepare(
+                "SELECT a.id, a.action, a.entity_type, a.entity_id, a.details, a.created_at,
+                        o.order_number, o.customer_name, o.total_amount, o.status AS order_status
+                 FROM admin_audit_log a
+                 LEFT JOIN orders o ON a.entity_type = 'order' AND a.entity_id = o.id
+                 WHERE LOWER(a.actor_email) = LOWER(?)
+                    OR (a.entity_type = 'staff' AND a.entity_id = ?)
+                    OR LOWER(CASE WHEN JSON_VALID(a.details)
+                        THEN JSON_UNQUOTE(JSON_EXTRACT(a.details, '$.actingAs'))
+                        ELSE NULL END) = LOWER(?)
+                 ORDER BY a.id DESC LIMIT 100"
+            );
+            $staffActivity->execute([(string) $staffProfile['email'], (string) $staffId, (string) $staffProfile['email']]);
+            $staffProfile['activity'] = array_map(static function (array $activity): array {
+                return [
+                    'id' => (int) $activity['id'],
+                    'action' => $activity['action'],
+                    'entityType' => $activity['entity_type'],
+                    'entityId' => $activity['entity_id'],
+                    'details' => $activity['details'] === null ? null : json_decode($activity['details'], true),
+                    'createdAt' => $activity['created_at'],
+                    'order' => $activity['order_number'] === null ? null : [
+                        'orderNumber' => $activity['order_number'],
+                        'customerName' => $activity['customer_name'],
+                        'totalAmount' => (float) $activity['total_amount'],
+                        'status' => $activity['order_status'],
+                    ],
+                ];
+            }, $staffActivity->fetchAll());
+            $leadActivities = $db->prepare(
+                'SELECT id, lead_id, activity_type, created_at
+                 FROM lead_activities WHERE LOWER(author_email) = LOWER(?) ORDER BY id DESC LIMIT 100'
+            );
+            $leadActivities->execute([(string) $staffProfile['email']]);
+            foreach ($leadActivities->fetchAll() as $activity) {
+                $staffProfile['activity'][] = [
+                    'id' => 'lead-' . (int) $activity['id'],
+                    'action' => 'lead.activity_' . $activity['activity_type'],
+                    'entityType' => 'lead',
+                    'entityId' => (string) $activity['lead_id'],
+                    'details' => null,
+                    'createdAt' => $activity['created_at'],
+                    'order' => null,
+                ];
+            }
+            usort($staffProfile['activity'], static fn (array $left, array $right): int =>
+                strcmp((string) $right['createdAt'], (string) $left['createdAt'])
+            );
+            $staffProfile['activity'] = array_slice($staffProfile['activity'], 0, 150);
             data_respond(200, ['profile' => $staffProfile]);
         }
         $rows = $db->query(
