@@ -1347,6 +1347,11 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     placeholder="Write your email message…"
                     className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
+                  {role !== 'admin' && (
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      Agent email is sent only to this lead. Additional recipients, attachments, email addresses, and phone numbers are not allowed.
+                    </p>
+                  )}
                 </div>
 
                 {!profile.lead.marketingConsent && (

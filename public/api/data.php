@@ -2096,6 +2096,12 @@ function data_mask_contact_phone(string $phone): string
     return $prefix . substr($digits, 0, 2) . str_repeat('*', max(5, strlen($digits) - 4)) . substr($digits, -2);
 }
 
+function data_contains_contact_details(string $text): bool
+{
+    return preg_match('/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i', $text) === 1
+        || preg_match('/(?<![A-Za-z0-9])\+?\d(?:[\s().-]*\d){6,}(?![A-Za-z0-9])/', $text) === 1;
+}
+
 function data_lead_row(array $row): array
 {
     $email = (string) $row['email'];
@@ -3322,7 +3328,11 @@ if (in_array($resource, [
         data_require_permission('integrations');
         $body = data_read_json(6 * 1024 * 1024);
         $db = data_db();
+        $isOperator = ($_SESSION['admin_role'] ?? '') !== 'admin';
         $leadIdValue = $body['leadId'] ?? null;
+        if ($isOperator && $leadIdValue === null) {
+            data_respond(403, ['error' => 'lead_recipient_required', 'message' => 'Agents can only email an assigned lead from that lead’s profile.']);
+        }
         if ($leadIdValue !== null) {
             $leadId = filter_var($leadIdValue, FILTER_VALIDATE_INT);
             if ($leadId === false || $leadId < 1) {
@@ -3347,6 +3357,19 @@ if (in_array($resource, [
         $message = $body['body'] ?? null;
         if (!is_string($message) || trim($message) === '' || strlen($message) > 24000) {
             data_respond(400, ['error' => 'invalid_email_content', 'message' => 'Enter a message of 24,000 bytes or less.']);
+        }
+        if ($isOperator) {
+            $ccValue = $body['cc'] ?? '';
+            $bccValue = $body['bcc'] ?? '';
+            $attachmentsValue = $body['attachments'] ?? [];
+            if (!is_string($ccValue) || trim($ccValue) !== ''
+                || !is_string($bccValue) || trim($bccValue) !== ''
+                || !is_array($attachmentsValue) || $attachmentsValue !== []) {
+                data_respond(403, ['error' => 'agent_email_restrictions', 'message' => 'Agent emails cannot include additional recipients or attachments.']);
+            }
+            if (data_contains_contact_details($subject . "\n" . $message)) {
+                data_respond(400, ['error' => 'contact_details_not_allowed', 'message' => 'Agent emails cannot include email addresses or phone-number-like contact details in the subject or message.']);
+            }
         }
         if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
             data_respond(400, ['error' => 'invalid_recipient', 'message' => 'Enter a valid recipient email address.']);
