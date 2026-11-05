@@ -1428,7 +1428,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                       <div className="border-t border-slate-100 pt-4">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Status change history</h3>
-                        <div className="mt-3 space-y-3">
+                        <div className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-2">
                           {profile.activities
                             .filter((activity) => activity.type === 'status_change')
                             .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -1474,7 +1474,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
                       <div className="border-t border-slate-100 pt-4">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assignment history</h3>
-                        <div className="mt-3 space-y-3">
+                        <div className="mt-3 max-h-64 space-y-3 overflow-y-auto pr-2">
                           {profile.activities
                             .filter((activity) => activity.type === 'assignment_change')
                             .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
