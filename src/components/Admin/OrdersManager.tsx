@@ -1399,7 +1399,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <X className="h-5 w-5" />
               </button>
             </header>
-            <div className="payment-modal-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain bg-slate-50/70 p-5">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain bg-slate-50/70 p-5">
               <label htmlFor="order-payment-link-type" className="block text-xs font-semibold text-slate-800">
                 Payment link type
                 <select
