@@ -948,7 +948,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
             {/* Modal Body */}
             <div className={orderPageId ? 'grid grid-cols-1 items-start gap-5 text-xs lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.9fr)]' : 'p-6 overflow-y-auto space-y-6 text-xs'}>
-              <div className={orderPageId ? 'lg:col-start-2 lg:row-start-1' : 'contents'}>
+              <div className={orderPageId ? 'space-y-5 lg:col-start-2' : 'contents'}>
               {/* Top Details Grid */}
               <div className={orderPageId ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
                 {/* Customer Info */}
@@ -1034,6 +1034,40 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </div>
               </div>
               </div>
+
+              {orderPageId && (
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <span className="font-bold text-slate-800 text-xs block">Internal Staff Notes</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newInternalNote}
+                      onChange={(e) => setNewInternalNote(e.target.value)}
+                      placeholder="Fulfillment note only; do not include clinical or health details"
+                      maxLength={2000}
+                      className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddNote}
+                      disabled={isSavingNote || !newInternalNote.trim()}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+                    >
+                      {isSavingNote ? 'Saving…' : 'Add Note'}
+                    </button>
+                  </div>
+
+                  {selectedOrder.internalNotes && selectedOrder.internalNotes.length > 0 && (
+                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-1.5">
+                      {selectedOrder.internalNotes.map((note, idx) => (
+                        <p key={idx} className="text-[11px] text-slate-600 border-b border-slate-200/60 pb-1 last:border-0 last:pb-0">
+                          {note}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className={orderPageId ? 'space-y-5 lg:col-start-1 lg:row-start-1' : 'contents'}>
               {/* Items List */}
@@ -1154,7 +1188,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
               </div>
 
               {/* Internal Notes Log */}
-              <div className={orderPageId ? 'space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-start-2 lg:row-start-2' : 'space-y-2'}>
+              {!orderPageId && <div className="space-y-2">
                 <span className="font-bold text-slate-800 text-xs block">Internal Staff Notes</span>
                 <div className="flex gap-2">
                   <input
@@ -1184,7 +1218,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     ))}
                   </div>
                 )}
-              </div>
+              </div>}
             </div>
           </div>
         </div>
