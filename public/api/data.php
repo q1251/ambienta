@@ -5274,24 +5274,35 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     if (!array_key_exists($emailTemplate, $paymentEmailTemplates)) {
         data_respond(400, ['error' => 'invalid_email_template', 'message' => 'Choose a supported payment email template.']);
     }
-    $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
-    $qrCodeDataUrl = data_string($body, 'qrCodeDataUrl', 100000);
-    if (!preg_match('/^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/', $qrCodeDataUrl, $qrMatch)) {
-        data_respond(400, ['error' => 'invalid_payment_qr', 'message' => 'A valid payment QR code could not be generated.']);
+    $emailDesign = data_string($body, 'emailDesign', 16, false);
+    if ($emailDesign === '') {
+        $emailDesign = 'card';
     }
-    $qrCodeImage = base64_decode($qrMatch[1], true);
-    $qrDimensions = is_string($qrCodeImage) && strlen($qrCodeImage) >= 24
-        ? unpack('Nwidth/Nheight', substr($qrCodeImage, 16, 8))
-        : false;
-    if (!is_string($qrCodeImage)
-        || substr($qrCodeImage, 0, 8) !== "\x89PNG\r\n\x1a\n"
-        || !is_array($qrDimensions)
-        || $qrDimensions['width'] < 100
-        || $qrDimensions['width'] > 512
-        || $qrDimensions['height'] < 100
-        || $qrDimensions['height'] > 512
-    ) {
-        data_respond(400, ['error' => 'invalid_payment_qr', 'message' => 'The payment QR code image is invalid.']);
+    if (!in_array($emailDesign, ['card', 'plain'], true)) {
+        data_respond(400, ['error' => 'invalid_email_design', 'message' => 'Choose either the designed card or plain email layout.']);
+    }
+    $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
+    $qrCodeImage = '';
+    if ($emailDesign === 'card') {
+        $qrCodeDataUrl = data_string($body, 'qrCodeDataUrl', 100000);
+        if (!preg_match('/^data:image\/png;base64,([A-Za-z0-9+\/=]+)$/', $qrCodeDataUrl, $qrMatch)) {
+            data_respond(400, ['error' => 'invalid_payment_qr', 'message' => 'A valid payment QR code could not be generated.']);
+        }
+        $decodedQrCodeImage = base64_decode($qrMatch[1], true);
+        $qrDimensions = is_string($decodedQrCodeImage) && strlen($decodedQrCodeImage) >= 24
+            ? unpack('Nwidth/Nheight', substr($decodedQrCodeImage, 16, 8))
+            : false;
+        if (!is_string($decodedQrCodeImage)
+            || substr($decodedQrCodeImage, 0, 8) !== "\x89PNG\r\n\x1a\n"
+            || !is_array($qrDimensions)
+            || $qrDimensions['width'] < 100
+            || $qrDimensions['width'] > 512
+            || $qrDimensions['height'] < 100
+            || $qrDimensions['height'] > 512
+        ) {
+            data_respond(400, ['error' => 'invalid_payment_qr', 'message' => 'The payment QR code image is invalid.']);
+        }
+        $qrCodeImage = $decodedQrCodeImage;
     }
 
     $settings = data_mail_settings();
@@ -5487,13 +5498,13 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
                 [],
                 [],
                 [],
-                $htmlBody,
-                [[
+                $emailDesign === 'card' ? $htmlBody : null,
+                $emailDesign === 'card' ? [[
                     'contentType' => 'image/png',
                     'name' => 'payment-qr.png',
                     'contentId' => 'ambienta-payment-qr',
                     'content' => $qrCodeImage,
-                ]]
+                ]] : []
             );
         } catch (Throwable $error) {
             $db->prepare('UPDATE email_activity SET status = ? WHERE id = ?')->execute(['Failed', $activityId]);
@@ -5527,6 +5538,7 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             'orderNumber' => $order['order_number'],
             'paymentMethod' => $order['payment_method'],
             'previewOnly' => $previewOnly,
+            'emailDesign' => $emailDesign,
             'recipient' => $recipient,
         ]);
         $db->commit();

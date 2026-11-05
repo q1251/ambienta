@@ -92,6 +92,7 @@ type PaymentEmailTemplate =
   | 'payment_reminder_final'
   | 'payment_link_updated';
 
+type PaymentEmailDesign = 'card' | 'plain';
 type PaymentLinkType = 'provider' | 'paypal' | 'crypto_wallet' | 'custom';
 type CryptoAsset = 'BTC' | 'ETH' | 'USDT';
 type CryptoNetwork = 'Bitcoin' | 'Ethereum (ERC-20)' | 'TRON (TRC-20)';
@@ -177,6 +178,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [paymentCryptoNetwork, setPaymentCryptoNetwork] = useState<CryptoNetwork>('Bitcoin');
   const [paymentQrPreview, setPaymentQrPreview] = useState('');
   const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<PaymentEmailTemplate>('payment_request');
+  const [paymentEmailDesign, setPaymentEmailDesign] = useState<PaymentEmailDesign>('card');
   const [paymentEmailNote, setPaymentEmailNote] = useState('');
   const [isPaymentEmailModalOpen, setIsPaymentEmailModalOpen] = useState(false);
   const [paymentEmailError, setPaymentEmailError] = useState('');
@@ -284,7 +286,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   useEffect(() => {
     let active = true;
     const payload = paymentLinkInput.trim();
-    if (!isPaymentEmailModalOpen || !payload) {
+    if (!isPaymentEmailModalOpen || paymentEmailDesign !== 'card' || !payload) {
       setPaymentQrPreview('');
       return () => { active = false; };
     }
@@ -302,7 +304,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       }
     });
     return () => { active = false; };
-  }, [isPaymentEmailModalOpen, paymentLinkInput]);
+  }, [isPaymentEmailModalOpen, paymentLinkInput, paymentEmailDesign]);
 
   useEffect(() => {
     const syncOrderPage = () => {
@@ -436,12 +438,14 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
     setIsSendingPaymentLink(true);
     try {
       const qrPayload = previewOnly ? 'https://example.invalid/demo-payment' : paymentLinkInput.trim();
-      const qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
-        errorCorrectionLevel: 'M',
-        margin: 2,
-        width: 240,
-        color: { dark: '#102d2a', light: '#ffffff' },
-      });
+      const qrCodeDataUrl = paymentEmailDesign === 'card'
+        ? await QRCode.toDataURL(qrPayload, {
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          width: 240,
+          color: { dark: '#102d2a', light: '#ffffff' },
+        })
+        : undefined;
       const response = await fetch('/api/data.php?resource=order-payment-link', {
         method: 'POST',
         credentials: 'same-origin',
@@ -455,6 +459,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           paymentCryptoNetwork,
           qrCodeDataUrl,
           emailTemplate: paymentEmailTemplate,
+          emailDesign: paymentEmailDesign,
           additionalMessage: paymentEmailNote.trim(),
           previewOnly,
         }),
@@ -1502,16 +1507,33 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   ))}
                 </select>
               </label>
+              <label htmlFor="order-payment-email-design" className="block text-xs font-semibold text-slate-800">
+                Email design
+                <select
+                  id="order-payment-email-design"
+                  value={paymentEmailDesign}
+                  onChange={(event) => setPaymentEmailDesign(event.target.value as PaymentEmailDesign)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                >
+                  <option value="card">Designed card with QR code</option>
+                  <option value="plain">Plain email (no card design)</option>
+                </select>
+                <span className="mt-1 block font-normal text-slate-500">
+                  {paymentEmailDesign === 'card'
+                    ? 'Uses the branded card layout and includes a payment QR code.'
+                    : 'Sends a simple text-only email without the card design or QR image.'}
+                </span>
+              </label>
               <details className="rounded-xl border border-slate-200 bg-slate-50">
                 <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-slate-700">
                   Preview selected template
                 </summary>
                 <div className="border-t border-slate-200 p-4">
                   <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Email body preview</p>
-                  <div className="space-y-3 rounded-lg bg-white p-4 text-xs leading-5 text-slate-700 shadow-sm">
+                  <div className={`space-y-3 text-xs leading-5 text-slate-700 ${paymentEmailDesign === 'card' ? 'rounded-lg bg-white p-4 shadow-sm' : 'px-1 py-2'}`}>
                     <p>Hello {selectedOrder.patientName},</p>
                     <p>{paymentEmailTemplates[paymentEmailTemplate].intro(selectedOrder.orderNumber)}</p>
-                    <div className="rounded-lg border border-slate-200 p-3">
+                    <div className={paymentEmailDesign === 'card' ? 'rounded-lg border border-slate-200 p-3' : 'space-y-1'}>
                       <p className="font-semibold text-slate-900">Order summary</p>
                       <p>Order: {selectedOrder.orderNumber}</p>
                       <p>Payment method: {paymentLinkType === 'crypto_wallet'
@@ -1531,7 +1553,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       : paymentLinkType === 'paypal'
                         ? 'Continue to PayPal using the link below and confirm the order total before approving payment.'
                         : paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
-                    <p className="font-semibold text-teal-800">
+                    <p className={paymentEmailDesign === 'card' ? 'font-semibold text-teal-800' : 'break-all text-teal-800 underline'}>
                       {paymentLinkInput.trim()
                         ? paymentLinkType === 'crypto_wallet'
                           ? `${paymentCryptoAsset} wallet address (${paymentCryptoNetwork}): ${paymentLinkInput.trim()}`
@@ -1540,7 +1562,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                             : `${paymentLinkType === 'paypal' ? 'PayPal link' : 'Payment provider link'}: ${paymentLinkInput.trim()}`
                         : '[Payment link or wallet address appears here]'}
                     </p>
-                    {paymentQrPreview && (
+                    {paymentEmailDesign === 'card' && paymentQrPreview && (
                       <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
                         <img src={paymentQrPreview} alt="Locally generated payment QR preview" className="h-20 w-20 rounded-md border border-slate-200 bg-white p-1" />
                         <p className="text-[11px] leading-5 text-slate-600">
