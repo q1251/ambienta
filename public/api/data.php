@@ -1580,6 +1580,7 @@ function data_campaign_process_batch(array $settings, int $limit = 10, ?int $cam
             $sql =
                 "SELECT r.id, r.campaign_id, r.lead_id, r.recipient_email, r.unsubscribe_token,
                         r.open_token, c.subject, c.body, c.track_opens,
+                        c.created_by_staff_id AS campaign_staff_id,
                         l.first_name, l.last_name, l.country,
                         c.status AS campaign_status
                  FROM email_campaign_recipients r
@@ -1615,11 +1616,18 @@ function data_campaign_process_batch(array $settings, int $limit = 10, ?int $cam
         }
 
         $processed++;
-        $consent = $db->prepare('SELECT marketing_consent FROM leads WHERE id = ? AND LOWER(TRIM(email)) = LOWER(?)');
+        $consent = $db->prepare('SELECT marketing_consent, assigned_staff_id FROM leads WHERE id = ? AND LOWER(TRIM(email)) = LOWER(?)');
         $consent->execute([(int) $recipient['lead_id'], (string) $recipient['recipient_email']]);
-        if ((int) $consent->fetchColumn() !== 1) {
+        $leadEligibility = $consent->fetch();
+        if (!is_array($leadEligibility) || (int) $leadEligibility['marketing_consent'] !== 1) {
             $db->prepare("UPDATE email_campaign_recipients SET status = 'unsubscribed' WHERE id = ?")->execute([(int) $recipient['id']]);
             $unsubscribed++;
+            continue;
+        }
+        if ($recipient['campaign_staff_id'] !== null
+            && (int) $leadEligibility['assigned_staff_id'] !== (int) $recipient['campaign_staff_id']) {
+            $db->prepare("UPDATE email_campaign_recipients SET status = 'failed' WHERE id = ?")->execute([(int) $recipient['id']]);
+            $failed++;
             continue;
         }
 
