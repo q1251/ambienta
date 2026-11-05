@@ -291,6 +291,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const showErrorMessage = errorMessage !== 'A valid agent account is required to manage email campaigns.';
 
   useEffect(() => {
     if (mode === 'mailbox' && settings.verified) {
@@ -1095,7 +1096,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </span>
         </div>
 
-        {errorMessage && (
+        {showErrorMessage && errorMessage && (
           <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>
         )}
         {successMessage && (
@@ -1211,7 +1212,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         </div>
 
         <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
-          {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
+          {showErrorMessage && errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
@@ -1296,7 +1297,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(messageBody) || '(message preview)'}</p>
                   )}
                 </details>
-                <p className="mt-1 text-xs text-amber-700">Do not include medical or other sensitive health information in email.</p>
               </div>
               {role === 'admin' && <div>
                 <label htmlFor="mail-attachments" className="mb-1 block text-sm font-medium text-slate-700">Attachments</label>
@@ -1733,7 +1733,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       ))}
                     </div>
                     <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} rows={8} required onChange={(event) => setCampaignBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                    <p className="mt-1 text-xs text-slate-500">Supports bold and italic formatting. Every campaign includes unsubscribe links and one-click unsubscribe headers. Do not include sensitive health information.</p>
+                    <p className="mt-1 text-xs text-slate-500">Supports bold and italic formatting. Every campaign includes unsubscribe links and one-click unsubscribe headers.</p>
                   </div>
                   <details className="rounded-lg border border-slate-200 p-3">
                     <summary className="cursor-pointer text-sm font-semibold text-slate-700">Preview with sample recipient</summary>

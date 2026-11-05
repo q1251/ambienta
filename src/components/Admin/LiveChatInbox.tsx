@@ -514,7 +514,6 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                 ) : (
                   <p className="rounded-xl bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">This chat is closed. Reopen it to send another reply.</p>
                 )}
-                <p className="mt-2 text-[10px] text-slate-400">Messages are plain text. Avoid including sensitive customer or health information.</p>
               </footer>
             </>
           )}
