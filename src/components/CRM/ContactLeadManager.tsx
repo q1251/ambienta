@@ -58,7 +58,9 @@ type NewLead = ContactLeadInput;
 interface ContactLeadManagerProps {
   role?: 'admin' | 'operator';
   canSendEmail?: boolean;
-  canCreateLeads?: boolean;
+  canAddContacts?: boolean;
+  canImportContacts?: boolean;
+  canExportContacts?: boolean;
   leads: ContactLead[];
   dataError?: string;
   onOpenEmailCampaigns?: () => void;
@@ -88,7 +90,9 @@ const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; b
 export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   role,
   canSendEmail = false,
-  canCreateLeads = false,
+  canAddContacts = false,
+  canImportContacts = false,
+  canExportContacts = false,
   leads,
   dataError,
   onOpenEmailCampaigns,
@@ -177,7 +181,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const profileRequestId = useRef(0);
   const initialProfileLoadStarted = useRef(false);
   const isSuperadmin = role === 'admin';
-  const canAddContacts = isSuperadmin || canCreateLeads;
+  const canAddContactsForRole = isSuperadmin || canAddContacts;
+  const canImportContactsForRole = isSuperadmin || canImportContacts;
+  const canExportContactsForRole = isSuperadmin || canExportContacts;
   const canEditSelectedLead = isSuperadmin || profile?.lead.assignedStaffId != null;
 
   // Load staff agents for assignment
@@ -329,8 +335,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   };
 
   const save = async (rows: NewLead[]) => {
-    if (!canAddContacts) {
-      setRequestError('You do not have permission to add or import contacts.');
+    const hasImportRows = rows.some((row) => row.leadSource === 'CSV Upload');
+    const hasManualRows = rows.some((row) => row.leadSource !== 'CSV Upload');
+    if ((hasImportRows && !canImportContactsForRole) || (hasManualRows && !canAddContactsForRole)) {
+      setRequestError(hasImportRows && !canImportContactsForRole
+        ? 'You do not have permission to import contacts.'
+        : 'You do not have permission to add contacts.');
       return;
     }
     setSaving(true);
@@ -375,7 +385,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   };
 
   const downloadContacts = (contactsToExport = filteredLeads) => {
-    if (!canAddContacts) {
+    if (!canExportContactsForRole) {
       setRequestError('You do not have permission to export contacts.');
       return;
     }
@@ -1523,7 +1533,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
           {/* Action Buttons: Add, Import, Export, View Toggle */}
           <div className="flex flex-wrap items-center gap-2">
-            {canAddContacts && <button
+            {canAddContactsForRole && <button
               type="button"
               onClick={() => {
                 setRequestError('');
@@ -1533,7 +1543,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             >
               <UserPlus className="h-4 w-4" /> Add contact
             </button>}
-            {canAddContacts && <button
+            {canImportContactsForRole && <button
               type="button"
               onClick={() => {
                 setRequestError('');
@@ -1543,7 +1553,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             >
               <Upload className="h-4 w-4" /> Import CSV
             </button>}
-            {canAddContacts && <button
+            {canExportContactsForRole && <button
               type="button"
               onClick={() => downloadContacts(filteredLeads)}
               disabled={!filteredLeads.length}
@@ -1701,7 +1711,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </label>
               )}
 
-              {canAddContacts && <button
+              {canExportContactsForRole && <button
                 type="button"
                 onClick={() => {
                   const selectedContacts = leads.filter((l) => selectedLeadIds.includes(l.id));
@@ -2063,7 +2073,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       )}
 
       {/* CSV & MANUAL ADD MODAL */}
-      {mode && canAddContacts && (
+      {mode && (mode === 'manual' ? canAddContactsForRole : canImportContactsForRole) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"
           onMouseDown={(e) => {

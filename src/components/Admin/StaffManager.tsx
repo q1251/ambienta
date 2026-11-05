@@ -4,13 +4,18 @@ import { ArrowLeft, CalendarDays, KeyRound, LogIn, UserPlus, Users, UserX } from
 const availablePermissions = [
   { id: 'leads', label: 'Assigned leads' },
   { id: 'new_leads', label: 'View unassigned new leads' },
-  { id: 'create_leads', label: 'Add/import/export contacts' },
+  { id: 'add_leads', label: 'Add contacts' },
+  { id: 'import_leads', label: 'Import contacts (CSV)' },
+  { id: 'export_leads', label: 'Export contacts (CSV)' },
   { id: 'orders', label: 'Orders' },
   { id: 'products', label: 'Products & stock' },
   { id: 'integrations', label: 'Integrations' },
   { id: 'chat', label: 'Live chat' },
 ] as const;
 type StaffPermission = (typeof availablePermissions)[number]['id'];
+const permissionRequiresLeads = (permission: StaffPermission) =>
+  permission === 'new_leads' || permission === 'add_leads'
+  || permission === 'import_leads' || permission === 'export_leads';
 
 interface StaffAccount {
   id: number;
@@ -129,9 +134,10 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
   }, []);
 
   const togglePermission = (current: StaffPermission[], permission: StaffPermission, update: (next: StaffPermission[]) => void) => {
-    if ((permission === 'new_leads' || permission === 'create_leads') && !current.includes('leads')) return;
+    if (permissionRequiresLeads(permission) && !current.includes('leads')) return;
     if (permission === 'leads' && current.includes('leads')) {
-      update(current.filter((value) => value !== 'leads' && value !== 'new_leads' && value !== 'create_leads'));
+      update(current.filter((value) => value !== 'leads' && value !== 'new_leads'
+        && value !== 'add_leads' && value !== 'import_leads' && value !== 'export_leads'));
       return;
     }
     update(current.includes(permission) ? current.filter((value) => value !== permission) : [...current, permission]);
@@ -551,7 +557,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={(permission.id === 'new_leads' || permission.id === 'create_leads') && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-blue-800" />
+                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={permissionRequiresLeads(permission.id) && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-blue-800" />
                       {permission.label}
                     </label>
                   ))}
@@ -611,7 +617,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={(permission.id === 'new_leads' || permission.id === 'create_leads') && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-blue-800" />
+                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={permissionRequiresLeads(permission.id) && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-blue-800" />
                       {permission.label}
                     </label>
                   ))}

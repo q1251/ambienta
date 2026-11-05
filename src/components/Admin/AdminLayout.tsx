@@ -54,7 +54,7 @@ interface AdminLayoutProps {
     role: 'operator';
     email: string;
     displayName: string;
-    permissions: Array<'leads' | 'new_leads' | 'create_leads' | 'orders' | 'products' | 'integrations' | 'chat'>;
+    permissions: Array<'leads' | 'new_leads' | 'add_leads' | 'import_leads' | 'export_leads' | 'orders' | 'products' | 'integrations' | 'chat'>;
     impersonating: true;
     impersonatedBy: string;
   }) => void;
@@ -378,7 +378,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             )}
             {activeTab === 'leads' && (
               <Suspense fallback={<p role="status" className="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">Loading contact leads…</p>}>
-                <ContactLeadManager role={props.role} canSendEmail={props.role === 'admin' || props.permissions.includes('integrations')} canCreateLeads={props.role === 'admin' || props.permissions.includes('create_leads')} leads={props.leads} dataError={props.leadDataError} onOpenEmailCampaigns={props.role === 'admin' ? openEmailCampaigns : undefined} onSaveLeads={props.onSaveLeads} onLoadLeadProfile={props.onLoadLeadProfile} onUpdateLead={props.onUpdateLead} onAddLeadActivity={props.onAddLeadActivity} />
+                <ContactLeadManager
+                  role={props.role}
+                  canSendEmail={props.role === 'admin' || props.permissions.includes('integrations')}
+                  canAddContacts={props.permissions.includes('add_leads')}
+                  canImportContacts={props.permissions.includes('import_leads')}
+                  canExportContacts={props.permissions.includes('export_leads')}
+                  leads={props.leads}
+                  dataError={props.leadDataError}
+                  onOpenEmailCampaigns={props.role === 'admin' ? openEmailCampaigns : undefined}
+                  onSaveLeads={props.onSaveLeads}
+                  onLoadLeadProfile={props.onLoadLeadProfile}
+                  onUpdateLead={props.onUpdateLead}
+                  onAddLeadActivity={props.onAddLeadActivity}
+                />
               </Suspense>
             )}
             {activeTab === 'chat' && <LiveChatInbox role={props.role} />}

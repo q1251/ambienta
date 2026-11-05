@@ -734,10 +734,7 @@ function data_require_admin(string $requiredRole = 'operator'): void
         }
         $_SESSION['staff_id'] = (int) $staff['id'];
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
-        $permissions = json_decode((string) $staff['permissions'], true);
-        $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'], true)))
-            : [];
+        $_SESSION['admin_permissions'] = data_staff_permissions(json_decode((string) $staff['permissions'], true)) ?? [];
     }
     if ($requiredRole === 'admin' && $_SESSION['admin_role'] !== 'admin') {
         data_respond(403, ['error' => 'admin_required', 'message' => 'Administrator access is required for this action.']);
@@ -748,8 +745,12 @@ function data_require_admin(string $requiredRole = 'operator'): void
 function data_require_permission(string $permission): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) data_require_admin();
-    if (($_SESSION['admin_role'] ?? '') !== 'admin'
-        && !in_array($permission, $_SESSION['admin_permissions'] ?? [], true)) {
+    $hasPermission = in_array($permission, $_SESSION['admin_permissions'] ?? [], true);
+    if (!$hasPermission && in_array('create_leads', $_SESSION['admin_permissions'] ?? [], true)
+        && in_array($permission, ['add_leads', 'import_leads', 'export_leads'], true)) {
+        $hasPermission = true;
+    }
+    if (($_SESSION['admin_role'] ?? '') !== 'admin' && !$hasPermission) {
         data_respond(403, ['error' => 'permission_required', 'message' => 'Your account does not have access to this section.']);
     }
 }
@@ -775,14 +776,19 @@ function data_require_lead_access(PDO $db, int $leadId, bool $allowUnassignedNew
 
 function data_staff_permissions($permissions): ?array
 {
-    $validPermissions = ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'];
+    $validPermissions = ['leads', 'new_leads', 'create_leads', 'add_leads', 'import_leads', 'export_leads', 'orders', 'products', 'integrations', 'chat'];
     if (!is_array($permissions)) return null;
     foreach ($permissions as $permission) {
         if (!is_string($permission) || !in_array($permission, $validPermissions, true)) return null;
     }
     $permissions = array_values(array_unique($permissions));
-    if ((in_array('new_leads', $permissions, true) || in_array('create_leads', $permissions, true))
-        && !in_array('leads', $permissions, true)) return null;
+    if ((in_array('new_leads', $permissions, true) || in_array('create_leads', $permissions, true)
+        || in_array('add_leads', $permissions, true) || in_array('import_leads', $permissions, true)
+        || in_array('export_leads', $permissions, true)) && !in_array('leads', $permissions, true)) return null;
+    if (in_array('create_leads', $permissions, true)) {
+        $permissions = array_values(array_diff($permissions, ['create_leads']));
+        $permissions = array_merge($permissions, ['add_leads', 'import_leads', 'export_leads']);
+    }
     return $permissions;
 }
 
@@ -4060,10 +4066,7 @@ if ($method === 'POST' && $resource === 'staff-session') {
         $_SESSION['impersonated_email'] = (string) $staff['email'];
         $_SESSION['staff_id'] = (int) $staff['id'];
         $_SESSION['staff_session_version'] = (int) $staff['session_version'];
-        $permissions = json_decode((string) $staff['permissions'], true);
-        $_SESSION['admin_permissions'] = is_array($permissions)
-            ? array_values(array_filter($permissions, static fn ($permission): bool => is_string($permission) && in_array($permission, ['leads', 'new_leads', 'create_leads', 'orders', 'products', 'integrations', 'chat'], true)))
-            : [];
+        $_SESSION['admin_permissions'] = data_staff_permissions(json_decode((string) $staff['permissions'], true)) ?? [];
         $_SESSION['last_activity'] = time();
         data_respond(200, [
             'role' => 'operator',
@@ -6011,11 +6014,17 @@ if ($method === 'POST' && $resource === 'orders') {
 }
 
 if ($method === 'POST' && $resource === 'leads') {
-    data_require_permission('create_leads');
+    data_require_permission('leads');
     $body = data_read_json();
     $leads = $body['leads'] ?? null;
     if (!is_array($leads) || count($leads) < 1 || count($leads) > 500) {
         data_respond(400, ['error' => 'invalid_leads', 'message' => 'Provide between 1 and 500 contact leads.']);
+    }
+    foreach ($leads as $lead) {
+        if (!is_array($lead)) {
+            data_respond(400, ['error' => 'invalid_lead', 'message' => 'A submitted lead is invalid.']);
+        }
+        data_require_permission(($lead['leadSource'] ?? null) === 'CSV Upload' ? 'import_leads' : 'add_leads');
     }
 
     $db = data_db();
