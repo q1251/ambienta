@@ -5201,7 +5201,34 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
     if ($emailTemplate === '') {
         $emailTemplate = 'payment_request';
     }
-    if (!in_array($emailTemplate, ['payment_request', 'payment_reminder'], true)) {
+    $paymentEmailTemplates = [
+        'payment_request' => [
+            'subject' => 'Payment instructions',
+            'intro' => 'Thank you for your order. We have reviewed order %s; please complete payment to continue.',
+            'closing' => 'If you have questions, reply to this email and our team will be happy to help.',
+        ],
+        'payment_request_formal' => [
+            'subject' => 'Payment instructions',
+            'intro' => 'Your order %s has been reviewed. Please use the secure link below to submit the outstanding payment.',
+            'closing' => 'Please contact our team by replying to this email if you require assistance.',
+        ],
+        'payment_reminder' => [
+            'subject' => 'Payment reminder',
+            'intro' => 'This is a friendly reminder that payment for order %s is still outstanding.',
+            'closing' => 'If you have already paid, please disregard this reminder or reply to this email so our team can assist.',
+        ],
+        'payment_reminder_final' => [
+            'subject' => 'Final payment reminder',
+            'intro' => 'Our records show that payment for order %s is still outstanding. Please review and complete payment using the secure link below.',
+            'closing' => 'If you have already completed payment or need help, please reply to this email so our team can review your order.',
+        ],
+        'payment_link_updated' => [
+            'subject' => 'Updated payment link',
+            'intro' => 'Here is the updated secure payment link for order %s. Please use this link instead of any earlier payment link.',
+            'closing' => 'If you have already paid using an earlier link, please reply to this email so our team can verify your order.',
+        ],
+    ];
+    if (!array_key_exists($emailTemplate, $paymentEmailTemplates)) {
         data_respond(400, ['error' => 'invalid_email_template', 'message' => 'Choose a supported payment email template.']);
     }
     $additionalMessage = data_string($body, 'additionalMessage', 2000, false);
@@ -5245,22 +5272,17 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
             data_respond(409, ['error' => 'order_not_payable', 'message' => 'A payment link cannot be sent for a paid or cancelled order.']);
         }
 
-        $isReminder = $emailTemplate === 'payment_reminder';
+        $template = $paymentEmailTemplates[$emailTemplate];
         $subject = ($previewOnly ? '[DEMO PREVIEW] ' : '')
-            . ($isReminder ? 'Payment reminder for Ambient order ' : 'Payment instructions for Ambient order ')
-            . $order['order_number'];
+            . $template['subject'] . ' for Ambient order ' . $order['order_number'];
         $paymentInstructions = match ($order['payment_method']) {
             'Credit / Debit Card' => 'Complete your card payment using the secure provider link below. Enter payment details only on the provider checkout page; please do not reply to this email with card details.',
             'PayPal' => 'Use the secure provider link below to continue to PayPal and complete payment. Confirm the order total before approving the payment.',
             'Cryptocurrency (USDC / BTC / ETH / SOL)' => 'Use the secure provider link below to review the available cryptocurrency and network, then follow the provider checkout instructions. Confirm the selected asset and network before completing payment.',
             default => '',
         };
-        $intro = $isReminder
-            ? "This is a friendly reminder that payment for order {$order['order_number']} is still outstanding."
-            : "Thank you for your order. We have reviewed order {$order['order_number']}; please complete payment to continue.";
-        $closing = $isReminder
-            ? 'If you have already paid, please disregard this reminder or reply to this email so our team can assist.'
-            : 'If you have questions, reply to this email and our team will be happy to help.';
+        $intro = sprintf($template['intro'], $order['order_number']);
+        $closing = $template['closing'];
         $plainBody = "Hello {$order['customer_name']},\n\n"
             . $intro . "\n\n"
             . "ORDER SUMMARY\n"

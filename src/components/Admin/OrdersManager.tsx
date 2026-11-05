@@ -84,6 +84,41 @@ const paymentInstructionsForMethod = (method: string): string => {
   return 'Use the secure provider link to review the available cryptocurrency and network, then follow the provider checkout instructions.';
 };
 
+type PaymentEmailTemplate =
+  | 'payment_request'
+  | 'payment_request_formal'
+  | 'payment_reminder'
+  | 'payment_reminder_final'
+  | 'payment_link_updated';
+
+const paymentEmailTemplates: Record<PaymentEmailTemplate, { label: string; intro: (orderNumber: string) => string; closing: string }> = {
+  payment_request: {
+    label: 'Payment instructions — friendly',
+    intro: (orderNumber) => `Thank you for your order. We’ve reviewed order ${orderNumber}; please complete payment to continue.`,
+    closing: 'If you have questions, reply to this email and our team will be happy to help.',
+  },
+  payment_request_formal: {
+    label: 'Payment instructions — formal',
+    intro: (orderNumber) => `Your order ${orderNumber} has been reviewed. Please use the secure link below to submit the outstanding payment.`,
+    closing: 'Please contact our team by replying to this email if you require assistance.',
+  },
+  payment_reminder: {
+    label: 'Payment reminder — friendly',
+    intro: (orderNumber) => `This is a friendly reminder that payment for order ${orderNumber} is still outstanding.`,
+    closing: 'If you have already paid, please disregard this reminder or reply to this email so our team can assist.',
+  },
+  payment_reminder_final: {
+    label: 'Final payment reminder',
+    intro: (orderNumber) => `Our records show that payment for order ${orderNumber} is still outstanding. Please review and complete payment using the secure link below.`,
+    closing: 'If you have already completed payment or need help, please reply to this email so our team can review your order.',
+  },
+  payment_link_updated: {
+    label: 'Updated payment link',
+    intro: (orderNumber) => `Here is the updated secure payment link for order ${orderNumber}. Please use this link instead of any earlier payment link.`,
+    closing: 'If you have already paid using an earlier link, please reply to this email so our team can verify your order.',
+  },
+};
+
 const OrderStatusTag: React.FC<{
   order: OnlineOrder;
   disabled?: boolean;
@@ -131,7 +166,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [paymentLinkInput, setPaymentLinkInput] = useState('');
-  const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<'payment_request' | 'payment_reminder'>('payment_request');
+  const [paymentEmailTemplate, setPaymentEmailTemplate] = useState<PaymentEmailTemplate>('payment_request');
   const [paymentEmailNote, setPaymentEmailNote] = useState('');
   const [isPaymentEmailModalOpen, setIsPaymentEmailModalOpen] = useState(false);
   const [paymentEmailError, setPaymentEmailError] = useState('');
@@ -1311,22 +1346,19 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <select
                   id="order-payment-email-template"
                   value={paymentEmailTemplate}
-                  onChange={(event) => setPaymentEmailTemplate(event.target.value as 'payment_request' | 'payment_reminder')}
+                  onChange={(event) => setPaymentEmailTemplate(event.target.value as PaymentEmailTemplate)}
                   className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
                 >
-                  <option value="payment_request">Payment instructions — new order</option>
-                  <option value="payment_reminder">Payment reminder — follow-up</option>
+                  {Object.entries(paymentEmailTemplates).map(([value, template]) => (
+                    <option key={value} value={value}>{template.label}</option>
+                  ))}
                 </select>
               </label>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Email body preview</p>
                 <div className="space-y-3 rounded-lg bg-white p-4 text-xs leading-5 text-slate-700 shadow-sm">
                   <p>Hello {selectedOrder.patientName},</p>
-                  {paymentEmailTemplate === 'payment_request' ? (
-                    <p>Thank you for your order. We’ve reviewed order {selectedOrder.orderNumber}; please complete payment to continue.</p>
-                  ) : (
-                    <p>This is a friendly reminder that payment for order {selectedOrder.orderNumber} is still outstanding.</p>
-                  )}
+                  <p>{paymentEmailTemplates[paymentEmailTemplate].intro(selectedOrder.orderNumber)}</p>
                   <div className="rounded-lg border border-slate-200 p-3">
                     <p className="font-semibold text-slate-900">Order summary</p>
                     <p>Order: {selectedOrder.orderNumber}</p>
@@ -1338,9 +1370,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     {paymentLinkInput.trim() || '[Secure payment link appears here]'}
                   </p>
                   {paymentEmailNote.trim() && <p className="whitespace-pre-wrap">{paymentEmailNote}</p>}
-                  <p>{paymentEmailTemplate === 'payment_request'
-                    ? 'If you have questions, reply to this email and our team will be happy to help.'
-                    : 'If you have already paid, please disregard this reminder or reply to this email so our team can assist.'}</p>
+                  <p>{paymentEmailTemplates[paymentEmailTemplate].closing}</p>
                   <p>Warm regards,<br />Ambient</p>
                 </div>
               </div>
