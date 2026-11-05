@@ -44,7 +44,7 @@ export const AuditLogView: React.FC = () => {
     <section className="space-y-5">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-teal-800">
+          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-800">
             <ShieldCheck className="h-4 w-4" />
             <span>Administrative activity</span>
           </div>

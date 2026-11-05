@@ -263,7 +263,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
       {/* Top Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#315649]">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#1e40af]">
             <Clock className="h-3.5 w-3.5" />
             <span>Prescription Care &amp; Maintenance</span>
           </div>
@@ -280,7 +280,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
             type="button"
             onClick={handleRunScanAndDispatch}
             disabled={isScanning}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#27483e] px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#1f3b33] disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#1e40af] px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#123b68] disabled:opacity-50"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             <span>{isScanning ? 'Scanning schedules…' : 'Run cron scan'}</span>
@@ -300,15 +300,15 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
 
       {/* Notifications / Feedback */}
       {scanResult && (
-        <div className="flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50/70 p-3.5 text-xs text-teal-900">
+        <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/70 p-3.5 text-xs text-blue-900">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-700" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-700" />
             <span className="font-semibold">{scanResult}</span>
           </div>
           <button
             type="button"
             onClick={() => setScanResult(null)}
-            className="text-xs font-bold text-teal-800 hover:text-teal-950"
+            className="text-xs font-bold text-blue-800 hover:text-blue-950"
           >
             Dismiss
           </button>
@@ -316,15 +316,15 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
       )}
 
       {actionSuccess && (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-900">
+        <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-900">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-700" />
             <span className="font-semibold">{actionSuccess}</span>
           </div>
           <button
             type="button"
             onClick={() => setActionSuccess(null)}
-            className="text-xs font-bold text-emerald-800 hover:text-emerald-950"
+            className="text-xs font-bold text-blue-800 hover:text-blue-950"
           >
             Dismiss
           </button>
@@ -333,7 +333,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
 
       {/* Executive KPI Metric Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-[#e5e7e1] bg-white p-4 shadow-2xs">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Due within 7 days</span>
             <AlertCircle className="h-4 w-4 text-amber-600" />
@@ -342,25 +342,25 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           <p className="mt-1 text-[11px] text-amber-700 font-medium">Require proactive outreach</p>
         </div>
 
-        <div className="rounded-xl border border-[#e5e7e1] bg-white p-4 shadow-2xs">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Active Therapies</span>
-            <Pill className="h-4 w-4 text-[#315649]" />
+            <Pill className="h-4 w-4 text-[#1e40af]" />
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{totalPrescriptions}</p>
           <p className="mt-1 text-[11px] text-slate-500">{patients.length} active patients</p>
         </div>
 
-        <div className="rounded-xl border border-[#e5e7e1] bg-white p-4 shadow-2xs">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Automated Rules</span>
-            <Bell className="h-4 w-4 text-teal-600" />
+            <Bell className="h-4 w-4 text-blue-600" />
           </div>
           <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{activeRulesCount}</p>
-          <p className="mt-1 text-[11px] text-teal-700 font-medium">Cron triggers enabled</p>
+          <p className="mt-1 text-[11px] text-blue-700 font-medium">Cron triggers enabled</p>
         </div>
 
-        <div className="rounded-xl border border-[#e5e7e1] bg-white p-4 shadow-2xs">
+        <div className="rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs">
           <div className="flex items-center justify-between text-slate-500">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Queued Notices</span>
             <Mail className="h-4 w-4 text-purple-600" />
@@ -377,7 +377,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           onClick={() => setActiveSubTab('queue')}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
             activeSubTab === 'queue'
-              ? 'border-[#2d5244] text-[#224136]'
+              ? 'border-[#1d4ed8] text-[#1e40af]'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -390,7 +390,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           onClick={() => setActiveSubTab('rules')}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
             activeSubTab === 'rules'
-              ? 'border-[#2d5244] text-[#224136]'
+              ? 'border-[#1d4ed8] text-[#1e40af]'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -403,7 +403,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           onClick={() => setActiveSubTab('categories')}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
             activeSubTab === 'categories'
-              ? 'border-[#2d5244] text-[#224136]'
+              ? 'border-[#1d4ed8] text-[#1e40af]'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -416,7 +416,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           onClick={() => setActiveSubTab('logs')}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
             activeSubTab === 'logs'
-              ? 'border-[#2d5244] text-[#224136]'
+              ? 'border-[#1d4ed8] text-[#1e40af]'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -437,7 +437,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search patient, medication name, or Rx number..."
-                className="w-full rounded-lg border border-slate-200 bg-[#f9faf8] py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#315649] focus:bg-white focus:outline-none"
+                className="w-full rounded-lg border border-slate-200 bg-[#f8fafc] py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-[#1e40af] focus:bg-white focus:outline-none"
               />
             </div>
 
@@ -477,10 +477,10 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           </div>
 
           {/* Table */}
-          <div className="overflow-hidden rounded-xl border border-[#e5e7e1] bg-white shadow-2xs">
+          <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-2xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="border-b border-[#e5e7e1] bg-[#f9faf8] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <thead className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Patient &amp; Contact</th>
                     <th className="px-4 py-3">Prescription &amp; Dosage</th>
@@ -513,7 +513,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                               onClick={() => setInspectingPatient(patient)}
                               className="text-left group"
                             >
-                              <p className="font-semibold text-slate-900 group-hover:text-[#2d5244] flex items-center gap-1.5">
+                              <p className="font-semibold text-slate-900 group-hover:text-[#1d4ed8] flex items-center gap-1.5">
                                 <span>{patient.firstName} {patient.lastName}</span>
                                 <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </p>
@@ -568,7 +568,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                                 ? 'bg-rose-50 text-rose-800 border border-rose-200'
                                 : computedStatus === 'Renewal Required'
                                 ? 'bg-purple-50 text-purple-800 border border-purple-200'
-                                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-blue-50 text-blue-800 border border-blue-200'
                             }`}>
                               {computedStatus}
                             </span>
@@ -590,7 +590,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                               type="button"
                               onClick={() => void handle1ClickFulfill(patient, record)}
                               disabled={fulfillingRxId === record.id}
-                              className="inline-flex items-center gap-1 rounded-md bg-[#2d5244] px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs transition hover:bg-[#234237] disabled:opacity-50"
+                              className="inline-flex items-center gap-1 rounded-md bg-[#1d4ed8] px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs transition hover:bg-[#1e3a5f] disabled:opacity-50"
                               title="1-click create refill order"
                             >
                               <RefreshCw className={`h-3 w-3 ${fulfillingRxId === record.id ? 'animate-spin' : ''}`} />
@@ -612,7 +612,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
       {activeSubTab === 'rules' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           <div className="lg:col-span-8 space-y-4">
-            <div className="rounded-xl border border-[#e5e7e1] bg-white p-5 shadow-2xs space-y-4">
+            <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-2xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Trigger Automation Schedules</h3>
@@ -628,14 +628,14 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                     key={rule.id}
                     className={`rounded-xl border p-4 transition ${
                       rule.isActive
-                        ? 'border-teal-200 bg-teal-50/30'
+                        ? 'border-blue-200 bg-blue-50/30'
                         : 'border-slate-200 bg-slate-50/60 opacity-70'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${
-                          rule.isActive ? 'bg-[#2d5244] text-white' : 'bg-slate-200 text-slate-600'
+                          rule.isActive ? 'bg-[#1d4ed8] text-white' : 'bg-slate-200 text-slate-600'
                         }`}>
                           {rule.daysBeforeDue}d
                         </span>
@@ -647,7 +647,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                         onClick={() => onToggleRule(rule.id)}
                         className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
                           rule.isActive
-                            ? 'bg-[#2d5244] text-white hover:bg-[#244237]'
+                            ? 'bg-[#1d4ed8] text-white hover:bg-[#1e3a5f]'
                             : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                         }`}
                       >
@@ -657,7 +657,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
 
                     <div className="space-y-1.5 rounded-lg border border-slate-200 bg-white p-3 text-xs">
                       <p className="font-mono text-slate-700 text-[11px] font-semibold">
-                        Subject: <span className="text-[#2d5244]">{rule.subjectTemplate}</span>
+                        Subject: <span className="text-[#1d4ed8]">{rule.subjectTemplate}</span>
                       </p>
                       <p className="whitespace-pre-line text-slate-600 text-[11px] leading-relaxed">
                         {rule.bodyTemplate}
@@ -670,7 +670,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           </div>
 
           <div className="lg:col-span-4 space-y-4">
-            <div className="rounded-xl border border-[#e5e7e1] bg-white p-5 shadow-2xs space-y-3">
+            <div className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-2xs space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
                 Template Variables
               </h3>
@@ -680,27 +680,27 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
 
               <div className="space-y-2 text-xs">
                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-200">
-                  <span className="font-mono font-bold text-[#2d5244]">{`{{patient_name}}`}</span>
+                  <span className="font-mono font-bold text-[#1d4ed8]">{`{{patient_name}}`}</span>
                   <p className="text-[11px] text-slate-500">Full legal name of the patient</p>
                 </div>
 
                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-200">
-                  <span className="font-mono font-bold text-[#2d5244]">{`{{medication}}`}</span>
+                  <span className="font-mono font-bold text-[#1d4ed8]">{`{{medication}}`}</span>
                   <p className="text-[11px] text-slate-500">Medication brand and clinical name</p>
                 </div>
 
                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-200">
-                  <span className="font-mono font-bold text-[#2d5244]">{`{{rx_number}}`}</span>
+                  <span className="font-mono font-bold text-[#1d4ed8]">{`{{rx_number}}`}</span>
                   <p className="text-[11px] text-slate-500">Official prescription reference code</p>
                 </div>
 
                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-200">
-                  <span className="font-mono font-bold text-[#2d5244]">{`{{renewal_date}}`}</span>
+                  <span className="font-mono font-bold text-[#1d4ed8]">{`{{renewal_date}}`}</span>
                   <p className="text-[11px] text-slate-500">Calculated date of medication depletion</p>
                 </div>
 
                 <div className="rounded-lg bg-slate-50 p-2 border border-slate-200">
-                  <span className="font-mono font-bold text-[#2d5244]">{`{{primary_doctor}}`}</span>
+                  <span className="font-mono font-bold text-[#1d4ed8]">{`{{primary_doctor}}`}</span>
                   <p className="text-[11px] text-slate-500">Authorizing physician or clinic</p>
                 </div>
               </div>
@@ -718,9 +718,9 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
               const totalMeds = matched.reduce((acc, p) => acc + p.refillHistory.length, 0);
 
               return (
-                <div key={category} className="rounded-xl border border-[#e5e7e1] bg-white p-5 shadow-2xs space-y-3">
+                <div key={category} className="rounded-xl border border-[#e2e8f0] bg-white p-5 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="rounded-md bg-[#edf2ed] px-2 py-0.5 text-[11px] font-bold text-[#28483b]">
+                    <span className="rounded-md bg-[#e8f2fb] px-2 py-0.5 text-[11px] font-bold text-[#1e40af]">
                       {category}
                     </span>
                     <span className="text-xs font-semibold text-slate-500">{matched.length} patients</span>
@@ -740,7 +740,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                         setCategoryFilter(category);
                         setActiveSubTab('queue');
                       }}
-                      className="font-semibold text-[#2d5244] hover:underline"
+                      className="font-semibold text-[#1d4ed8] hover:underline"
                     >
                       Filter renewal queue &rarr;
                     </button>
@@ -754,7 +754,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
 
       {/* TAB 4: DISPATCH HISTORY & LOGS */}
       {activeSubTab === 'logs' && (
-        <div className="overflow-hidden rounded-xl border border-[#e5e7e1] bg-white shadow-2xs">
+        <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white shadow-2xs">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">Renewal Notice Activity Log ({automatedLogs.length})</h3>
             <span className="text-xs text-slate-500">Synced with Hostinger email queue</span>
@@ -788,7 +788,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">
                       Category: {log.healthCategory || 'General Care'}
                     </span>
-                    <span className="rounded bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-800 border border-teal-200">
+                    <span className="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800 border border-blue-200">
                       Status: {log.status}
                     </span>
                   </div>
@@ -826,7 +826,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                   type="text"
                   value={draftSubject}
                   onChange={(e) => setDraftSubject(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#315649]"
+                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#1e40af]"
                 />
               </div>
 
@@ -836,7 +836,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                   rows={6}
                   value={draftBody}
                   onChange={(e) => setDraftBody(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#315649]"
+                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#1e40af]"
                 />
               </div>
             </div>
@@ -852,7 +852,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
               <button
                 type="button"
                 onClick={handleConfirmDraftSend}
-                className="rounded-lg bg-[#2d5244] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#234237]"
+                className="rounded-lg bg-[#1d4ed8] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#1e3a5f]"
               >
                 Queue reminder draft
               </button>
@@ -867,7 +867,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-2xl text-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e8eeea] text-sm font-bold text-[#2d5244]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e8f2fb] text-sm font-bold text-[#1d4ed8]">
                   {inspectingPatient.firstName.slice(0, 1)}
                 </span>
                 <div>
@@ -923,7 +923,7 @@ export const PrescriptionRenewalsManager: React.FC<PrescriptionRenewalsManagerPr
                     </div>
                     <div className="text-right">
                       <span className="font-mono font-bold text-slate-800 block">Due: {rx.nextRefillDue}</span>
-                      <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] font-semibold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded">
                         {rx.remainingRefills} refills left
                       </span>
                     </div>

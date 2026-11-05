@@ -3,7 +3,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 .payment-modal-scrollbar {
-  scrollbar-color: #9ab8ad transparent;
+  scrollbar-color: #93c5fd transparent;
   scrollbar-width: thin;
 }
 
@@ -18,12 +18,12 @@
 .payment-modal-scrollbar::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: #9ab8ad;
+  background: #93c5fd;
   background-clip: padding-box;
 }
 
 .payment-modal-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #668f81;
+  background: #2563eb;
   background-clip: padding-box;
 }
 

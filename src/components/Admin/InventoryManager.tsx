@@ -410,12 +410,12 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               <ArrowLeft className="h-4 w-4" />
             </button>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Product details</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">Product details</p>
               <h1 className="text-xl font-bold text-slate-900">{viewingItem.name}</h1>
               <p className="text-xs text-slate-500">SKU: {viewingItem.sku || 'Not specified'} · Product ID: {viewingItem.id}</p>
             </div>
           </div>
-          <button type="button" onClick={() => { openEditItem(viewingItem); setViewingItem(null); }} className="inline-flex items-center gap-2 rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900">
+          <button type="button" onClick={() => { openEditItem(viewingItem); setViewingItem(null); }} className="inline-flex items-center gap-2 rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900">
             <Edit2 className="h-4 w-4" /> Edit product
           </button>
         </div>
@@ -434,7 +434,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 {viewingImages.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-1">
                     {viewingImages.map((image, index) => (
-                      <button key={`${image}-${index}`} type="button" onClick={() => setViewingImageIndex(index)} aria-label={`Show product image ${index + 1}`} aria-pressed={index === viewingImageIndex} className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${index === viewingImageIndex ? 'border-teal-700' : 'border-slate-200'}`}>
+                      <button key={`${image}-${index}`} type="button" onClick={() => setViewingImageIndex(index)} aria-label={`Show product image ${index + 1}`} aria-pressed={index === viewingImageIndex} className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${index === viewingImageIndex ? 'border-blue-700' : 'border-slate-200'}`}>
                         <img src={image} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                       </button>
                     ))}
@@ -443,8 +443,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">{viewingItem.category}</span>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${viewingItem.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>{viewingItem.isActive === false ? 'Hidden from storefront' : 'Published'}</span>
+                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">{viewingItem.category}</span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${viewingItem.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-700'}`}>{viewingItem.isActive === false ? 'Hidden from storefront' : 'Published'}</span>
                   {viewingItem.isFeatured && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Featured</span>}
                   {viewingItem.rxRequired && <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800">Prescription required</span>}
                 </div>
@@ -470,7 +470,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               <p className="text-xs font-semibold text-slate-500">Inventory</p>
               <p className={`mt-1 text-2xl font-bold ${viewingItem.stockCount <= 0 ? 'text-rose-700' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'text-amber-700' : 'text-slate-900'}`}>{viewingItem.stockCount} units</p>
               <p className="mt-1 text-xs text-slate-500">Low stock threshold: {viewingItem.minStockThreshold}</p>
-              <p className={`mt-2 text-xs font-semibold ${viewingItem.stockCount <= 0 ? 'text-rose-700' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'text-amber-700' : 'text-emerald-700'}`}>{viewingItem.stockCount <= 0 ? 'Out of stock' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'Low stock' : 'In stock'}</p>
+              <p className={`mt-2 text-xs font-semibold ${viewingItem.stockCount <= 0 ? 'text-rose-700' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'text-amber-700' : 'text-blue-700'}`}>{viewingItem.stockCount <= 0 ? 'Out of stock' : viewingItem.stockCount <= viewingItem.minStockThreshold ? 'Low stock' : 'In stock'}</p>
               <p className="mt-2 text-xs text-slate-500">Availability: {viewingItem.inStock && viewingItem.stockCount > 0 ? 'Available' : 'Unavailable'}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -486,8 +486,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       {/* Top Controls Bar */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-teal-800 uppercase tracking-wider mb-1">
-            <Package className="w-3.5 h-3.5 text-teal-700" />
+          <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 uppercase tracking-wider mb-1">
+            <Package className="w-3.5 h-3.5 text-blue-700" />
             <span>Dispensary Catalog &amp; Formulations</span>
           </div>
           <h3 className="text-base font-bold text-slate-900">
@@ -503,20 +503,20 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             onClick={() => setIsProductCsvOpen(true)}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-teal-700" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-blue-700" />
             <span>Bulk CSV Upload</span>
           </button>
           <button
             onClick={() => setIsBulkPriceModalOpen(true)}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
           >
-            <Percent className="w-3.5 h-3.5 text-teal-700" />
+            <Percent className="w-3.5 h-3.5 text-blue-700" />
             <span>Bulk Price Adjust</span>
           </button>
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Upload New Product</span>
@@ -525,14 +525,14 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       </div>
 
       {notification && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-900">
+        <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-blue-700 shrink-0" />
             <span className="font-semibold">{notification}</span>
           </div>
           <button
             onClick={() => setNotification(null)}
-            className="text-emerald-700 hover:text-emerald-900 text-xs font-bold"
+            className="text-blue-700 hover:text-blue-900 text-xs font-bold"
           >
             Dismiss
           </button>
@@ -555,7 +555,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
           />
         </label>
-        <button disabled={isSaving || !newCategory.trim()} className="rounded-md bg-teal-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
+        <button disabled={isSaving || !newCategory.trim()} className="rounded-md bg-blue-800 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
           Add category
         </button>
         <span className="w-full text-[11px] text-slate-500">{categories.join(' · ') || 'No categories configured.'}</span>
@@ -593,7 +593,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
             <span>Retail Inventory Value</span>
-            <DollarSign className="w-4 h-4 text-teal-600" />
+            <DollarSign className="w-4 h-4 text-blue-600" />
           </div>
           <div className="text-2xl font-bold font-mono text-slate-900">
             ${totalInventoryValuation.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -611,7 +611,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by product name, SKU (e.g. RX-MET-500ER), or NDC code..."
-            className="w-full bg-slate-50 border border-slate-300 rounded-md pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+            className="w-full bg-slate-50 border border-slate-300 rounded-md pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
           />
         </div>
 
@@ -669,7 +669,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       event.preventDefault();
                       openEditItem(item);
                     }}
-                    className="cursor-pointer hover:bg-slate-50/70 focus:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-700 transition-colors"
+                    className="cursor-pointer hover:bg-slate-50/70 focus:bg-slate-50/70 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-700 transition-colors"
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
@@ -681,7 +681,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-md bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-800 shrink-0">
+                          <div className="w-10 h-10 rounded-md bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-800 shrink-0">
                             <Package className="w-5 h-5" />
                           </div>
                         )}
@@ -696,7 +696,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     </td>
 
                     <td className="py-3 px-3">
-                      <span className="font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-sm border border-teal-200 whitespace-nowrap">
+                      <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-sm border border-blue-200 whitespace-nowrap">
                         {item.category}
                       </span>
                       {item.rxRequired && (
@@ -712,7 +712,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         <span className="font-bold text-slate-900">${item.price.toFixed(2)}</span>
                       </div>
                       {item.copayPrice !== undefined && item.copayPrice > 0 && (
-                        <div className="mt-0.5 text-[11px] text-teal-700">
+                        <div className="mt-0.5 text-[11px] text-blue-700">
                           Copay: ${item.copayPrice.toFixed(2)}
                         </div>
                       )}
@@ -775,7 +775,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                             ? 'bg-rose-50 text-rose-800 border-rose-200'
                             : isLow
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-blue-50 text-blue-800 border-blue-200'
                         }`}
                       >
                         {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'}
@@ -802,13 +802,13 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                           title={item.isActive === false ? 'Show on storefront' : 'Hide from storefront'}
                           aria-label={item.isActive === false ? `Show ${item.name} on storefront` : `Hide ${item.name} from storefront`}
                           aria-pressed={item.isActive !== false}
-                          className={`rounded-md p-1.5 transition-colors ${item.isActive === false ? 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700' : 'bg-emerald-50 text-emerald-700 hover:bg-amber-50 hover:text-amber-700'}`}
+                          className={`rounded-md p-1.5 transition-colors ${item.isActive === false ? 'bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-700' : 'bg-blue-50 text-blue-700 hover:bg-amber-50 hover:text-amber-700'}`}
                         >
                           {item.isActive === false ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       <div className="mt-1 flex justify-center gap-1">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.isActive === false ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-700'}`}>
                           {item.isActive === false ? 'Hidden' : 'Published'}
                         </span>
                         {item.isFeatured && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Featured</span>}
@@ -820,7 +820,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         type="button"
                         disabled={isSaving}
                         onClick={(event) => { event.stopPropagation();                         openProductDetails(item); }}
-                        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-800"
+                        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-blue-800"
                         title="View product page"
                         aria-label={`View ${item.name} product page`}
                       >
@@ -830,7 +830,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         type="button"
                         disabled={isSaving}
                         onClick={(event) => { event.stopPropagation(); openEditItem(item); }}
-                        className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded-md transition-colors"
+                        className="p-1.5 text-slate-500 hover:text-blue-800 hover:bg-slate-100 rounded-md transition-colors"
                         title="Edit Price & Details"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -887,7 +887,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   <Upload className="h-4 w-4" /> Choose CSV
                   <input type="file" accept=".csv,text/csv" className="sr-only" onChange={handleProductCsvFile} />
                 </label>
-                <button type="button" onClick={downloadProductTemplate} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-teal-800 hover:bg-teal-50">
+                <button type="button" onClick={downloadProductTemplate} className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-blue-800 hover:bg-blue-50">
                   <Download className="h-4 w-4" /> Download template
                 </button>
               </div>
@@ -925,7 +925,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                   type="button"
                   disabled={isSaving || productCsvPreview.products.length === 0 || productCsvPreview.errors.length > 0}
                   onClick={() => void handleBulkProductImport()}
-                  className="rounded-md bg-teal-800 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md bg-blue-800 px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSaving ? 'Importing…' : `Import ${productCsvPreview.products.length} products`}
                 </button>
@@ -1092,7 +1092,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     multiple
                     disabled={newProductImages.length >= 10}
                     onChange={(event) => handleProductImageSelection(event, 0, newProductImages, setNewProductImages)}
-                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-teal-50 file:px-3 file:py-1.5 file:font-semibold file:text-teal-800"
+                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:font-semibold file:text-blue-800"
                   />
                   <p className="mt-1 text-[11px] text-slate-500">Upload up to 10 JPEG, PNG, WebP, or GIF images; 5 MB maximum per image.</p>
                   {newProductImages.length > 0 && (
@@ -1124,15 +1124,15 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
                 <div className="sm:col-span-2 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2">
                   <label className="flex items-start gap-2 font-semibold text-slate-800">
-                    <input type="checkbox" checked={rxRequired} onChange={(e) => setRxRequired(e.target.checked)} className="mt-0.5 rounded text-teal-700 focus:ring-teal-700" />
+                    <input type="checkbox" checked={rxRequired} onChange={(e) => setRxRequired(e.target.checked)} className="mt-0.5 rounded text-blue-700 focus:ring-blue-700" />
                     <span>Prescription required</span>
                   </label>
                   <label className="flex items-start gap-2 font-semibold text-slate-800">
-                    <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="mt-0.5 rounded text-teal-700 focus:ring-teal-700" />
+                    <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} className="mt-0.5 rounded text-blue-700 focus:ring-blue-700" />
                     <span>Show on storefront</span>
                   </label>
                   <label className="flex items-start gap-2 font-semibold text-slate-800 sm:col-span-2">
-                    <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} className="mt-0.5 rounded text-teal-700 focus:ring-teal-700" />
+                    <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} className="mt-0.5 rounded text-blue-700 focus:ring-blue-700" />
                     <span>Feature this product in the storefront</span>
                   </label>
                 </div>
@@ -1149,7 +1149,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
+                  className="px-5 py-2.5 font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md shadow-xs"
                 >
                   {isSaving ? 'Saving…' : 'Save product'}
                 </button>
@@ -1241,7 +1241,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     multiple
                     disabled={getProductImages(editingItem).length + editingProductImages.length >= 10}
                     onChange={(event) => handleProductImageSelection(event, getProductImages(editingItem).length, editingProductImages, setEditingProductImages)}
-                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-teal-50 file:px-3 file:py-1.5 file:font-semibold file:text-teal-800"
+                    className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 file:mr-3 file:rounded-md file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:font-semibold file:text-blue-800"
                   />
                   <p className="mt-1 text-[11px] text-slate-500">Up to 10 images per product; JPEG, PNG, WebP, or GIF, maximum 5 MB each.</p>
                   <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
@@ -1262,7 +1262,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       </div>
                     ))}
                     {editingProductImages.map((image) => (
-                      <div key={image.previewUrl} className="relative aspect-square overflow-hidden rounded-lg border border-teal-300">
+                      <div key={image.previewUrl} className="relative aspect-square overflow-hidden rounded-lg border border-blue-300">
                         <img src={image.previewUrl} alt={image.file.name} className="h-full w-full object-cover" />
                         <button type="button" onClick={() => removePendingProductImage(image, setEditingProductImages)} aria-label={`Remove ${image.file.name}`} className="absolute right-1 top-1 rounded-full bg-slate-950/75 p-1 text-white hover:bg-rose-700">
                           <X className="h-3 w-3" />
@@ -1369,7 +1369,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       type="checkbox"
                       checked={editingItem.isActive !== false}
                       onChange={(event) => setEditingItem({ ...editingItem, isActive: event.target.checked })}
-                      className="mt-0.5 rounded text-teal-700 focus:ring-teal-700"
+                      className="mt-0.5 rounded text-blue-700 focus:ring-blue-700"
                     />
                     <span>Show on storefront</span>
                   </label>
@@ -1378,7 +1378,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       type="checkbox"
                       checked={editingItem.isFeatured === true}
                       onChange={(event) => setEditingItem({ ...editingItem, isFeatured: event.target.checked })}
-                      className="mt-0.5 rounded text-teal-700 focus:ring-teal-700"
+                      className="mt-0.5 rounded text-blue-700 focus:ring-blue-700"
                     />
                     <span>Featured product</span>
                   </label>
@@ -1387,7 +1387,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                       type="checkbox"
                       checked={editingItem.rxRequired}
                       onChange={(event) => setEditingItem({ ...editingItem, rxRequired: event.target.checked })}
-                      className="mt-0.5 rounded text-teal-700 focus:ring-teal-700"
+                      className="mt-0.5 rounded text-blue-700 focus:ring-blue-700"
                     />
                     <span>Prescription required</span>
                   </label>
@@ -1405,7 +1405,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2.5 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
+                  className="px-5 py-2.5 font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md shadow-xs"
                 >
                   {isSaving ? 'Saving…' : 'Update Product'}
                 </button>
@@ -1478,7 +1478,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2 font-bold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs"
+                  className="px-5 py-2 font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md shadow-xs"
                 >
                   {isSaving ? 'Saving…' : 'Apply to Catalog'}
                 </button>

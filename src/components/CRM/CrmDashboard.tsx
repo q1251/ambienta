@@ -104,8 +104,8 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
       {/* CRM Header & Top KPI Metrics */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-teal-800 uppercase tracking-wider mb-1">
-            <span className="w-2 h-2 rounded-full bg-teal-600"></span>
+          <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 uppercase tracking-wider mb-1">
+            <span className="w-2 h-2 rounded-full bg-blue-600"></span>
             <span>Clinical Dispensary Administration</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
@@ -121,12 +121,12 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
             onClick={() => setActiveTab('leads')}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-teal-700" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-blue-700" />
             <span>Upload Leads (CSV)</span>
           </button>
           <button
             onClick={() => setActiveTab('hostinger')}
-            className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
           >
             <Mail className="w-3.5 h-3.5" />
             <span>Hostinger Mailbox</span>
@@ -157,9 +157,9 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
         <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500 text-xs mb-1">
             <span>Email delivery / opens</span>
-            <Mail className="w-4 h-4 text-teal-600" />
+            <Mail className="w-4 h-4 text-blue-600" />
           </div>
-          <div className="text-2xl font-bold font-mono text-teal-800">{deliveredEmailCount} / {openedEmailCount}</div>
+          <div className="text-2xl font-bold font-mono text-blue-800">{deliveredEmailCount} / {openedEmailCount}</div>
           <p className="text-[11px] text-slate-400 mt-1">Delivered / opened · provider not connected</p>
         </div>
 
@@ -179,7 +179,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           onClick={() => setActiveTab('patients')}
           className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'patients'
-              ? 'bg-teal-800 text-white shadow-xs'
+              ? 'bg-blue-800 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -191,7 +191,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           onClick={() => setActiveTab('leads')}
           className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'leads'
-              ? 'bg-teal-800 text-white shadow-xs'
+              ? 'bg-blue-800 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -203,7 +203,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           onClick={() => setActiveTab('reminders')}
           className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'reminders'
-              ? 'bg-teal-800 text-white shadow-xs'
+              ? 'bg-blue-800 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -215,7 +215,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           onClick={() => setActiveTab('hostinger')}
           className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'hostinger'
-              ? 'bg-teal-800 text-white shadow-xs'
+              ? 'bg-blue-800 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -227,7 +227,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
           onClick={() => setActiveTab('bulk')}
           className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 whitespace-nowrap ${
             activeTab === 'bulk'
-              ? 'bg-teal-800 text-white shadow-xs'
+              ? 'bg-blue-800 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
@@ -248,7 +248,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search patient name, email, Rx number (e.g. RX-884219), or medication..."
-                className="w-full bg-slate-50 border border-slate-300 rounded-md pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                className="w-full bg-slate-50 border border-slate-300 rounded-md pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
               />
             </div>
 
@@ -308,7 +308,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
                       <tr
                         key={patient.id}
                         onClick={() => onSelectPatient(patient)}
-                        className="hover:bg-teal-50/40 cursor-pointer transition-colors"
+                        className="hover:bg-blue-50/40 cursor-pointer transition-colors"
                       >
                         <td className="py-3 px-4">
                           <p className="font-bold text-slate-900">
@@ -319,7 +319,7 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
                         </td>
 
                         <td className="py-3 px-3">
-                          <span className="font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-sm border border-teal-200">
+                          <span className="font-semibold text-blue-800 bg-blue-50 px-2 py-0.5 rounded-sm border border-blue-200">
                             {patient.healthCategory}
                           </span>
                           <span className="block text-[11px] text-slate-400 mt-1">
@@ -382,13 +382,13 @@ export const CrmDashboard: React.FC<CrmDashboardProps> = ({
                           <button
                             onClick={() => onTriggerDirectEmail(patient)}
                             title="Direct Email via Hostinger"
-                            className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded-md transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-blue-800 hover:bg-slate-100 rounded-md transition-colors"
                           >
                             <Mail className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => onSelectPatient(patient)}
-                            className="px-2.5 py-1 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-md transition-colors"
+                            className="px-2.5 py-1 text-xs font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors"
                           >
                             View Record
                           </button>

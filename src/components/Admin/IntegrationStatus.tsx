@@ -10,7 +10,7 @@ export const IntegrationStatus: React.FC<IntegrationStatusProps> = ({ role }) =>
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Connections</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Connections</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Integrations</h1>
         <p className="mt-2 text-sm text-slate-600">Manage external services connected to the storefront and operations.</p>
       </header>
@@ -21,7 +21,7 @@ export const IntegrationStatus: React.FC<IntegrationStatusProps> = ({ role }) =>
             <div className="rounded-xl bg-slate-100 p-3 text-slate-600"><Link2 className="h-5 w-5" /></div>
             <div className="min-w-0">
               <h2 className="font-semibold text-slate-900">Payment links by email</h2>
-              <span className="mt-2 inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-800">
+              <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-800">
                 {role === 'admin' ? 'Administrator-managed' : 'Managed by administrators'}
               </span>
               <p className="mt-3 text-sm leading-6 text-slate-600">

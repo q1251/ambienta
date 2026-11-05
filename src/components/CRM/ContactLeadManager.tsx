@@ -80,7 +80,7 @@ const STAGES: Array<{ id: LeadStatus; label: string; bg: string; text: string; b
   { id: 'Cold', label: 'Cold', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
   { id: 'Contacted', label: 'Contacted', bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
   { id: 'Qualified', label: 'Qualified', bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' },
-  { id: 'Customer', label: 'Customer', bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
+  { id: 'Customer', label: 'Customer', bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
   { id: 'Inactive', label: 'Inactive', bg: 'bg-zinc-100', text: 'text-zinc-600', border: 'border-zinc-200' },
 ];
 
@@ -610,9 +610,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         onClick={(event) => void copyLeadValue(event, lead.id, field, value)}
         aria-label={`${copied ? 'Copied' : 'Copy'} ${field} for ${lead.firstName} ${lead.lastName}`}
         title={copied ? 'Copied' : `Copy ${field}`}
-        className="ml-1 inline-flex shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700"
+        className="ml-1 inline-flex shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700"
       >
-        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <Check className="h-3.5 w-3.5 text-blue-600" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     );
   };
@@ -731,7 +731,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 setEmailError('');
                 setEmailComposerOpen(true);
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#115e59] disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#1d4ed8] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1e40af] disabled:opacity-50"
             >
               <Mail className="h-4 w-4" /> Compose email
             </button>
@@ -742,7 +742,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div className="flex items-start gap-4">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-xl font-bold uppercase text-teal-800">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-xl font-bold uppercase text-blue-800">
                 {(profile?.lead.firstName || selectedLead?.firstName || 'C')[0]}
                 {(profile?.lead.lastName || selectedLead?.lastName || '')[0]}
               </span>
@@ -761,7 +761,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     {profile?.lead.status || selectedLead?.status}
                   </span>
                   {profile?.lead.marketingConsent && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-800">
                       <Check className="h-3 w-3" /> Opted in
                     </span>
                   )}
@@ -799,7 +799,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               onClick={() => setProfileActiveTab('overview')}
               className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
                 profileActiveTab === 'overview'
-                  ? 'bg-teal-50 text-teal-800'
+                  ? 'bg-blue-50 text-blue-800'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -810,7 +810,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               onClick={() => setProfileActiveTab('orders')}
               className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
                 profileActiveTab === 'orders'
-                  ? 'bg-teal-50 text-teal-800'
+                  ? 'bg-blue-50 text-blue-800'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -821,7 +821,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               onClick={() => setProfileActiveTab('timeline')}
               className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
                 profileActiveTab === 'timeline'
-                  ? 'bg-teal-50 text-teal-800'
+                  ? 'bg-blue-50 text-blue-800'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
@@ -831,7 +831,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         </header>
 
         {profileLoading && (
-          <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm font-medium text-teal-900">
+          <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-medium text-blue-900">
             Loading contact profile, orders, and interaction history…
           </p>
         )}
@@ -952,7 +952,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           <button
                             type="submit"
                             disabled={profileSaving}
-                            className="rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm disabled:opacity-50"
+                            className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm disabled:opacity-50"
                           >
                             {profileSaving ? 'Saving…' : 'Save changes'}
                           </button>
@@ -979,12 +979,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         value={activityNote}
                         onChange={(e) => setActivityNote(e.target.value)}
                         placeholder="Add an internal note or consult log for team reference…"
-                        className="w-full rounded-xl border border-slate-300 p-3 text-sm focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                        className="w-full rounded-xl border border-slate-300 p-3 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                       />
                       <button
                         type="submit"
                         disabled={activitySaving || !activityNote.trim()}
-                        className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm disabled:opacity-50"
                       >
                         <MessageSquare className="h-3.5 w-3.5" />
                         {activitySaving ? 'Saving note…' : 'Post comment'}
@@ -1061,7 +1061,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                             disabled={!canEditSelectedLead || profileSaving}
                             checked={profile.lead.marketingConsent}
                             onChange={(e) => void updateProfile({ marketingConsent: e.target.checked })}
-                            className="mt-0.5 rounded text-teal-800"
+                            className="mt-0.5 rounded text-blue-800"
                           />
                           <span>
                             <strong className="block font-semibold text-slate-900">Marketing Consent</strong>
@@ -1125,7 +1125,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                               <span
                                 className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                                   order.status === 'Delivered'
-                                    ? 'bg-emerald-50 text-emerald-800'
+                                    ? 'bg-blue-50 text-blue-800'
                                     : order.status === 'Cancelled'
                                     ? 'bg-rose-50 text-rose-800'
                                     : 'bg-blue-50 text-blue-800'
@@ -1181,7 +1181,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                               )}
                               <div className="relative flex space-x-3">
                                 <div>
-                                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 ring-4 ring-white">
+                                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-800 ring-4 ring-white">
                                     <Package className="h-4 w-4" />
                                   </span>
                                 </div>
@@ -1221,7 +1221,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                                   className={`flex h-8 w-8 items-center justify-center rounded-full ring-4 ring-white ${
                                     isStage
                                       ? 'bg-purple-100 text-purple-800'
-                                      : 'bg-teal-100 text-teal-800'
+                                      : 'bg-blue-100 text-blue-800'
                                   }`}
                                 >
                                   {isStage ? <TrendingUp className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
@@ -1270,7 +1270,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               <div className="flex items-start justify-between border-b border-slate-200 p-5">
                 <div>
                   <h3 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-                    <Mail className="h-5 w-5 text-teal-800" />
+                    <Mail className="h-5 w-5 text-blue-800" />
                     Compose Email to {profile.lead.firstName}
                   </h3>
                   <p className="mt-0.5 text-xs text-slate-500">
@@ -1333,7 +1333,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     value={emailSubject}
                     onChange={(e) => setEmailSubject(e.target.value)}
                     placeholder="Subject line…"
-                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
                 </div>
                 <div>
@@ -1345,7 +1345,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     value={emailBody}
                     onChange={(e) => setEmailBody(e.target.value)}
                     placeholder="Write your email message…"
-                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                    className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                   />
                 </div>
 
@@ -1371,7 +1371,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <button
                     type="submit"
                     disabled={emailSending || !emailSubject.trim() || !emailBody.trim()}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#115e59] disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#1e40af] disabled:opacity-50"
                   >
                     <Send className="h-3.5 w-3.5" />
                     {emailSending ? 'Sending…' : 'Send via Hostinger'}
@@ -1393,14 +1393,14 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       {/* Notifications */}
       {dataError && <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{dataError}</p>}
       {requestError && <p role="alert" className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{requestError}</p>}
-      {success && <p role="status" className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{success}</p>}
+      {success && <p role="status" className="rounded-xl border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">{success}</p>}
 
       {/* TOP KPI COMMAND CENTER */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Contacts</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-800">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
               <Users className="h-5 w-5" />
             </span>
           </div>
@@ -1411,7 +1411,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Converted Customers</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
               <Package className="h-5 w-5" />
             </span>
           </div>
@@ -1455,7 +1455,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               }}
               className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
                 leadTab === 'all'
-                  ? 'bg-teal-800 text-white'
+                  ? 'bg-blue-800 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
@@ -1469,7 +1469,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               }}
               className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
                 leadTab === 'uncalled_repeat_buyers'
-                  ? 'bg-teal-800 text-white'
+                  ? 'bg-blue-800 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
@@ -1483,7 +1483,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               }}
               className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
                 leadTab === 'needs_followup'
-                  ? 'bg-teal-800 text-white'
+                  ? 'bg-blue-800 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
@@ -1497,7 +1497,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
               }}
               className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
                 leadTab === 'opted_in'
-                  ? 'bg-teal-800 text-white'
+                  ? 'bg-blue-800 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
@@ -1513,7 +1513,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 setRequestError('');
                 setMode('manual');
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#0f766e] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#115e59]"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1d4ed8] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1e40af]"
             >
               <UserPlus className="h-4 w-4" /> Add contact
             </button>
@@ -1543,7 +1543,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 onClick={() => setViewMode('table')}
                 aria-label="Table view"
                 className={`rounded-lg p-1.5 text-xs font-semibold transition ${
-                  viewMode === 'table' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  viewMode === 'table' ? 'bg-white text-blue-800 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                 }`}
                 title="Dense Data Table"
               >
@@ -1554,7 +1554,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 onClick={() => setViewMode('kanban')}
                 aria-label="Kanban pipeline view"
                 className={`rounded-lg p-1.5 text-xs font-semibold transition ${
-                  viewMode === 'kanban' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  viewMode === 'kanban' ? 'bg-white text-blue-800 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                 }`}
                 title="Visual Pipeline Kanban"
               >
@@ -1575,7 +1575,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 setLeadPage(1);
               }}
               placeholder="Search by name, email, phone, or country…"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-3.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-3.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
             />
           </div>
 
@@ -1633,9 +1633,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
         {/* BATCH ACTION TOOLBAR (VISIBLE WHEN 1+ LEADS SELECTED) */}
         {selectedLeadIds.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/70 px-4 py-2.5 text-xs">
-            <div className="flex items-center gap-2 font-semibold text-teal-900">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-800 text-[10px] font-bold text-white">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-2.5 text-xs">
+            <div className="flex items-center gap-2 font-semibold text-blue-900">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-800 text-[10px] font-bold text-white">
                 {selectedLeadIds.length}
               </span>
               <span>contact{selectedLeadIds.length === 1 ? '' : 's'} selected</span>
@@ -1691,7 +1691,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   const selectedContacts = leads.filter((l) => selectedLeadIds.includes(l.id));
                   downloadContacts(selectedContacts);
                 }}
-                className="rounded-lg border border-teal-300 bg-white px-2.5 py-1 font-semibold text-teal-800 hover:bg-teal-50"
+                className="rounded-lg border border-blue-300 bg-white px-2.5 py-1 font-semibold text-blue-800 hover:bg-blue-50"
               >
                 Export selected
               </button>
@@ -1722,7 +1722,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                       type="checkbox"
                       checked={isAllVisibleSelected}
                       onChange={toggleSelectAll}
-                      className="rounded border-slate-300 text-teal-800 cursor-pointer"
+                      className="rounded border-slate-300 text-blue-800 cursor-pointer"
                       aria-label="Select all contacts on this page"
                     />
                   </th>
@@ -1734,7 +1734,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <span>Name</span>
                       {sortField === 'name' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                       )}
@@ -1748,7 +1748,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <span>Email</span>
                       {sortField === 'email' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                       )}
@@ -1763,7 +1763,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <span>Country</span>
                       {sortField === 'country' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                       )}
@@ -1777,7 +1777,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <span>Stage</span>
                       {sortField === 'stage' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                       )}
@@ -1791,7 +1791,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <span>Orders</span>
                       {sortField === 'orders' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                       )}
@@ -1805,7 +1805,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     >
                       <span>Source / Added</span>
                       {sortField === 'createdAt' ? (
-                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#2d5244]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#2d5244]" />
+                        sortOrder === 'asc' ? <ArrowUp className="h-3.5 w-3.5 text-[#1d4ed8]" /> : <ArrowDown className="h-3.5 w-3.5 text-[#1d4ed8]" />
                       ) : (
                         <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                       )}
@@ -1828,7 +1828,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         void openProfile(lead);
                       }}
                       className={`cursor-pointer transition hover:bg-slate-50/80 ${
-                        isSelected ? 'bg-teal-50/40' : ''
+                        isSelected ? 'bg-blue-50/40' : ''
                       }`}
                     >
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -1836,12 +1836,12 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectOne(lead.id)}
-                          className="rounded border-slate-300 text-teal-800"
+                          className="rounded border-slate-300 text-blue-800"
                           aria-label={`Select ${lead.firstName} ${lead.lastName}`}
                         />
                       </td>
 
-                      <td className="px-4 py-3 font-semibold text-teal-900">
+                      <td className="px-4 py-3 font-semibold text-blue-900">
                         <div className="flex items-center">
                           <span>
                             {lead.firstName} {lead.lastName}
@@ -1992,7 +1992,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     <article
                       key={lead.id}
                       onClick={() => void openProfile(lead)}
-                      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:border-teal-400 hover:shadow"
+                      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm transition hover:border-blue-400 hover:shadow"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="font-bold text-slate-900 truncate">
@@ -2010,7 +2010,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </span>
 
                         {lead.marketingConsent && (
-                          <span className="text-[10px] font-semibold text-emerald-700">Opted in</span>
+                          <span className="text-[10px] font-semibold text-blue-700">Opted in</span>
                         )}
                       </div>
 
@@ -2090,7 +2090,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <button
                     type="button"
                     onClick={downloadSample}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:underline"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-800 hover:underline"
                   >
                     <Download className="h-3.5 w-3.5" /> Download Template
                   </button>
@@ -2101,7 +2101,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   onChange={(e) => parse(e.target.value)}
                   rows={5}
                   placeholder={'first_name,last_name,email,phone\nEleanor,Vance,eleanor@example.com,+15553491102'}
-                  className="w-full rounded-xl border border-slate-300 p-3 font-mono text-xs focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                  className="w-full rounded-xl border border-slate-300 p-3 font-mono text-xs focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                 />
 
                 {errors.map((err) => (
@@ -2150,7 +2150,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     type="button"
                     disabled={!preview.length || saving}
                     onClick={() => void save(preview)}
-                    className="rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#115e59] disabled:opacity-50"
+                    className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#1e40af] disabled:opacity-50"
                   >
                     {saving ? 'Importing…' : `Import ${preview.length} leads`}
                   </button>
@@ -2203,7 +2203,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                     type="checkbox"
                     checked={marketingConsent}
                     onChange={(e) => setMarketingConsent(e.target.checked)}
-                    className="mt-0.5 rounded text-teal-800"
+                    className="mt-0.5 rounded text-blue-800"
                   />
                   <span>Contact explicitly opted in to promotional and educational correspondence.</span>
                 </label>
@@ -2219,7 +2219,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <button
                     type="submit"
                     disabled={saving}
-                    className="rounded-xl bg-[#0f766e] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#115e59] disabled:opacity-50"
+                    className="rounded-xl bg-[#1d4ed8] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#1e40af] disabled:opacity-50"
                   >
                     {saving ? 'Saving…' : 'Save contact'}
                   </button>

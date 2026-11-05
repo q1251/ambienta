@@ -354,13 +354,13 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
     <div className="mx-auto flex h-full min-h-0 max-w-[1500px] flex-col gap-3">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Customer support</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Customer support</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Live chat</h1>
           <p className="mt-2 text-sm text-slate-600">{role === 'admin' ? 'Monitor incoming chats, assign an agent, or take ownership with a visible handoff.' : 'Claim available chats or continue conversations assigned to you.'}</p>
         </div>
         {view === 'inbox' ? (
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
-            <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" /></span>
+            <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500" /></span>
             {filter === 'open' ? `${openCount} open` : `${conversations.length} shown`} <span className="text-slate-300">·</span> {unreadCount} unread
             {role === 'admin' && <><span className="text-slate-300">·</span><span>{adminOnline ? 'You are online' : 'You are offline'}</span></>}
           </div>
@@ -380,7 +380,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
       </div>
 
       {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
-      {actionMessage && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{actionMessage}</p>}
+      {actionMessage && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{actionMessage}</p>}
 
       <nav aria-label="Live chat workspace" className="flex w-fit items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
         <button type="button" onClick={() => setView('inbox')} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${view === 'inbox' ? 'bg-[#123b68] text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -398,7 +398,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <label className="sr-only" htmlFor="chat-search">Search conversations</label>
-              <input id="chat-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-teal-700" />
+              <input id="chat-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-700" />
             </div>
             <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
               {(['open', 'closed', 'all'] as const).map((value) => (
@@ -417,7 +417,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                 <p className="mt-1 text-xs text-slate-500">New storefront messages will appear in this inbox.</p>
               </div>
             ) : conversations.map((conversation) => (
-              <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setActionMessage(''); }} className={`w-full border-b border-slate-100 px-4 py-4 text-left transition hover:bg-slate-50 ${selectedId === conversation.id ? 'bg-teal-50/70' : ''}`}>
+              <button key={conversation.id} type="button" onClick={() => { setSelectedId(conversation.id); setActionMessage(''); }} className={`w-full border-b border-slate-100 px-4 py-4 text-left transition hover:bg-slate-50 ${selectedId === conversation.id ? 'bg-blue-50/70' : ''}`}>
                 <div className="flex items-start gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500"><UserRound className="h-5 w-5" /></span>
                   <span className="min-w-0 flex-1">
@@ -432,7 +432,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                     </span>
                     <span className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="truncate text-xs text-slate-500">{conversation.lastSender === 'staff' ? 'You: ' : ''}{conversation.lastMessage || 'New conversation'}</span>
-                      {conversation.unreadCount > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-teal-700 px-1.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>}
+                      {conversation.unreadCount > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-700 px-1.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>}
                     </span>
                   </span>
                 </div>
@@ -453,7 +453,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
               <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                   <button type="button" onClick={() => setSelectedId(null)} aria-label="Back to conversations" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><X className="h-4 w-4" /></button>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-800"><UserRound className="h-5 w-5" /></span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-800"><UserRound className="h-5 w-5" /></span>
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold text-slate-950">{selectedConversation.visitorName}</h2>
                     <p className="truncate text-xs text-slate-500">
@@ -463,12 +463,12 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="max-w-40 truncate text-[11px] font-medium text-slate-500">{selectedConversation.ownerType === 'queue' ? 'Unassigned · shared queue' : `Handled by ${selectedConversation.ownerName}`}</span>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedConversation.status === 'open' ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedConversation.status === 'open' ? 'bg-blue-50 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
                     {selectedConversation.status === 'open' ? <Circle className="h-2 w-2 fill-current" /> : <Check className="h-3 w-3" />}
                     {selectedConversation.status}
                   </span>
                   {role === 'operator' && selectedConversation.canClaim && (
-                    <button type="button" disabled={saving} onClick={() => void runAction('claim')} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900 disabled:opacity-50">Claim chat</button>
+                    <button type="button" disabled={saving} onClick={() => void runAction('claim')} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-800 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-900 disabled:opacity-50">Claim chat</button>
                   )}
                   {role === 'admin' && selectedConversation.ownerType !== 'admin' && (
                     <button type="button" disabled={saving} onClick={() => void runAction('takeover')} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50">Take over</button>
@@ -486,7 +486,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                   {(role === 'admin' || selectedConversation.ownerType === 'agent') && (selectedConversation.status === 'open' ? (
                     <button type="button" disabled={saving} onClick={() => void runAction('close')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"><X className="h-3.5 w-3.5" />Close</button>
                   ) : (
-                    <button type="button" disabled={saving} onClick={() => void runAction('reopen')} className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-900 hover:bg-teal-100 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" />Reopen</button>
+                    <button type="button" disabled={saving} onClick={() => void runAction('reopen')} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-900 hover:bg-blue-100 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" />Reopen</button>
                   ))}
                 </div>
               </header>
@@ -497,7 +497,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                   ) : (
                     <div key={message.id} className={`flex ${message.sender === 'staff' ? 'justify-end' : 'justify-start'}`}>
                       <article className={`max-w-[min(76%,620px)] rounded-2xl px-4 py-3 ${message.sender === 'staff' ? 'rounded-br-md bg-[#123b68] text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm'}`}>
-                        <p className={`mb-1.5 text-[10px] font-semibold ${message.sender === 'staff' ? 'text-blue-100' : 'text-teal-800'}`}>{message.sender === 'staff' ? message.senderName : selectedConversation.visitorName}</p>
+                        <p className={`mb-1.5 text-[10px] font-semibold ${message.sender === 'staff' ? 'text-blue-100' : 'text-blue-800'}`}>{message.sender === 'staff' ? message.senderName : selectedConversation.visitorName}</p>
                         <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.body}</p>
                         <time className={`mt-2 block text-right text-[10px] ${message.sender === 'staff' ? 'text-blue-100' : 'text-slate-400'}`}>{formatDate(message.createdAt)}</time>
                       </article>
@@ -510,7 +510,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                 {selectedConversation.status === 'open' && (role === 'admin' || selectedConversation.ownerType === 'agent') ? (
                   <form onSubmit={(event) => { event.preventDefault(); if (reply.trim()) void runAction('reply'); }} className="flex items-end gap-3">
                     <label className="sr-only" htmlFor="crm-chat-reply">Reply to customer</label>
-                    <textarea id="crm-chat-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder={`Reply to ${selectedConversation.visitorName}…`} className="max-h-36 min-h-12 flex-1 resize-y rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/10" />
+                    <textarea id="crm-chat-reply" required maxLength={2000} rows={2} value={reply} onChange={(event) => setReply(event.target.value)} placeholder={`Reply to ${selectedConversation.visitorName}…`} className="max-h-36 min-h-12 flex-1 resize-y rounded-xl border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-700/10" />
                     <button type="submit" disabled={saving || !reply.trim()} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#123b68] px-4 text-sm font-semibold text-white hover:bg-[#0b2f52] disabled:cursor-not-allowed disabled:opacity-50">
                       {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}<span className="hidden sm:inline">Send</span>
                     </button>
@@ -531,7 +531,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
           <aside className={`min-h-0 flex-col border-b border-slate-200 lg:flex lg:border-b-0 lg:border-r ${selectedVisitorSessionId ? 'hidden' : 'flex'}`}>
             <div className="flex items-center gap-1 border-b border-slate-100 p-4">
               {(['active', 'recent'] as const).map((value) => (
-                <button key={value} type="button" onClick={() => setVisitorFilter(value)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${visitorFilter === value ? 'bg-teal-50 text-teal-900' : 'text-slate-500 hover:bg-slate-50'}`}>
+                <button key={value} type="button" onClick={() => setVisitorFilter(value)} className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold ${visitorFilter === value ? 'bg-blue-50 text-blue-900' : 'text-slate-500 hover:bg-slate-50'}`}>
                   {value === 'active' ? 'Active now' : 'Last 24 hours'}
                 </button>
               ))}
@@ -547,19 +547,19 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                   <p className="mt-1 text-xs text-slate-500">Visitors appear after their storefront page reports a session.</p>
                 </div>
               ) : visitorSessions.map((session) => (
-                <button key={session.id} type="button" onClick={() => setSelectedVisitorSessionId(session.id)} className={`w-full border-b border-slate-100 px-4 py-4 text-left transition hover:bg-slate-50 ${selectedVisitorSessionId === session.id ? 'bg-teal-50/70' : ''}`}>
+                <button key={session.id} type="button" onClick={() => setSelectedVisitorSessionId(session.id)} className={`w-full border-b border-slate-100 px-4 py-4 text-left transition hover:bg-slate-50 ${selectedVisitorSessionId === session.id ? 'bg-blue-50/70' : ''}`}>
                   <span className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${session.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${session.active ? 'bg-blue-500' : 'bg-slate-300'}`} />
                       <span className="truncate text-sm font-semibold text-slate-900">Visitor {session.visitorId}</span>
                     </span>
                     <time className="shrink-0 text-[10px] text-slate-400">{formatDate(session.lastSeen)}</time>
                   </span>
                   <span className="mt-2 flex items-center gap-1.5 truncate pl-4 text-xs text-slate-700"><Eye className="h-3.5 w-3.5 shrink-0 text-slate-400" />{session.currentTitle}</span>
-                  {session.currentProduct && <span className="mt-1 block truncate pl-9 text-[11px] text-teal-800">Viewing {session.currentProduct}</span>}
+                  {session.currentProduct && <span className="mt-1 block truncate pl-9 text-[11px] text-blue-800">Viewing {session.currentProduct}</span>}
                   <span className="mt-1 flex items-center justify-between pl-4 text-[11px] text-slate-500">
                     <span>{formatDuration(session.durationSeconds)} on site · {session.pageCount} pages</span>
-                    {session.chatId && <span className={session.chatEngaged ? 'text-emerald-700' : 'text-amber-700'}>{session.chatEngaged ? `Chat · ${session.chatOwner}` : 'Waiting for staff'}</span>}
+                    {session.chatId && <span className={session.chatEngaged ? 'text-blue-700' : 'text-amber-700'}>{session.chatEngaged ? `Chat · ${session.chatOwner}` : 'Waiting for staff'}</span>}
                   </span>
                   <span className="mt-1 flex items-center gap-1.5 truncate pl-4 text-[11px] text-slate-500"><Globe2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />{countryName(session.countryCode)}{session.referrerDomain ? ` · from ${session.referrerDomain}` : ''}</span>
                 </button>
@@ -581,7 +581,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                 <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-4 py-5 sm:px-6">
                   <div className="flex min-w-0 items-center gap-3">
                     <button type="button" onClick={() => setSelectedVisitorSessionId(null)} aria-label="Back to visitor sessions" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"><X className="h-4 w-4" /></button>
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-800"><UserRound className="h-5 w-5" /></span>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-800"><UserRound className="h-5 w-5" /></span>
                     <div className="min-w-0">
                       <h2 className="truncate text-sm font-semibold text-slate-950">Visitor {selectedVisitorSession.visitorId}</h2>
                       <p className="mt-0.5 text-xs text-slate-500">Session started {formatDate(selectedVisitorSession.firstSeen)}</p>
@@ -600,7 +600,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                       Open customer chat
                     </button>
                   )}
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedVisitorSession.active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${selectedVisitorSession.active ? 'bg-blue-50 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
                     <Circle className="h-2 w-2 fill-current" />{selectedVisitorSession.active ? 'Active now' : 'Inactive'}
                   </span>
                 </header>
@@ -617,7 +617,7 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                     <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Eye className="h-3.5 w-3.5" />Current page</p>
                     <p className="mt-1.5 break-words text-sm font-semibold text-slate-900">{selectedVisitorSession.currentTitle}</p>
                     <p className="mt-1 break-all text-xs text-slate-500">{selectedVisitorSession.currentPath}</p>
-                    {selectedVisitorSession.currentProduct && <p className="mt-1 text-xs font-medium text-teal-800">Product: {selectedVisitorSession.currentProduct}</p>}
+                    {selectedVisitorSession.currentProduct && <p className="mt-1 text-xs font-medium text-blue-800">Product: {selectedVisitorSession.currentProduct}</p>}
                   </div>
                   <div className="rounded-xl bg-slate-50 p-3.5">
                     <p className="flex items-center gap-2 text-[11px] font-medium text-slate-500"><Clock3 className="h-3.5 w-3.5" />Session duration · language</p>
@@ -640,11 +640,11 @@ export const LiveChatInbox: React.FC<LiveChatInboxProps> = ({ role }) => {
                       {visitorPages.map((page, index) => (
                         <li key={`${page.path}-${page.viewedAt}-${index}`} className="relative flex gap-3 pb-5 last:pb-0">
                           {index < visitorPages.length - 1 && <span className="absolute bottom-0 left-[7px] top-4 w-px bg-slate-200" />}
-                          <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-teal-600 bg-white" />
+                          <span className="relative mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-2 border-blue-600 bg-white" />
                           <span className="min-w-0 flex-1">
                             <span className="block text-sm font-medium text-slate-800">{page.title || page.path}</span>
                             <span className="mt-0.5 block break-all text-xs text-slate-500">{page.path}</span>
-                            {page.productName && <span className="mt-1 block text-xs font-medium text-teal-800">Product: {page.productName}</span>}
+                            {page.productName && <span className="mt-1 block text-xs font-medium text-blue-800">Product: {page.productName}</span>}
                             <time className="mt-1 block text-[11px] text-slate-400">{formatDate(page.viewedAt)} · {formatDuration(page.dwellSeconds)}</time>
                           </span>
                         </li>

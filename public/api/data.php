@@ -1510,13 +1510,13 @@ function data_mail_card_html(string $subject, string $message): string
     $formattedBody = data_campaign_html($message);
     $bodyContent = substr($formattedBody, strlen('<!doctype html><html><body>'), -strlen('</body></html>'));
     $safeSubject = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    return '<!doctype html><html><body style="margin:0;padding:28px 12px;background:#f1f5f4;font-family:Arial,Helvetica,sans-serif;color:#173b35">'
-        . '<div style="width:100%;max-width:720px;box-sizing:border-box;margin:0 auto;overflow:hidden;border:1px solid #dce8e4;border-radius:16px;background:#ffffff">'
-        . '<div style="padding:20px 26px;background:#123b36;color:#ffffff">'
-        . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#c4ddd4">AMBIENTA · CUSTOMER SUPPORT</p>'
+    return '<!doctype html><html><body style="margin:0;padding:28px 12px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#172033">'
+        . '<div style="width:100%;max-width:720px;box-sizing:border-box;margin:0 auto;overflow:hidden;border:1px solid #cbdcf0;border-radius:16px;background:#ffffff">'
+        . '<div style="padding:20px 26px;background:#123b68;color:#ffffff">'
+        . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#bfdbfe">AMBIENTA · CUSTOMER SUPPORT</p>'
         . '<h1 style="margin:10px 0 0;font-size:20px;line-height:1.35;color:#ffffff">' . $safeSubject . '</h1>'
-        . '</div><div style="padding:24px 26px;font-size:14px;line-height:1.7;color:#405852">' . $bodyContent . '</div>'
-        . '<div style="padding:13px 26px;border-top:1px solid #e8efed;background:#fbfdfc;font-size:11px;color:#71837e">Ambient Customer Support</div>'
+        . '</div><div style="padding:24px 26px;font-size:14px;line-height:1.7;color:#334155">' . $bodyContent . '</div>'
+        . '<div style="padding:13px 26px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11px;color:#64748b">Ambient Customer Support</div>'
         . '</div></body></html>';
 }
 
@@ -5471,35 +5471,35 @@ if ($method === 'POST' && $resource === 'order-payment-link') {
         $safeAdditionalMessage = htmlspecialchars($additionalMessage, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeEmailPaymentMethod = htmlspecialchars($emailPaymentMethod, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $safeTotal = number_format((float) $order['total_amount'], 2);
-        $htmlBody = '<div style="margin:0;padding:28px 12px;background:#f1f5f4;font-family:Arial,Helvetica,sans-serif;color:#173b35">'
-            . '<div style="max-width:560px;margin:0 auto;overflow:hidden;border:1px solid #dce8e4;border-radius:18px;background:#ffffff">'
-            . '<div style="padding:24px 28px;background:#123b36;color:#ffffff">'
-            . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#c4ddd4">AMBIENT · ORDER PAYMENT</p>'
+        $htmlBody = '<div style="margin:0;padding:28px 12px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#172033">'
+            . '<div style="max-width:560px;margin:0 auto;overflow:hidden;border:1px solid #cbdcf0;border-radius:18px;background:#ffffff">'
+            . '<div style="padding:24px 28px;background:#123b68;color:#ffffff">'
+            . '<p style="margin:0;font-size:11px;font-weight:bold;letter-spacing:2px;color:#bfdbfe">AMBIENT · ORDER PAYMENT</p>'
             . '<h1 style="margin:12px 0 0;font-size:23px;line-height:1.3;color:#ffffff">Payment details</h1>'
             . '</div><div style="padding:26px 28px">'
             . '<p style="margin:0 0 10px;font-size:15px;line-height:1.6">Hello ' . $safeName . ',</p>'
-            . '<p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#475f59">' . $safeIntro . '</p>'
-            . '<div style="margin:0 0 20px;padding:17px 18px;border:1px solid #e0e9e6;border-radius:12px;background:#f7faf9">'
-            . '<p style="margin:0 0 10px;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#55716a">Order summary</p>'
+            . '<p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#475569">' . $safeIntro . '</p>'
+            . '<div style="margin:0 0 20px;padding:17px 18px;border:1px solid #cbdcf0;border-radius:12px;background:#f1f7fc">'
+            . '<p style="margin:0 0 10px;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#356a9e">Order summary</p>'
             . '<table role="presentation" style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.6">'
-            . '<tr><td style="padding:3px 0;color:#647873">Order</td><td style="padding:3px 0;text-align:right;font-weight:bold;color:#173b35">' . $safeOrderNumber . '</td></tr>'
-            . '<tr><td style="padding:3px 0;color:#647873">Payment</td><td style="padding:3px 0;text-align:right;color:#173b35">' . $safeEmailPaymentMethod . '</td></tr>'
-            . '<tr><td style="padding:8px 0 0;color:#647873">Total due</td><td style="padding:8px 0 0;text-align:right;font-size:18px;font-weight:bold;color:#123b36">$' . $safeTotal . '</td></tr>'
+            . '<tr><td style="padding:3px 0;color:#64748b">Order</td><td style="padding:3px 0;text-align:right;font-weight:bold;color:#172033">' . $safeOrderNumber . '</td></tr>'
+            . '<tr><td style="padding:3px 0;color:#64748b">Payment</td><td style="padding:3px 0;text-align:right;color:#172033">' . $safeEmailPaymentMethod . '</td></tr>'
+            . '<tr><td style="padding:8px 0 0;color:#647873">Total due</td><td style="padding:8px 0 0;text-align:right;font-size:18px;font-weight:bold;color:#123b68">$' . $safeTotal . '</td></tr>'
             . '</table></div>'
-            . '<p style="margin:0 0 16px;font-size:13px;line-height:1.65;color:#405852">' . $safeInstructions . '</p>'
-            . '<div style="margin:0 0 20px;padding:20px;border:1px solid #dce8e4;border-radius:14px;text-align:center;background:#ffffff">'
-            . '<p style="margin:0 0 12px;font-size:12px;font-weight:bold;color:#173b35">' . $safePaymentLinkLabel . '</p>'
+            . '<p style="margin:0 0 16px;font-size:13px;line-height:1.65;color:#334155">' . $safeInstructions . '</p>'
+            . '<div style="margin:0 0 20px;padding:20px;border:1px solid #cbdcf0;border-radius:14px;text-align:center;background:#ffffff">'
+            . '<p style="margin:0 0 12px;font-size:12px;font-weight:bold;color:#172033">' . $safePaymentLinkLabel . '</p>'
             . '<img src="cid:ambienta-payment-qr" width="180" height="180" alt="QR code for ' . $safePaymentLinkLabel . '" style="display:block;width:180px;height:180px;margin:0 auto 12px;border:0">'
-            . '<p style="margin:0;font-size:11px;line-height:1.5;color:#647873">Scan to open the payment link or copy the payment details below.</p>'
-            . '<div style="margin-top:14px;padding:11px 12px;border-radius:8px;background:#f7faf9;font-size:12px;line-height:1.6;overflow-wrap:anywhere">'
+            . '<p style="margin:0;font-size:11px;line-height:1.5;color:#64748b">Scan to open the payment link or copy the payment details below.</p>'
+            . '<div style="margin-top:14px;padding:11px 12px;border-radius:8px;background:#f1f7fc;font-size:12px;line-height:1.6;overflow-wrap:anywhere">'
             . ($isHttpsPaymentLink
-                ? '<a href="' . $safeLink . '" style="display:inline-block;padding:11px 20px;border-radius:8px;background:#123b36;color:#ffffff;font-weight:bold;text-decoration:none">' . ($previewOnly ? 'Open demo link' : 'Continue to payment') . '</a><br><a href="' . $safeLink . '" style="display:inline-block;margin-top:10px;color:#0f766e;text-decoration:underline">' . $safePaymentLinkLabel . '</a>'
-                : '<code style="font-family:Consolas,monospace;color:#173b35">' . $safeLink . '</code>')
+                ? '<a href="' . $safeLink . '" style="display:inline-block;padding:11px 20px;border-radius:8px;background:#123b68;color:#ffffff;font-weight:bold;text-decoration:none">' . ($previewOnly ? 'Open demo link' : 'Continue to payment') . '</a><br><a href="' . $safeLink . '" style="display:inline-block;margin-top:10px;color:#1d4ed8;text-decoration:underline">' . $safePaymentLinkLabel . '</a>'
+                : '<code style="font-family:Consolas,monospace;color:#172033">' . $safeLink . '</code>')
             . '</div></div>'
-            . ($safeAdditionalMessage !== '' ? '<div style="margin:0 0 20px;padding:14px 16px;border-left:3px solid #85b8a8;background:#f7faf9;font-size:13px;line-height:1.65;color:#405852">' . nl2br($safeAdditionalMessage, false) . '</div>' : '')
-            . '<p style="margin:0 0 10px;font-size:13px;line-height:1.65;color:#405852">' . $safeClosing . '</p>'
-            . '<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#173b35">Warm regards,<br><strong>Ambient</strong></p>'
-            . '</div><div style="padding:15px 28px;border-top:1px solid #e8efed;background:#fbfdfc;font-size:10px;line-height:1.5;color:#71837e">'
+            . ($safeAdditionalMessage !== '' ? '<div style="margin:0 0 20px;padding:14px 16px;border-left:3px solid #60a5fa;background:#f1f7fc;font-size:13px;line-height:1.65;color:#334155">' . nl2br($safeAdditionalMessage, false) . '</div>' : '')
+            . '<p style="margin:0 0 10px;font-size:13px;line-height:1.65;color:#334155">' . $safeClosing . '</p>'
+            . '<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#172033">Warm regards,<br><strong>Ambient</strong></p>'
+            . '</div><div style="padding:15px 28px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:10px;line-height:1.5;color:#64748b">'
             . 'Please verify the order, amount, payment destination, and crypto network before confirming payment. Never share card details or wallet recovery phrases by email.'
             . '</div></div></div>';
         if ($previewOnly) {

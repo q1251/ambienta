@@ -62,14 +62,14 @@ const orderStatusClasses: Record<OnlineOrder['status'], string> = {
   'Pharmacist Review': 'border-sky-300 bg-sky-50 text-sky-800',
   Dispensing: 'border-purple-300 bg-purple-50 text-purple-800',
   'Ready for Pickup': 'border-blue-300 bg-blue-50 text-blue-800',
-  Shipped: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-  Delivered: 'border-emerald-300 bg-emerald-50 text-emerald-800',
-  Completed: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  Shipped: 'border-blue-300 bg-blue-50 text-blue-800',
+  Delivered: 'border-blue-300 bg-blue-50 text-blue-800',
+  Completed: 'border-blue-300 bg-blue-50 text-blue-800',
   Cancelled: 'border-rose-300 bg-rose-50 text-rose-800',
 };
 
 const paymentStatusClass = (status?: OnlineOrder['paymentStatus']): string => {
-  if (status === 'Paid') return 'bg-emerald-50 text-emerald-700';
+  if (status === 'Paid') return 'bg-blue-50 text-blue-700';
   if (status === 'Authorized') return 'bg-sky-50 text-sky-800';
   if (status === 'Payment Failed' || status === 'Refunded') return 'bg-rose-50 text-rose-700';
   return 'bg-amber-50 text-amber-800';
@@ -136,7 +136,7 @@ const OrderStatusTag: React.FC<{
     disabled={disabled}
     onClick={(event) => event.stopPropagation()}
     onChange={(event) => onChange(order, event.currentTarget.value as OnlineOrder['status'], event.currentTarget)}
-    className={`max-w-full cursor-pointer appearance-none rounded-full border px-2.5 py-1 text-[11px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:cursor-wait disabled:opacity-60 ${orderStatusClasses[order.status]}`}
+    className={`max-w-full cursor-pointer appearance-none rounded-full border px-2.5 py-1 text-[11px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 disabled:cursor-wait disabled:opacity-60 ${orderStatusClasses[order.status]}`}
   >
     {orderStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
   </select>
@@ -294,7 +294,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       errorCorrectionLevel: 'M',
       margin: 2,
       width: 220,
-      color: { dark: '#102d2a', light: '#ffffff' },
+      color: { dark: '#0b2f52', light: '#ffffff' },
     }).then((dataUrl) => {
       if (active) setPaymentQrPreview(dataUrl);
     }).catch((error: unknown) => {
@@ -443,7 +443,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           errorCorrectionLevel: 'M',
           margin: 2,
           width: 240,
-          color: { dark: '#102d2a', light: '#ffffff' },
+          color: { dark: '#0b2f52', light: '#ffffff' },
         })
         : undefined;
       const response = await fetch('/api/data.php?resource=order-payment-link', {
@@ -643,7 +643,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 setManualOrderError('');
                 setIsManualModalOpen(true);
               }}
-              className="px-3 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              className="px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create order</span>
@@ -661,15 +661,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
 
         {orderSaveError && <p role="alert" className="border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-900">{orderSaveError}</p>}
         {quickActionSuccess && (
-          <div className="flex items-center justify-between border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-xs text-emerald-900">
+          <div className="flex items-center justify-between border-b border-blue-200 bg-blue-50 px-5 py-3 text-xs text-blue-900">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+              <CheckCircle2 className="h-4 w-4 text-blue-700 shrink-0" />
               <span className="font-semibold">{quickActionSuccess}</span>
             </div>
             <button
               type="button"
               onClick={() => setQuickActionSuccess(null)}
-              className="font-bold text-emerald-800 hover:text-emerald-950"
+              className="font-bold text-blue-800 hover:text-blue-950"
             >
               Dismiss
             </button>
@@ -689,7 +689,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 setCurrentPage(1);
               }}
               placeholder="Search order number, customer, email, or product..."
-              className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-700"
+              className="w-full bg-white border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-700"
             />
           </div>
 
@@ -738,7 +738,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   >
                     <span>Order # &amp; Date</span>
                     {sortField === 'orderNumber' || sortField === 'placedAt' ? (
-                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#1d4ed8]" /> : <ArrowDown className="h-3 w-3 text-[#1d4ed8]" />
                     ) : (
                       <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                     )}
@@ -752,7 +752,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   >
                     <span>Customer Details</span>
                     {sortField === 'patientName' ? (
-                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#1d4ed8]" /> : <ArrowDown className="h-3 w-3 text-[#1d4ed8]" />
                     ) : (
                       <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                     )}
@@ -767,7 +767,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   >
                     <span>Amount &amp; payment</span>
                     {sortField === 'totalAmount' ? (
-                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#1d4ed8]" /> : <ArrowDown className="h-3 w-3 text-[#1d4ed8]" />
                     ) : (
                       <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                     )}
@@ -782,7 +782,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   >
                     <span>Status</span>
                     {sortField === 'status' ? (
-                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#2d5244]" /> : <ArrowDown className="h-3 w-3 text-[#2d5244]" />
+                      sortOrder === 'asc' ? <ArrowUp className="h-3 w-3 text-[#1d4ed8]" /> : <ArrowDown className="h-3 w-3 text-[#1d4ed8]" />
                     ) : (
                       <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
                     )}
@@ -813,7 +813,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         handleOpenDetail(ord);
                       }
                     }}
-                    className="cursor-pointer hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-700"
+                    className="cursor-pointer hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-700"
                   >
                     {/* Order # and Date */}
                     <td className="py-3.5 px-4 font-mono">
@@ -857,7 +857,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     <td className="py-3.5 px-4">
                       <span className="font-medium text-slate-800 block">{ord.deliveryMethod}</span>
                       {ord.trackingNumber ? (
-                        <span className="text-[10px] font-mono text-teal-800 bg-teal-50 px-1 rounded">
+                        <span className="text-[10px] font-mono text-blue-800 bg-blue-50 px-1 rounded">
                           {ord.trackingNumber}
                         </span>
                       ) : (
@@ -876,7 +876,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         <button
                           type="button"
                           onClick={() => handleOpenQuickFulfill(ord)}
-                          className="inline-flex items-center gap-1 rounded-md bg-[#2d5244] px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-[#234237]"
+                          className="inline-flex items-center gap-1 rounded-md bg-[#1d4ed8] px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-[#1e3a5f]"
                           title="Fulfill order & assign tracking"
                         >
                           <Truck className="h-3 w-3" />
@@ -888,7 +888,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         <button
                           type="button"
                           onClick={() => void handleQuickDeliver(ord)}
-                          className="inline-flex items-center gap-1 rounded-md bg-emerald-700 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-emerald-800"
+                          className="inline-flex items-center gap-1 rounded-md bg-blue-700 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-blue-800"
                           title="Mark delivered"
                         >
                           <Check className="h-3 w-3" />
@@ -899,7 +899,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       <button
                         type="button"
                         onClick={() => setPackingSlipOrder(ord)}
-                        className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                        className="p-1.5 text-slate-500 hover:text-blue-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
                         title="Print dispensary packing slip"
                         aria-label={`Print packing slip for ${ord.orderNumber}`}
                       >
@@ -909,7 +909,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenOrderPage(ord)}
-                        className="p-1.5 text-slate-500 hover:text-teal-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
+                        className="p-1.5 text-slate-500 hover:text-blue-800 hover:bg-slate-100 rounded cursor-pointer transition-colors"
                         title="Open order page"
                         aria-label={`Open order page for ${ord.orderNumber}`}
                       >
@@ -931,11 +931,11 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           ) : filteredOrders.map((ord) => (
             <article
               key={ord.id}
-              className="rounded-xl border border-[#e5e8e1] bg-white p-4 transition hover:border-[#c8d4c8] sm:p-5"
+              className="rounded-xl border border-[#e2e8f0] bg-white p-4 transition hover:border-[#cbd5e1] sm:p-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <button type="button" onClick={() => handleOpenDetail(ord)} className="min-w-0 text-left">
-                  <span className="block break-all text-sm font-bold tracking-tight text-[#315649]">{ord.orderNumber}</span>
+                  <span className="block break-all text-sm font-bold tracking-tight text-[#1e40af]">{ord.orderNumber}</span>
                   <span className="mt-1 block text-xs text-slate-500">{ord.placedAt}</span>
                 </button>
                 <div className="flex items-center gap-2">
@@ -943,7 +943,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => handleOpenOrderPage(ord)}
-                    className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50 hover:text-[#315649]"
+                    className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50 hover:text-[#1e40af]"
                     title="Open order page"
                     aria-label={`Open order page for ${ord.orderNumber}`}
                   >
@@ -990,7 +990,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
       {orderPageId && !selectedOrder && (
         <div className="w-full space-y-5">
           <div>
-            <button type="button" onClick={handleCloseOrderPage} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-teal-800">
+            <button type="button" onClick={handleCloseOrderPage} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-800">
               <ArrowLeft className="h-4 w-4" />Orders
             </button>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950">Order details</h1>
@@ -1017,7 +1017,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           {orderPageId && (
             <div className="flex flex-col gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <button type="button" onClick={handleCloseOrderPage} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-teal-800">
+                <button type="button" onClick={handleCloseOrderPage} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-blue-800">
                   <ArrowLeft className="h-4 w-4" />Orders
                 </button>
                 <div className="flex flex-wrap items-center gap-3">
@@ -1045,7 +1045,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
             {/* Header */}
             {!orderPageId && <div className="bg-slate-900 text-white p-5 flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-teal-700 flex items-center justify-center font-bold text-white text-xs">
+                <div className="w-8 h-8 rounded-lg bg-blue-700 flex items-center justify-center font-bold text-white text-xs">
                   ORD
                 </div>
                 <div>
@@ -1124,7 +1124,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         Payment instructions are unavailable because this order is cancelled.
                       </p>
                     ) : selectedOrder.paymentStatus === 'Paid' ? (
-                      <p role="status" className="mt-3 border-t border-emerald-200 pt-3 text-[11px] leading-5 text-emerald-800">
+                      <p role="status" className="mt-3 border-t border-blue-200 pt-3 text-[11px] leading-5 text-blue-800">
                         This order is marked as paid; no payment email is needed.
                       </p>
                     ) : (
@@ -1134,14 +1134,14 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                             Last sent {new Date(`${selectedOrder.paymentLinkSentAt.replace(' ', 'T')}Z`).toLocaleString()}
                           </p>
                         )}
-                        {paymentLinkSuccess && <p role="status" className="text-[11px] font-medium text-emerald-700">{paymentLinkSuccess}</p>}
+                        {paymentLinkSuccess && <p role="status" className="text-[11px] font-medium text-blue-700">{paymentLinkSuccess}</p>}
                         <button
                           type="button"
                           onClick={() => {
                             setPaymentEmailError('');
                             setIsPaymentEmailModalOpen(true);
                           }}
-                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-900"
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-800 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-900"
                         >
                           <Mail className="h-3.5 w-3.5" />
                           {selectedOrder.paymentLinkSentAt ? 'Resend payment email' : 'Email payment instructions'}
@@ -1158,7 +1158,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         type="button"
                         onClick={() => void handleMarkPaymentPaid()}
                         disabled={isMarkingPaymentPaid}
-                        className="w-full rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
+                        className="w-full rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
                       >
                         {isMarkingPaymentPaid ? 'Updating payment…' : 'Mark as paid'}
                       </button>
@@ -1219,7 +1219,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-md bg-teal-50 text-teal-800 flex items-center justify-center font-bold text-xs">
+                            <div className="w-10 h-10 rounded-md bg-blue-50 text-blue-800 flex items-center justify-center font-bold text-xs">
                               Item
                             </div>
                           )}
@@ -1254,7 +1254,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     </span>
                   </div>
                   {selectedOrder.discountAmount ? (
-                    <div className="flex justify-between text-emerald-700">
+                    <div className="flex justify-between text-blue-700">
                       <span>Discount ({selectedOrder.couponCode}):</span>
                       <span className="font-mono font-semibold">-${selectedOrder.discountAmount.toFixed(2)}</span>
                     </div>
@@ -1267,16 +1267,16 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   </div>
                   <div className="border-t border-slate-300 pt-1.5 flex justify-between font-bold text-slate-900 text-sm">
                     <span>Order total (not payment confirmation):</span>
-                    <span className="font-mono text-teal-900">${selectedOrder.totalAmount.toFixed(2)}</span>
+                    <span className="font-mono text-blue-900">${selectedOrder.totalAmount.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Fulfillment & Tracking Section */}
-              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-teal-200 bg-white p-5 shadow-sm' : 'bg-teal-50/50 p-4 rounded-xl border border-teal-200 space-y-3'}>
+              <div className={orderPageId ? 'space-y-4 rounded-2xl border border-blue-200 bg-white p-5 shadow-sm' : 'bg-blue-50/50 p-4 rounded-xl border border-blue-200 space-y-3'}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
-                    <Truck className="w-4 h-4 text-teal-700" />
+                  <span className="font-bold text-blue-950 text-xs flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-blue-700" />
                     <span>Fulfillment &amp; Tracking</span>
                   </span>
                 </div>
@@ -1312,7 +1312,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <button
                     type="button"
                     onClick={handleSaveTracking}
-                    className="px-3 py-1.5 bg-teal-800 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+                    className="px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
                   >
                     Save Tracking
                   </button>
@@ -1371,13 +1371,13 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
             aria-modal="true"
             aria-labelledby="order-payment-email-title"
           >
-            <header className="flex items-start justify-between bg-gradient-to-br from-[#123b36] to-[#1d5b50] px-5 py-5 text-white">
+            <header className="flex items-start justify-between bg-gradient-to-br from-[#123b68] to-[#1d4ed8] px-5 py-5 text-white">
               <div className="min-w-0">
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-teal-100">Order payment</p>
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-100">Order payment</p>
                 <h2 id="order-payment-email-title" className="text-lg font-semibold text-white">
                   Email payment instructions
                 </h2>
-                <p className="mt-1 truncate text-xs text-teal-50/90">
+                <p className="mt-1 truncate text-xs text-blue-50/90">
                   Order {selectedOrder.orderNumber} · {selectedOrder.email} · ${selectedOrder.totalAmount.toFixed(2)}
                 </p>
               </div>
@@ -1386,7 +1386,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 aria-label="Close email modal"
                 onClick={() => setIsPaymentEmailModalOpen(false)}
                 disabled={isSendingPaymentLink}
-                className="rounded-lg p-1 text-teal-100 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                className="rounded-lg p-1 text-blue-100 hover:bg-white/10 hover:text-white disabled:opacity-50"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1401,7 +1401,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     setPaymentLinkType(event.target.value as PaymentLinkType);
                     setPaymentEmailError('');
                   }}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                 >
                   {selectedOrder.paymentMethod !== 'PayPal' && (
                     <option value="provider">Payment provider link</option>
@@ -1421,7 +1421,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     onChange={(event) => setPaymentLinkName(event.target.value)}
                     maxLength={80}
                     placeholder="e.g. PayPal invoice, Coinbase Commerce"
-                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                   />
                 </label>
               )}
@@ -1437,7 +1437,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                         setPaymentCryptoAsset(asset);
                         setPaymentCryptoNetwork(asset === 'BTC' ? 'Bitcoin' : 'Ethereum (ERC-20)');
                       }}
-                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                     >
                       <option value="BTC">Bitcoin (BTC)</option>
                       <option value="ETH">Ethereum (ETH)</option>
@@ -1451,7 +1451,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       value={paymentCryptoNetwork}
                       onChange={(event) => setPaymentCryptoNetwork(event.target.value as CryptoNetwork)}
                       disabled={paymentCryptoAsset !== 'USDT'}
-                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20 disabled:bg-slate-100 disabled:text-slate-600"
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20 disabled:bg-slate-100 disabled:text-slate-600"
                     >
                       {paymentCryptoAsset === 'BTC' ? (
                         <option value="Bitcoin">Bitcoin</option>
@@ -1484,7 +1484,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     : 'https://…'}
                   autoComplete="url"
                   autoFocus
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                 />
               </label>
               <p className="-mt-2 text-[11px] leading-5 text-slate-500">
@@ -1500,7 +1500,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   id="order-payment-email-template"
                   value={paymentEmailTemplate}
                   onChange={(event) => setPaymentEmailTemplate(event.target.value as PaymentEmailTemplate)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                 >
                   {Object.entries(paymentEmailTemplates).map(([value, template]) => (
                     <option key={value} value={value}>{template.label}</option>
@@ -1513,7 +1513,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   id="order-payment-email-design"
                   value={paymentEmailDesign}
                   onChange={(event) => setPaymentEmailDesign(event.target.value as PaymentEmailDesign)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                 >
                   <option value="card">Designed card with QR code</option>
                   <option value="plain">Plain email (no card design)</option>
@@ -1553,7 +1553,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                       : paymentLinkType === 'paypal'
                         ? 'Continue to PayPal using the link below and confirm the order total before approving payment.'
                         : paymentInstructionsForMethod(selectedOrder.paymentMethod || '')}</p>
-                    <p className={paymentEmailDesign === 'card' ? 'font-semibold text-teal-800' : 'break-all text-teal-800 underline'}>
+                    <p className={paymentEmailDesign === 'card' ? 'font-semibold text-blue-800' : 'break-all text-blue-800 underline'}>
                       {paymentLinkInput.trim()
                         ? paymentLinkType === 'crypto_wallet'
                           ? `${paymentCryptoAsset} wallet address (${paymentCryptoNetwork}): ${paymentLinkInput.trim()}`
@@ -1587,14 +1587,14 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   maxLength={1000}
                   rows={2}
                   placeholder="Add a short note"
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-700/20"
                 />
               </label>
               <p className="text-[11px] leading-5 text-slate-500">
                 Use a provider-generated link. Never request card or wallet credentials by email. The selected body template and your optional message will be included. Hostinger acceptance does not confirm delivery.
               </p>
               {paymentEmailError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{paymentEmailError}</p>}
-              {paymentLinkSuccess && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">{paymentLinkSuccess}</p>}
+              {paymentLinkSuccess && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">{paymentLinkSuccess}</p>}
             </div>
             <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:justify-between">
                 <button
@@ -1618,7 +1618,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                     type="button"
                     onClick={() => void handleSendPaymentLink(false)}
                     disabled={isSendingPaymentLink || !paymentLinkInput.trim() || (paymentLinkType === 'custom' && !paymentLinkName.trim())}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-teal-800 px-3 py-2.5 text-xs font-semibold text-white hover:bg-teal-900 disabled:cursor-wait disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-800 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-900 disabled:cursor-wait disabled:opacity-60"
                   >
                     <Mail className="h-3.5 w-3.5" />
                     {isSendingPaymentLink ? 'Sending…' : selectedOrder.paymentLinkSentAt ? 'Resend email' : 'Send email'}
@@ -1726,7 +1726,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <button
                   type="submit"
                   disabled={isSavingManualOrder}
-                  className="px-5 py-2 text-xs font-bold text-white bg-teal-800 hover:bg-teal-700 rounded-lg shadow-xs cursor-pointer"
+                  className="px-5 py-2 text-xs font-bold text-white bg-blue-800 hover:bg-blue-700 rounded-lg shadow-xs cursor-pointer"
                 >
                   {isSavingManualOrder ? 'Saving…' : 'Create order'}
                 </button>
@@ -1742,7 +1742,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl text-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Truck className="h-5 w-5 text-[#2d5244]" />
+                <Truck className="h-5 w-5 text-[#1d4ed8]" />
                 <h3 className="text-base font-bold text-slate-900">
                   Fulfill &amp; Ship Order #{quickFulfillOrder.orderNumber}
                 </h3>
@@ -1768,7 +1768,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 <select
                   value={quickCarrier}
                   onChange={(e) => setQuickCarrier(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#2d5244]"
+                  className="w-full rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#1d4ed8]"
                 >
                   <option value="CareCourier Express">CareCourier Express (Standard Pharmacy Courier)</option>
                   <option value="FedEx Health Logistics">FedEx Health Logistics</option>
@@ -1783,7 +1783,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <button
                     type="button"
                     onClick={handleRegenerateTracking}
-                    className="text-[10px] font-semibold text-[#2d5244] hover:underline cursor-pointer"
+                    className="text-[10px] font-semibold text-[#1d4ed8] hover:underline cursor-pointer"
                   >
                     Regenerate Code
                   </button>
@@ -1792,7 +1792,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   type="text"
                   value={quickTracking}
                   onChange={(e) => setQuickTracking(e.target.value)}
-                  className="w-full font-mono rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#2d5244]"
+                  className="w-full font-mono rounded-lg border border-slate-300 p-2 text-xs text-slate-900 focus:outline-none focus:border-[#1d4ed8]"
                 />
               </div>
             </div>
@@ -1809,7 +1809,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 type="button"
                 onClick={handleConfirmQuickFulfill}
                 disabled={quickFulfilling || !quickTracking.trim()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#2d5244] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#234237] disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#1d4ed8] px-4 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#1e3a5f] disabled:opacity-50 cursor-pointer"
               >
                 <Truck className="h-3.5 w-3.5" />
                 <span>{quickFulfilling ? 'Dispatching…' : 'Confirm & Mark Shipped'}</span>
@@ -1825,7 +1825,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl text-xs space-y-5 print:shadow-none print:border-0 print:max-h-none print:p-8">
             <div className="flex items-start justify-between border-b border-slate-200 pb-4 print:border-b-2 print:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#2d5244] text-white font-bold text-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1d4ed8] text-white font-bold text-sm">
                   AMB
                 </div>
                 <div>
@@ -1840,7 +1840,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => window.print()}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#2d5244] px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#234237] cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#1d4ed8] px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#1e3a5f] cursor-pointer"
                   >
                     <Printer className="h-3.5 w-3.5" />
                     <span>Print Packing Slip</span>
@@ -1877,7 +1877,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   Method: <span className="font-semibold text-slate-800">{packingSlipOrder.deliveryMethod}</span>
                 </p>
                 {packingSlipOrder.trackingNumber && (
-                  <p className="font-mono text-[11px] text-[#2d5244] font-semibold mt-0.5">
+                  <p className="font-mono text-[11px] text-[#1d4ed8] font-semibold mt-0.5">
                     {packingSlipOrder.carrier || 'Courier'}: {packingSlipOrder.trackingNumber}
                   </p>
                 )}
@@ -1935,7 +1935,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                   </span>
                 </div>
                 {packingSlipOrder.discountAmount ? (
-                  <div className="flex justify-between text-emerald-700">
+                  <div className="flex justify-between text-blue-700">
                     <span>Discount:</span>
                     <span className="font-mono font-semibold">-${packingSlipOrder.discountAmount.toFixed(2)}</span>
                   </div>
@@ -1948,15 +1948,15 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({
                 </div>
                 <div className="border-t border-slate-300 pt-1.5 flex justify-between font-bold text-slate-950 text-sm">
                   <span>Total Invoiced:</span>
-                  <span className="font-mono text-[#2d5244]">${packingSlipOrder.totalAmount.toFixed(2)}</span>
+                  <span className="font-mono text-[#1d4ed8]">${packingSlipOrder.totalAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
             {/* Dispensary Verification Badge */}
-            <div className="rounded-xl border border-[#2d5244]/20 bg-[#f4f7f5] p-3.5 space-y-2 text-[11px] text-slate-700">
-              <div className="flex items-center gap-2 font-bold text-[#224136]">
-                <CheckCircle2 className="h-4 w-4 text-[#2d5244]" />
+            <div className="rounded-xl border border-[#1d4ed8]/20 bg-[#f1f5f9] p-3.5 space-y-2 text-[11px] text-slate-700">
+              <div className="flex items-center gap-2 font-bold text-[#1e40af]">
+                <CheckCircle2 className="h-4 w-4 text-[#1d4ed8]" />
                 <span>Clinical Pharmacist Safety &amp; Dispensing Inspection</span>
               </div>
               <p className="leading-relaxed">

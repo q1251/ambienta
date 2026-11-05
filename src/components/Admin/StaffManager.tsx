@@ -332,14 +332,14 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Access control</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Access control</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{profileAccountId === null ? 'Agent management' : 'Agent profile'}</h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">{profileAccountId === null ? 'Create accounts and select an agent to view their profile, manage access, update credentials, or enter their workspace.' : 'Review and manage this agent’s account, permissions, credentials, and assigned leads.'}</p>
         </div>
       </header>
 
       {(profileAccountId === null || editingId === null) && error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</p>}
-      {(profileAccountId === null || editingId === null) && message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">{message}</p>}
+      {(profileAccountId === null || editingId === null) && message && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{message}</p>}
 
       {profileAccountId !== null ? (
         <section className="space-y-6">
@@ -352,7 +352,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
             <>
               <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent profile</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Agent profile</p>
                   <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{selectedProfile.display_name || selectedProfile.email}</h2>
                   <p className="mt-1 text-sm text-slate-600">{selectedProfile.email} · {selectedProfile.is_active ? 'Active' : 'Inactive'} agent</p>
                 </div>
@@ -388,7 +388,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                     <button type="button" onClick={() => startEditing(selectedProfile)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Edit profile</button>
                     <div className="w-full border-t border-slate-100 pt-4">
                       <div className="flex flex-wrap gap-2">
-                        {selectedProfile.permissions.map((permission) => <span key={permission} className="rounded-full bg-teal-50 px-3 py-1 text-xs font-medium capitalize text-teal-900">{permission}</span>)}
+                        {selectedProfile.permissions.map((permission) => <span key={permission} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium capitalize text-blue-900">{permission}</span>)}
                         {!selectedProfile.permissions.length && <span className="text-sm text-slate-500">No operational permissions</span>}
                       </div>
                     </div>
@@ -396,7 +396,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <div className="grid gap-4 md:grid-cols-2">
                     <section className="rounded-2xl border border-slate-200 bg-white p-5">
                       <h3 className="font-semibold text-slate-900">Account history</h3>
-                      <p className="mt-3 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-teal-800" />Created {new Date(selectedProfile.created_at).toLocaleString()}</p>
+                      <p className="mt-3 flex items-center gap-2 text-sm text-slate-700"><CalendarDays className="h-4 w-4 text-blue-800" />Created {new Date(selectedProfile.created_at).toLocaleString()}</p>
                       <p className="mt-2 text-sm text-slate-600">Created by {selectedProfile.created_by}</p>
                       <p className="mt-1 text-sm text-slate-600">Last updated {new Date(selectedProfile.updated_at).toLocaleString()}</p>
                     </section>
@@ -436,7 +436,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 checked={agentsMayClaimWhenAdminOnline}
                 disabled={routingSaving}
                 onChange={(event) => void updateChatRouting(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-teal-800 focus:ring-teal-700"
+                className="h-4 w-4 rounded border-slate-300 text-blue-800 focus:ring-blue-700"
               />
               Allow agents to claim while I’m online
             </label>
@@ -450,7 +450,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="font-semibold text-slate-900">Your presence</h2>
           <p className="mt-2 flex items-center gap-2 text-sm text-slate-700">
-            <span className={`h-2.5 w-2.5 rounded-full ${presence?.admin.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span className={`h-2.5 w-2.5 rounded-full ${presence?.admin.online ? 'bg-blue-500' : 'bg-slate-300'}`} />
             {presence?.admin.online ? `Online · ${formatDuration(presence.admin.durationSeconds)}` : 'Offline'}
           </p>
           {presence?.admin.online && <p className="mt-1 text-xs capitalize text-slate-500">Current section: {presence.admin.currentSection || 'overview'}</p>}
@@ -470,7 +470,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <p className="truncate text-xs text-slate-500">{agent.email}</p>
               </div>
               <div className="text-right">
-                <p className={`text-xs font-semibold ${agent.online ? 'text-emerald-700' : 'text-slate-500'}`}>
+                <p className={`text-xs font-semibold ${agent.online ? 'text-blue-700' : 'text-slate-500'}`}>
                   {agent.online ? `Online · ${formatDuration(agent.durationSeconds)}` : agent.active ? 'Offline' : 'Inactive'}
                 </p>
                 <p className="mt-0.5 text-xs capitalize text-slate-500">{agent.online ? agent.currentSection || 'overview' : 'No current activity'}</p>
@@ -488,7 +488,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
             <Users className="h-5 w-5 text-slate-500" />
             <h2 className="font-semibold text-slate-900">Agents ({accounts.length})</h2>
           </div>
-          <button type="button" onClick={() => { setError(''); setCreateModalOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-900">
+          <button type="button" onClick={() => { setError(''); setCreateModalOpen(true); }} className="inline-flex items-center gap-2 rounded-xl bg-blue-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-900">
             <UserPlus className="h-4 w-4" />Create agent
           </button>
         </div>
@@ -498,11 +498,11 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-slate-900">{account.display_name || account.email}</p>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${account.is_active ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{account.is_active ? 'Active' : 'Inactive'}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${account.is_active ? 'bg-blue-50 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{account.is_active ? 'Active' : 'Inactive'}</span>
                     </div>
                     <p className="mt-1 break-words text-xs text-slate-500">{account.email} · {account.assigned_lead_count} assigned leads · Created {account.created_at} by {account.created_by}</p>
                     <p className="mt-2 flex flex-wrap gap-1.5">
-                      {account.permissions.map((permission) => <span key={permission} className="rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium capitalize text-teal-900">{permission}</span>)}
+                      {account.permissions.map((permission) => <span key={permission} className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium capitalize text-blue-900">{permission}</span>)}
                       {!account.permissions.length && <span className="text-xs text-slate-500">No operational permissions</span>}
                     </p>
                   </div>
@@ -527,7 +527,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
         >
           <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="create-agent-title">
             <header className="border-b border-slate-200 px-5 py-4 sm:px-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent management</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Agent management</p>
               <h2 id="create-agent-title" className="mt-1 text-xl font-semibold text-slate-950">Create agent account</h2>
               <p className="mt-1 text-sm text-slate-600">Choose account details and the operational sections this agent can access.</p>
             </header>
@@ -550,7 +550,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-teal-800" />
+                      <input type="checkbox" checked={permissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !permissions.includes('leads')} onChange={() => togglePermission(permissions, permission.id, setPermissions)} className="rounded border-slate-300 text-blue-800" />
                       {permission.label}
                     </label>
                   ))}
@@ -559,7 +559,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
               <p className="text-xs leading-5 text-slate-500">The password is stored as a secure hash, and the agent will be required to change it at first sign-in. Share the temporary password out-of-band.</p>
               <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" disabled={saving} onClick={() => setCreateModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={saving || !displayName.trim() || !email.trim() || temporaryPassword.length < 12} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
+                <button type="submit" disabled={saving || !displayName.trim() || !email.trim() || temporaryPassword.length < 12} className="rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:opacity-50">{saving ? 'Creating…' : 'Create agent'}</button>
               </footer>
             </form>
           </section>
@@ -580,7 +580,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
             aria-labelledby="edit-agent-profile-title"
           >
             <header className="border-b border-slate-200 px-5 py-4 sm:px-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-800">Agent account</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-800">Agent account</p>
               <h2 id="edit-agent-profile-title" className="mt-1 text-xl font-semibold text-slate-950">Edit profile</h2>
               <p className="mt-1 text-sm text-slate-600">Update the agent’s name, sign-in email, and operational permissions.</p>
             </header>
@@ -610,7 +610,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {availablePermissions.map((permission) => (
                     <label key={permission.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
-                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-teal-800" />
+                      <input type="checkbox" checked={editPermissions.includes(permission.id)} disabled={permission.id === 'new_leads' && !editPermissions.includes('leads')} onChange={() => togglePermission(editPermissions, permission.id, setEditPermissions)} className="rounded border-slate-300 text-blue-800" />
                       {permission.label}
                     </label>
                   ))}
@@ -618,7 +618,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ onEnterAccount }) =>
               </fieldset>
               <footer className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" disabled={saving} onClick={closeEditModal} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={saving || !editName.trim() || !editEmail.trim()} className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
+                <button type="submit" disabled={saving || !editName.trim() || !editEmail.trim()} className="rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
               </footer>
             </form>
           </section>

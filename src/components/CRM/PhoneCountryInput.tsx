@@ -60,7 +60,7 @@ const CountryPicker: React.FC<CountryPickerProps> = ({
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex min-h-10 w-full items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex min-h-10 w-full items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm text-slate-900 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <CountryFlag countryCode={selectedCountry?.code} />
         <span className="min-w-0 flex-1 truncate">
@@ -97,12 +97,12 @@ const CountryPicker: React.FC<CountryPickerProps> = ({
                 type="button"
                 aria-pressed={country.code === value}
                 onClick={() => chooseCountry(country)}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-slate-800 hover:bg-teal-50 focus-visible:bg-teal-50 focus-visible:outline-none"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-slate-800 hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none"
               >
                 <CountryFlag countryCode={country.code} />
                 <span className="min-w-0 flex-1 truncate">{country.name}</span>
                 {showCallingCode && <span className="text-slate-500">+{country.callingCode}</span>}
-                {country.code === value && <Check aria-hidden="true" className="h-4 w-4 text-teal-800" />}
+                {country.code === value && <Check aria-hidden="true" className="h-4 w-4 text-blue-800" />}
               </button>
             ))}
             {!visibleCountries.length && <p className="px-3 py-4 text-center text-sm text-slate-500">No countries found.</p>}

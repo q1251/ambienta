@@ -245,28 +245,28 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   };
 
   return (
-    <div className={`crm-shell bg-[#f4f5f1] text-slate-900 ${
+    <div className={`crm-shell bg-[#f1f5f9] text-slate-900 ${
       activeTab === 'email' || activeTab === 'chat'
         ? 'flex h-dvh min-h-0 flex-col overflow-hidden'
         : 'min-h-screen'
     }`}>
-      <header className="sticky top-0 z-30 border-b border-[#e5e7e1] bg-white">
+      <header className="sticky top-0 z-30 border-b border-[#e2e8f0] bg-white">
         <div className="flex h-[72px] items-center justify-between gap-4 px-4 sm:px-7">
           <div className="flex min-w-0 items-center gap-3">
             <img src="/ambients-mark.svg" alt="" className="h-10 w-10 rounded-xl" />
             <div className="min-w-0">
-              <p className="truncate text-[15px] font-bold tracking-[-0.03em] text-[#172d2c]">Ambienta</p>
+              <p className="truncate text-[15px] font-bold tracking-[-0.03em] text-[#172033]">Ambienta</p>
               <p className="text-[11px] font-medium tracking-wide text-slate-500">PHARMACY OPERATIONS</p>
             </div>
             <span className="mx-2 hidden h-8 w-px bg-slate-200 sm:block" />
             <p className="hidden truncate text-sm font-semibold text-slate-700 sm:block">{activeLabel}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <span className={`hidden rounded-full px-2.5 py-1.5 text-[11px] font-bold sm:inline-flex ${props.role === 'admin' ? 'bg-[#f0edf8] text-[#554477]' : 'bg-[#eaf3ed] text-[#35614a]'}`}>
+            <span className={`hidden rounded-full px-2.5 py-1.5 text-[11px] font-bold sm:inline-flex ${props.role === 'admin' ? 'bg-[#f0edf8] text-[#554477]' : 'bg-[#e8f2fb] text-[#1d4ed8]'}`}>
               {props.role === 'admin' ? 'Superadmin' : 'Agent'}
             </span>
             <div className="hidden min-w-0 items-center gap-2.5 border-l border-slate-200 pl-3 sm:flex">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e8eeea] text-xs font-bold uppercase text-[#315a4b]">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e8f2fb] text-xs font-bold uppercase text-[#1e40af]">
                 {(props.displayName || props.email || 'A').trim().slice(0, 1)}
               </span>
               <span className="max-w-40 truncate text-xs font-semibold text-slate-700">{props.displayName || props.email}</span>
@@ -291,10 +291,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
           ? 'min-h-0 flex-1'
           : 'min-h-[calc(100vh-72px)]'
       }`}>
-        <aside className="sticky top-[72px] hidden h-[calc(100vh-72px)] w-[264px] shrink-0 flex-col border-r border-[#e5e7e1] bg-[#fbfcfa] px-4 py-6 lg:flex">
-          <div className="mb-6 rounded-xl border border-[#e7e9e3] bg-white px-3.5 py-3">
+        <aside className="sticky top-[72px] hidden h-[calc(100vh-72px)] w-[264px] shrink-0 flex-col border-r border-[#e2e8f0] bg-[#f8fafc] px-4 py-6 lg:flex">
+          <div className="mb-6 rounded-xl border border-[#e2e8f0] bg-white px-3.5 py-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Workspace</p>
-            <p className="mt-1 text-sm font-semibold text-[#213936]">{props.role === 'admin' ? 'Administration' : 'Team workspace'}</p>
+            <p className="mt-1 text-sm font-semibold text-[#1e3a5f]">{props.role === 'admin' ? 'Administration' : 'Team workspace'}</p>
           </div>
           <nav aria-label="Workspace navigation" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div>
@@ -317,9 +317,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             ))}
           </div>
           </nav>
-          <div className="mt-5 border-t border-[#e8eae4] pt-4">
+          <div className="mt-5 border-t border-[#e2e8f0] pt-4">
             <div className="mb-3 flex min-w-0 items-center gap-2.5 px-2">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e8eeea] text-xs font-bold uppercase text-[#315a4b]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e8f2fb] text-xs font-bold uppercase text-[#1e40af]">
                 {(props.displayName || props.email || 'A').trim().slice(0, 1)}
               </span>
               <div className="min-w-0">
@@ -330,7 +330,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
             <button
               type="button"
               onClick={() => void logout()}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f1f3ef] hover:text-slate-950"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-600 transition hover:bg-[#f1f5f9] hover:text-slate-950"
             >
               <LogOut className="h-4 w-4 text-slate-400" />
               <span>Sign out</span>
@@ -406,8 +406,8 @@ interface NavButtonProps {
 }
 
 const NavButton: React.FC<NavButtonProps> = ({ item, label, active, onSelect }) => (
-  <button type="button" onClick={() => onSelect(item.id)} aria-current={active ? 'page' : undefined} className={`group mb-1 flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-left text-[13px] transition ${active ? 'border-[#52735f] bg-[#edf2ed] font-semibold text-[#244438]' : 'border-transparent font-medium text-slate-600 hover:bg-[#f0f2ee] hover:text-slate-950'}`}>
-    <item.icon className={`h-[17px] w-[17px] ${active ? 'text-[#456953]' : 'text-slate-400 group-hover:text-slate-600'}`} />
+  <button type="button" onClick={() => onSelect(item.id)} aria-current={active ? 'page' : undefined} className={`group mb-1 flex w-full items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-left text-[13px] transition ${active ? 'border-[#1d4ed8] bg-[#e8f2fb] font-semibold text-[#1e3a5f]' : 'border-transparent font-medium text-slate-600 hover:bg-[#f1f5f9] hover:text-slate-950'}`}>
+    <item.icon className={`h-[17px] w-[17px] ${active ? 'text-[#1e40af]' : 'text-slate-400 group-hover:text-slate-600'}`} />
     <span>{label}</span>
   </button>
 );

@@ -985,7 +985,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     <div className={mode === 'mailbox' ? 'mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-3' : 'space-y-5'}>
       <header className={mode === 'mailbox' ? 'shrink-0 flex flex-wrap items-end justify-between gap-x-4 gap-y-2' : undefined}>
         <div className="min-w-0">
-          <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${mode === 'settings' ? 'text-violet-700' : 'text-[#315649]'}`}>
+          <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${mode === 'settings' ? 'text-violet-700' : 'text-[#1e40af]'}`}>
             {mode === 'settings' ? 'Connections' : 'Communications'}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
@@ -1019,7 +1019,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </div>
           <span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
             settings.verified
-              ? 'bg-emerald-50 text-emerald-800'
+              ? 'bg-blue-50 text-blue-800'
               : settings.configured
                 ? 'bg-amber-50 text-amber-800'
                 : 'bg-slate-100 text-slate-700'
@@ -1033,7 +1033,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>
         )}
         {successMessage && (
-          <p role="status" className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>
+          <p role="status" className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>
         )}
 
         {role === 'admin' ? (
@@ -1076,8 +1076,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             onClick={() => setActiveFolder('compose')}
             className={`mr-1 inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
               activeFolder === 'compose'
-                ? 'bg-[#315649] text-white'
-                : 'bg-[#315649] text-white hover:bg-[#26483b]'
+                ? 'bg-[#1e40af] text-white'
+                : 'bg-[#1e40af] text-white hover:bg-[#1e40af]'
             }`}
           >
             <Mail className="h-4 w-4" /> Compose
@@ -1099,7 +1099,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 }}
                 className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === folder
-                    ? 'bg-[#eaf0eb] text-[#315649]'
+                    ? 'bg-[#e8f2fb] text-[#1e40af]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                 }`}
               >
@@ -1116,7 +1116,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 onClick={() => setActiveFolder('campaigns')}
                 className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === 'campaigns' || activeFolder === 'campaign-history'
-                    ? 'bg-[#eaf0eb] text-[#315649]'
+                    ? 'bg-[#e8f2fb] text-[#1e40af]'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'
                 }`}
               >
@@ -1129,7 +1129,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 onClick={() => setActiveFolder('campaign-history')}
                 className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
                   activeFolder === 'campaign-history'
-                    ? 'bg-[#eaf0eb] text-[#315649]'
+                    ? 'bg-[#e8f2fb] text-[#1e40af]'
                     : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
                 }`}
               >
@@ -1138,15 +1138,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               </>
             )}
           </nav>
-          <span className={`ml-auto hidden shrink-0 items-center gap-1.5 px-2 text-xs 2xl:inline-flex ${settings.verified ? 'text-emerald-700' : 'text-amber-700'}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${settings.verified ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          <span className={`ml-auto hidden shrink-0 items-center gap-1.5 px-2 text-xs 2xl:inline-flex ${settings.verified ? 'text-blue-700' : 'text-amber-700'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${settings.verified ? 'bg-blue-500' : 'bg-amber-500'}`} />
             {settings.verified ? 'Connected' : 'Not verified'}
           </span>
         </div>
 
         <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
           {errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
-          {successMessage && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">{successMessage}</p>}
+          {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
             <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
@@ -1204,7 +1204,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">Preview formatted message</summary>
                   {emailDesign === 'card' ? (
                     <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-teal-800">Ambienta · Customer support</p>
+                      <p className="mb-3 text-[10px] font-bold uppercase tracking-wider text-blue-800">Ambienta · Customer support</p>
                       <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{formatMailText(messageBody) || '(message preview)'}</p>
                     </div>
                   ) : (
@@ -1280,7 +1280,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <ul className="divide-y divide-slate-100">
                       {inboxMessages.map((message) => (
                         <li key={message.id}>
-                          <button type="button" onClick={() => setSelectedMailboxMessageId(message.id)} aria-current={selectedMailboxMessage?.id === message.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedMailboxMessage?.id === message.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                          <button type="button" onClick={() => setSelectedMailboxMessageId(message.id)} aria-current={selectedMailboxMessage?.id === message.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedMailboxMessage?.id === message.id ? 'border-[#1e40af] bg-[#e8f2fb]' : 'border-transparent hover:bg-slate-50'}`}>
                             <span className="flex items-center justify-between gap-2">
                               <span className={`truncate text-sm ${message.unread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>{message.from.split('<')[0].trim() || message.from}</span>
                               <time className="shrink-0 text-[10px] text-slate-500" title={message.date}>{formatMailboxDate(message.date)}</time>
@@ -1307,12 +1307,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                           <p className="mt-2 break-all text-sm font-medium text-slate-700">{selectedMailboxMessage.from}</p>
                           <p className="mt-1 text-xs text-slate-500">{formatMailboxDate(selectedMailboxMessage.date, true)}</p>
                         </div>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedMailboxMessage.unread ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedMailboxMessage.unread ? 'bg-blue-50 text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
                           {selectedMailboxMessage.unread ? 'Unread' : 'Read'}
                         </span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => void replyToInbox(selectedMailboxMessage)} className="rounded-lg bg-[#315649] px-3 py-2 text-xs font-semibold text-white hover:bg-[#26483b]">Reply</button>
+                        <button type="button" onClick={() => void replyToInbox(selectedMailboxMessage)} className="rounded-lg bg-[#1e40af] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1e40af]">Reply</button>
                         <button type="button" onClick={() => void forwardInboxMessage(selectedMailboxMessage)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Forward</button>
                         <button type="button" onClick={() => void setMessageReadState(selectedMailboxMessage, 'inbox', selectedMailboxMessage.unread)} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{selectedMailboxMessage.unread ? 'Mark read' : 'Mark unread'}</button>
                         <button type="button" onClick={() => void moveMailToTrash(selectedMailboxMessage)} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Move to Trash</button>
@@ -1351,7 +1351,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </article>
                 ) : (
                   <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#edf3ee] text-[#315649]"><Inbox className="h-5 w-5" /></span>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e8f2fb] text-[#1e40af]"><Inbox className="h-5 w-5" /></span>
                     <p className="mt-3 text-sm font-semibold text-slate-800">Select a message</p>
                     <p className="mt-1 text-xs text-slate-500">Choose an email from the list to read it here.</p>
                   </div>
@@ -1371,8 +1371,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   <button type="button" onClick={() => { void loadData(); if (sentSource === 'hostinger') void refreshMailboxFolder('sent'); }} disabled={isLoading || (sentSource === 'hostinger' && (!settings.verified || isSyncingSent))} className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Refresh</button>
                 </div>
                 <div role="tablist" aria-label="Sent mail source" className="grid grid-cols-2 gap-1 border-b border-slate-100 p-2">
-                  <button type="button" role="tab" aria-selected={sentSource === 'crm'} onClick={() => { setSentSource('crm'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'crm' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>CRM sent ({activityTotal})</button>
-                  <button type="button" role="tab" aria-selected={sentSource === 'hostinger'} onClick={() => { setSentSource('hostinger'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'hostinger' ? 'bg-[#eaf0eb] text-[#315649]' : 'text-slate-600 hover:bg-slate-50'}`}>Hostinger ({mailboxTotal})</button>
+                  <button type="button" role="tab" aria-selected={sentSource === 'crm'} onClick={() => { setSentSource('crm'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'crm' ? 'bg-[#e8f2fb] text-[#1e40af]' : 'text-slate-600 hover:bg-slate-50'}`}>CRM sent ({activityTotal})</button>
+                  <button type="button" role="tab" aria-selected={sentSource === 'hostinger'} onClick={() => { setSentSource('hostinger'); setMailboxPage(1); setMailboxSearchInput(''); setMailboxSearch(''); setSelectedSentActivityId(null); setSelectedHostSentMessageId(null); }} className={`rounded-lg px-3 py-2 text-sm font-semibold ${sentSource === 'hostinger' ? 'bg-[#e8f2fb] text-[#1e40af]' : 'text-slate-600 hover:bg-slate-50'}`}>Hostinger ({mailboxTotal})</button>
                 </div>
                 {sentSource === 'hostinger' && !settings.configured ? (
                   <p className="p-6 text-center text-sm text-slate-500">Configure the Hostinger mailbox to load sent messages.</p>
@@ -1412,10 +1412,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                           <ul className="divide-y divide-slate-100">
                             {messages.map((item) => (
                               <li key={item.id}>
-                                <button type="button" onClick={() => setSelectedSentActivityId(item.id)} aria-current={selectedSentActivity?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedSentActivity?.id === item.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                                <button type="button" onClick={() => setSelectedSentActivityId(item.id)} aria-current={selectedSentActivity?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedSentActivity?.id === item.id ? 'border-[#1e40af] bg-[#e8f2fb]' : 'border-transparent hover:bg-slate-50'}`}>
                                   <span className="flex items-center justify-between gap-2">
                                     <span className="truncate text-sm font-semibold text-slate-900">{item.recipientEmail}</span>
-                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status === 'Sent' ? 'SMTP accepted' : item.status}</span>
+                                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.status === 'Sent' ? 'bg-blue-50 text-blue-800' : item.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{item.status === 'Sent' ? 'SMTP accepted' : item.status}</span>
                                   </span>
                                   <span className="mt-1 block truncate text-sm text-slate-800">{item.subject || '(no subject)'}</span>
                                   <time className="mt-1 block truncate text-xs text-slate-500" title={item.sentAt}>{formatMailboxDate(item.sentAt, true)}</time>
@@ -1430,7 +1430,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         <ul className="divide-y divide-slate-100">
                           {hostSentMessages.map((item) => (
                             <li key={item.id}>
-                              <button type="button" onClick={() => setSelectedHostSentMessageId(item.id)} aria-current={selectedHostSentMessage?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedHostSentMessage?.id === item.id ? 'border-[#315649] bg-[#edf3ee]' : 'border-transparent hover:bg-slate-50'}`}>
+                              <button type="button" onClick={() => setSelectedHostSentMessageId(item.id)} aria-current={selectedHostSentMessage?.id === item.id ? 'true' : undefined} className={`w-full border-l-2 px-3 py-2.5 text-left transition-colors ${selectedHostSentMessage?.id === item.id ? 'border-[#1e40af] bg-[#e8f2fb]' : 'border-transparent hover:bg-slate-50'}`}>
                                 <span className="flex items-center justify-between gap-2">
                                   <span className="truncate text-sm font-semibold text-slate-900">{item.from.split('<')[0].trim() || item.from}</span>
                                   <time className="shrink-0 text-[10px] text-slate-500" title={item.date}>{formatMailboxDate(item.date)}</time>
@@ -1456,7 +1456,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       {selectedSentActivity.cc.length > 0 && <p className="mt-1 break-all text-xs text-slate-500">CC: {selectedSentActivity.cc.join(', ')}</p>}
                       {selectedSentActivity.bcc.length > 0 && <p className="mt-1 break-all text-xs text-slate-500">BCC: {selectedSentActivity.bcc.join(', ')}</p>}
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedSentActivity.status === 'Sent' ? 'bg-emerald-50 text-emerald-800' : selectedSentActivity.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{selectedSentActivity.status === 'Sent' ? 'SMTP accepted' : selectedSentActivity.status}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedSentActivity.status === 'Sent' ? 'bg-blue-50 text-blue-800' : selectedSentActivity.status === 'Failed' ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'}`}>{selectedSentActivity.status === 'Sent' ? 'SMTP accepted' : selectedSentActivity.status}</span>
                         <time className="text-xs text-slate-500">{formatMailboxDate(selectedSentActivity.sentAt, true)}</time>
                       </div>
                       <p className="text-xs text-slate-500">{selectedSentActivity.status === 'Sent' ? 'Accepted by SMTP; final delivery is not confirmed.' : selectedSentActivity.status === 'Failed' ? 'Sending failed.' : 'Sending outcome is unknown; check Hostinger before retrying.'}</p>
@@ -1502,7 +1502,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </article>
                 ) : (
                   <div className="flex h-full min-h-0 flex-col items-center justify-center px-6 text-center">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#edf3ee] text-[#315649]"><Send className="h-5 w-5" /></span>
+                    <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e8f2fb] text-[#1e40af]"><Send className="h-5 w-5" /></span>
                     <p className="mt-3 text-sm font-semibold text-slate-800">Select a sent message</p>
                     <p className="mt-1 text-xs text-slate-500">Choose a message from the list to read it here.</p>
                   </div>
@@ -1702,7 +1702,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate text-sm font-semibold text-slate-900">{campaign.name}</p>
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            campaign.status === 'sent' ? 'bg-emerald-50 text-emerald-800'
+                            campaign.status === 'sent' ? 'bg-blue-50 text-blue-800'
                               : campaign.status === 'partial' || campaign.status === 'failed' ? 'bg-rose-50 text-rose-800'
                                 : campaign.status === 'sending' ? 'bg-blue-50 text-blue-800'
                                   : campaign.status === 'scheduled' ? 'bg-violet-50 text-violet-800'

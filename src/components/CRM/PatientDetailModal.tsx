@@ -65,7 +65,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   const getStatusBadge = (status: RefillRecord['status']) => {
     switch (status) {
       case 'Active':
-        return 'text-emerald-800 bg-emerald-50 border-emerald-200';
+        return 'text-blue-800 bg-blue-50 border-blue-200';
       case 'Due Soon':
         return 'text-amber-800 bg-amber-50 border-amber-200';
       case 'Renewal Required':
@@ -83,7 +83,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-teal-800 text-white flex items-center justify-center font-bold text-sm">
+            <div className="w-10 h-10 rounded-full bg-blue-800 text-white flex items-center justify-center font-bold text-sm">
               {patient.firstName[0]}
               {patient.lastName[0]}
             </div>
@@ -92,7 +92,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                 <h3 className="text-lg font-bold text-slate-900">
                   {patient.firstName} {patient.lastName}
                 </h3>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-sm bg-teal-100/70 text-teal-900 border border-teal-200">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-sm bg-blue-100/70 text-blue-900 border border-blue-200">
                   {patient.healthCategory}
                 </span>
               </div>
@@ -105,7 +105,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onOpenEmailComposer(patient)}
-              className="px-3 py-1.5 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 rounded-md border border-teal-200 transition-colors flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200 transition-colors flex items-center gap-1.5"
             >
               <Mail className="w-3.5 h-3.5" />
               <span>Email Patient via Hostinger</span>
@@ -125,7 +125,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
             onClick={() => setActiveTab('refills')}
             className={`py-3 border-b-2 flex items-center gap-1.5 transition-colors ${
               activeTab === 'refills'
-                ? 'border-teal-700 text-teal-900'
+                ? 'border-blue-700 text-blue-900'
                 : 'border-transparent hover:text-slate-900'
             }`}
           >
@@ -136,7 +136,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
             onClick={() => setActiveTab('notes')}
             className={`py-3 border-b-2 flex items-center gap-1.5 transition-colors ${
               activeTab === 'notes'
-                ? 'border-teal-700 text-teal-900'
+                ? 'border-blue-700 text-blue-900'
                 : 'border-transparent hover:text-slate-900'
             }`}
           >
@@ -147,7 +147,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
             onClick={() => setActiveTab('info')}
             className={`py-3 border-b-2 flex items-center gap-1.5 transition-colors ${
               activeTab === 'info'
-                ? 'border-teal-700 text-teal-900'
+                ? 'border-blue-700 text-blue-900'
                 : 'border-transparent hover:text-slate-900'
             }`}
           >
@@ -198,7 +198,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                             <p className="text-[11px] text-slate-500">
                               {refill.strength} · {refill.dosageForm} ({refill.quantity} units, {refill.daysSupply} days)
                             </p>
-                            <p className="text-[11px] text-teal-800 mt-0.5">
+                            <p className="text-[11px] text-blue-800 mt-0.5">
                               Provider: {refill.providerDoctor || (refill as any).prescribingDoctor} ({refill.doctorClinic})
                             </p>
                           </td>
@@ -226,7 +226,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                           <td className="py-3 px-3 text-right whitespace-nowrap">
                             <button
                               onClick={() => onTriggerRefill(patient.id, refill.rxNumber)}
-                              className="px-2.5 py-1 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-md transition-colors"
+                              className="px-2.5 py-1 text-xs font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors"
                             >
                               Dispense Refill
                             </button>
@@ -254,7 +254,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                 </div>
                 <button
                   onClick={() => setShowAddNoteForm(!showAddNoteForm)}
-                  className="px-3 py-1.5 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>{showAddNoteForm ? 'Cancel Note' : 'Add Pharmacist Note'}</span>
@@ -308,7 +308,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                           type="checkbox"
                           checked={isConfidential}
                           onChange={(e) => setIsConfidential(e.target.checked)}
-                          className="rounded border-slate-300 text-teal-700 focus:ring-teal-700"
+                          className="rounded border-slate-300 text-blue-700 focus:ring-blue-700"
                         />
                         <span>Mark as Confidential / Sensitive</span>
                       </label>
@@ -325,7 +325,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                       onChange={(e) => setNoteContent(e.target.value)}
                       rows={3}
                       placeholder="Detail patient counseling, therapeutic drug monitoring, renal clearance checks, or physician communications..."
-                      className="w-full bg-white border border-slate-300 rounded-md p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                      className="w-full bg-white border border-slate-300 rounded-md p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
                     ></textarea>
                   </div>
 
@@ -335,7 +335,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                     </span>
                     <button
                       type="submit"
-                      className="px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-md shadow-xs transition-colors"
+                      className="px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-md shadow-xs transition-colors"
                     >
                       Save Secure Note
                     </button>
@@ -429,7 +429,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                 </div>
                 <div>
                   <span className="text-slate-400 block">Lead Source</span>
-                  <span className="text-teal-800 font-medium">{patient.leadSource}</span>
+                  <span className="text-blue-800 font-medium">{patient.leadSource}</span>
                 </div>
               </div>
 
@@ -439,7 +439,7 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                 </h5>
                 <div>
                   <span className="text-slate-400 block">Target Health Category</span>
-                  <span className="font-semibold text-teal-800">{patient.healthCategory}</span>
+                  <span className="font-semibold text-blue-800">{patient.healthCategory}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block">Primary Physician</span>
