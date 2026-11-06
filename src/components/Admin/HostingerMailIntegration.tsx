@@ -1149,7 +1149,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         )}
       </section>}
 
-      {mode === 'mailbox' && <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {mode === 'mailbox' && <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex min-w-0 flex-nowrap items-center gap-1 border-b border-slate-200 bg-white p-2">
           <button
             type="button"
@@ -1229,7 +1229,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-2">
+            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
