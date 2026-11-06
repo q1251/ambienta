@@ -1258,9 +1258,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   )}
                 </div>
                 {role === 'admin' && (
-                  <div className="md:col-span-4">
-                    <label htmlFor="mail-cc" className="mb-1 block text-xs font-semibold text-slate-600">CC</label>
-                    <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="Separate addresses with commas" className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                  <div className="grid grid-cols-2 gap-2 md:col-span-4">
+                    <div className="min-w-0">
+                      <label htmlFor="mail-cc" className="mb-1 block text-xs font-semibold text-slate-600">CC</label>
+                      <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="CC recipients" className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    </div>
+                    <div className="min-w-0">
+                      <label htmlFor="mail-bcc" className="mb-1 block text-xs font-semibold text-slate-600">BCC</label>
+                      <input id="mail-bcc" type="text" value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="BCC recipients" className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    </div>
                   </div>
                 )}
                 <div className={role === 'admin' ? 'md:col-span-3' : 'md:col-span-7'}>
@@ -1280,15 +1286,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <label htmlFor="mail-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject</label>
                 <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
               </div>
-              {role === 'admin' && <details className="rounded-lg border border-slate-200 px-3 py-2">
-                <summary className="cursor-pointer text-xs font-medium text-slate-700">Add BCC</summary>
-                <div className="mt-2 grid max-w-2xl gap-2 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="mail-bcc" className="mb-1 block text-xs font-medium text-slate-600">BCC</label>
-                    <input id="mail-bcc" type="text" value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="Separate addresses with commas" className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                  </div>
-                </div>
-              </details>}
               <div className="flex min-h-0 flex-1 flex-col">
                 <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="mail-body" className="block text-xs font-semibold text-slate-600">Message</label>
