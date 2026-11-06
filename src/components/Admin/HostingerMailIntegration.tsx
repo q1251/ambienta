@@ -185,14 +185,6 @@ const campaignTemplates = {
   },
 } as const;
 
-const previewMergeTags = (value: string): string => value
-  .replaceAll('{{first_name}}', 'Alex')
-  .replaceAll('{{last_name}}', 'Morgan')
-  .replaceAll('{{email}}', 'alex@example.com')
-  .replaceAll('{{country}}', 'South Africa')
-  .replace(/\*\*(.*?)\*\*/gs, '$1')
-  .replace(/\*(.*?)\*/gs, '$1');
-
 const formatMailText = (value: string): string => value
   .replace(/\*\*(.*?)\*\*/gs, '$1')
   .replace(/\*(.*?)\*/gs, '$1');
@@ -1224,7 +1216,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </span>
         </div>
 
-        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : activeFolder === 'compose' ? 'flex flex-col overflow-y-auto' : 'overflow-y-auto'}`}>
+        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : activeFolder === 'compose' || activeFolder === 'campaigns' ? 'flex flex-col overflow-y-auto' : 'overflow-y-auto'}`}>
           {showErrorMessage && errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
@@ -1643,134 +1635,130 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             </div>
           )}
           {activeFolder === 'campaigns' && campaignAccess && (
-            <div className="space-y-5">
-              <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-h-full flex-1 flex-col gap-4">
+              <section className="flex min-h-full flex-1 flex-col">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{role === 'admin' ? 'Send to leads with recorded marketing consent only.' : 'Send to your assigned leads with recorded marketing consent only.'}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{role === 'admin' ? 'Only leads with recorded marketing consent can receive campaigns.' : 'Only assigned leads with recorded marketing consent can receive campaigns.'}</p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                     campaignAudienceCount > 5000 ? 'bg-rose-50 text-rose-800' : 'bg-violet-50 text-violet-800'
                   }`}>
                     {campaignAudienceCount > 5000 ? 'Over 5,000 opted-in recipients' : `${campaignAudienceCount} opted-in recipients`}
                   </span>
                 </div>
                 {!settings.verified && (
-                  <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     Verify the Hostinger connection in Integrations before scheduling or sending campaigns.
                   </p>
                 )}
                 {campaignAudienceCount === 0 && (
-                  <p role="status" className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  <p role="status" className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                     {role === 'admin'
                       ? 'No eligible recipients match these filters. Campaigns only include leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.'
                       : 'No eligible assigned leads match these filters. Campaigns only include your assigned leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.'}
                   </p>
                 )}
                 {campaignAudienceCount > 5000 && (
-                  <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+                  <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
                     Campaigns are limited to 5,000 recipients. Narrow the opted-in audience before sending.
                   </p>
                 )}
-                <form onSubmit={(event) => void saveCampaign(event)} className="mt-4 space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
+                <form onSubmit={(event) => void saveCampaign(event)} className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <div className="min-w-0">
-                      <label htmlFor="campaign-name" className="mb-1 block text-sm font-medium text-slate-700">Campaign name</label>
-                      <input id="campaign-name" value={campaignName} maxLength={160} required onChange={(event) => setCampaignName(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                      <label htmlFor="campaign-name" className="mb-1 block text-xs font-semibold text-slate-600">Campaign name</label>
+                      <input id="campaign-name" value={campaignName} maxLength={160} required onChange={(event) => setCampaignName(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                     </div>
                     <div className="min-w-0">
-                      <label htmlFor="campaign-subject" className="mb-1 block text-sm font-medium text-slate-700">Email subject</label>
-                      <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                      <label htmlFor="campaign-subject" className="mb-1 block text-xs font-semibold text-slate-600">Email subject</label>
+                      <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                     </div>
                   </div>
-                  <div>
-                    <label htmlFor="campaign-template" className="mb-1 block text-sm font-medium text-slate-700">Start from a template</label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label htmlFor="campaign-template" className="block text-xs font-semibold text-slate-600">
+                      Template
                     <select id="campaign-template" value={campaignTemplate} onChange={(event) => {
                       const template = campaignTemplates[event.target.value as keyof typeof campaignTemplates];
                       setCampaignTemplate(event.target.value as keyof typeof campaignTemplates);
                       setCampaignSubject(template.subject);
                       setCampaignBody(template.body);
-                    }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:max-w-sm">
+                    }} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100">
                       <option value="blank">Blank campaign</option>
                       <option value="welcome">Welcome</option>
                       <option value="update">Customer update</option>
                       <option value="seasonal">News announcement</option>
                     </select>
+                    </label>
+                    <label htmlFor="campaign-schedule" className="block text-xs font-semibold text-slate-600">
+                      Schedule for
+                      <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    </label>
                   </div>
-                  <fieldset className="rounded-xl border border-slate-200 p-4">
-                    <legend className="px-1 text-sm font-semibold text-slate-800">{role === 'admin' ? 'Audience segments' : 'Assigned lead segments'}</legend>
-                    <p className="mb-3 text-xs text-slate-500">{role === 'admin' ? 'All recipients must have recorded marketing consent. Filters narrow that opted-in audience.' : 'Only leads assigned to you with recorded marketing consent can receive these campaigns. Filters narrow that audience.'}</p>
-                    <div className="grid gap-3 sm:grid-cols-3">
+                  <details className="rounded-lg border border-slate-200 px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-700">{role === 'admin' ? 'Audience filters' : 'Assigned lead filters'}</summary>
+                    <p className="mb-2 mt-1 text-xs text-slate-500">{role === 'admin' ? 'Filters narrow leads with recorded marketing consent.' : 'Filters narrow assigned leads with recorded marketing consent.'}</p>
+                    <div className="grid gap-2 sm:grid-cols-3">
                       <label className="text-xs font-medium text-slate-600">
                         Country
-                        <select value={campaignAudienceFilter.country} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, country: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+                        <select value={campaignAudienceFilter.country} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, country: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800">
                           <option value="">All countries</option>
                           {campaignCountries.map((country) => <option key={country} value={country}>{country}</option>)}
                         </select>
                       </label>
                       <label className="text-xs font-medium text-slate-600">
                         Lead status
-                        <select value={campaignAudienceFilter.status} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, status: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+                        <select value={campaignAudienceFilter.status} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, status: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800">
                           <option value="">All statuses</option>
                           {campaignStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                         </select>
                       </label>
                       <label className="text-xs font-medium text-slate-600">
                         Lead source
-                        <select value={campaignAudienceFilter.source} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, source: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800">
+                        <select value={campaignAudienceFilter.source} onChange={(event) => setCampaignAudienceFilter((current) => ({ ...current, source: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800">
                           <option value="">All sources</option>
                           {campaignSources.map((source) => <option key={source} value={source}>{source}</option>)}
                         </select>
                       </label>
                     </div>
-                  </fieldset>
-                  <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
-                    <input type="checkbox" checked={campaignTrackOpens} onChange={(event) => setCampaignTrackOpens(event.target.checked)} className="mt-0.5 rounded border-slate-300 text-violet-700 focus:ring-violet-500" />
-                    <span><span className="font-medium">Enable approximate open tracking</span><span className="mt-1 block text-xs text-slate-500">Adds a 1-pixel image to campaign messages. Privacy features may block it, and image loads are not proof that a person read the email.</span></span>
+                  </details>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input type="checkbox" checked={campaignTrackOpens} onChange={(event) => setCampaignTrackOpens(event.target.checked)} className="rounded border-slate-300 text-violet-700 focus:ring-violet-500" />
+                    Enable approximate open tracking
                   </label>
-                  <div>
-                    <label htmlFor="campaign-schedule" className="mb-1 block text-sm font-medium text-slate-700">Schedule for</label>
-                    <div className="flex flex-wrap items-end gap-3">
-                      <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100 sm:w-auto" />
-                      <button type="button" onClick={() => void scheduleCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50">
-                        {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Schedule campaign
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="campaign-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => wrapCampaignSelection('**')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Bold</button>
-                      <button type="button" onClick={() => wrapCampaignSelection('*')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs italic text-slate-700">Italic</button>
-                      <span className="text-xs text-slate-500">Personalize:</span>
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                      <label htmlFor="campaign-body" className="block text-xs font-semibold text-slate-600">Message</label>
+                      <div className="flex flex-wrap items-center gap-1">
+                      <button type="button" onClick={() => wrapCampaignSelection('**')} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">Bold</button>
+                      <button type="button" onClick={() => wrapCampaignSelection('*')} className="rounded-md border border-slate-300 px-2 py-1 text-xs italic text-slate-700">Italic</button>
+                      <span className="px-1 text-xs text-slate-500">Personalize</span>
                       {campaignMergeTags.map((tag) => (
                         <button key={tag} type="button" onClick={() => setCampaignBody((current) => `${current}${tag}`)} className="rounded-md bg-violet-50 px-2 py-1 font-mono text-[11px] text-violet-800">{tag}</button>
                       ))}
+                      </div>
                     </div>
-                    <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} rows={8} required onChange={(event) => setCampaignBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                    <p className="mt-1 text-xs text-slate-500">Supports bold and italic formatting. Every campaign includes unsubscribe links and one-click unsubscribe headers.</p>
+                    <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} required onChange={(event) => setCampaignBody(event.target.value)} className="min-h-40 w-full flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
-                  <details className="rounded-lg border border-slate-200 p-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-700">Preview with sample recipient</summary>
-                    <p className="mt-3 font-semibold text-slate-900">{previewMergeTags(campaignSubject) || '(subject preview)'}</p>
-                    <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-slate-700">{previewMergeTags(campaignBody) || '(message preview)'}</pre>
-                  </details>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                      {isCampaignSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2">
+                    <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      {isCampaignSaving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                       {isCampaignSaving ? 'Saving…' : 'Save draft'}
                     </button>
-                    <button type="button" onClick={() => void launchCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
-                      {isCampaignAction && <LoaderCircle className="h-4 w-4 animate-spin" />} Send now
+                    <button type="button" onClick={() => void scheduleCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50">
+                      {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />} Schedule
+                    </button>
+                    <button type="button" onClick={() => void launchCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
+                      {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />} Send now
                     </button>
                     {role === 'admin' && (
-                      <button type="button" onClick={() => void sendCampaignTest()} disabled={!settings.verified || !campaignSubject.trim() || !campaignBody.trim() || isCampaignAction || isLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      <button type="button" onClick={() => void sendCampaignTest()} disabled={!settings.verified || !campaignSubject.trim() || !campaignBody.trim() || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                         Send test to mailbox
                       </button>
                     )}
                   </div>
-                  {!editingCampaignId && <p className="text-xs text-slate-500">Save the campaign draft first to enable scheduling or sending.</p>}
+                  {!editingCampaignId && <p className="text-[11px] text-slate-500">Save the draft first to enable scheduling or sending.</p>}
                 </form>
               </section>
 
