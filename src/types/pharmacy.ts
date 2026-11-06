@@ -78,6 +78,7 @@ export interface ContactLead {
   status: LeadStatus;
   marketingConsent: boolean;
   marketingConsentAt?: string | null;
+  campaignSuppressed?: boolean;
   orderCount?: number;
   lastOrderAt?: string | null;
   activeOrderCount?: number;
@@ -144,6 +145,7 @@ export interface ContactLeadUpdate {
   status?: LeadStatus;
   statusNote?: string;
   marketingConsent?: boolean;
+  campaignSuppressed?: boolean;
   phone?: string;
   country?: string;
   address?: string;

@@ -156,7 +156,7 @@ interface ApiResponse {
   snapshotHash?: string;
   selectedLeadIds?: number[];
   selectionLimit?: number;
-  withoutConsentCount?: number;
+  noCampaignCount?: number;
   withoutEmailCount?: number;
   total?: number;
   page?: number;
@@ -263,7 +263,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [campaignLeadTotal, setCampaignLeadTotal] = useState(0);
   const [isLoadingCampaignLeads, setIsLoadingCampaignLeads] = useState(false);
   const [isSelectingCampaignMatches, setIsSelectingCampaignMatches] = useState(false);
-  const [campaignWithoutConsentCount, setCampaignWithoutConsentCount] = useState(0);
+  const [campaignNoCampaignCount, setCampaignNoCampaignCount] = useState(0);
   const [campaignWithoutEmailCount, setCampaignWithoutEmailCount] = useState(0);
   const [campaignDialogMode, setCampaignDialogMode] = useState<CampaignDialogMode>(null);
   const [campaignReviewIntent, setCampaignReviewIntent] = useState<CampaignReviewIntent>('send');
@@ -382,13 +382,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             requestMailApi('email-campaign-audience', 'GET'),
           ]);
           if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
-            || typeof audienceResult.withoutConsentCount !== 'number' || typeof audienceResult.withoutEmailCount !== 'number'
+            || typeof audienceResult.noCampaignCount !== 'number' || typeof audienceResult.withoutEmailCount !== 'number'
             || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
             throw new Error('Campaign data returned an invalid response.');
           }
           setCampaigns(campaignResult.campaigns);
           setCampaignAudienceCount(audienceResult.audienceCount);
-          setCampaignWithoutConsentCount(audienceResult.withoutConsentCount);
+          setCampaignNoCampaignCount(audienceResult.noCampaignCount);
           setCampaignWithoutEmailCount(audienceResult.withoutEmailCount);
           setCampaignCountries(audienceResult.countries);
           setCampaignStatuses(audienceResult.statuses);
@@ -441,7 +441,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         .then((result) => {
           if (active && typeof result.audienceCount === 'number') {
             setCampaignAudienceCount(result.audienceCount);
-            if (typeof result.withoutConsentCount === 'number') setCampaignWithoutConsentCount(result.withoutConsentCount);
+            if (typeof result.noCampaignCount === 'number') setCampaignNoCampaignCount(result.noCampaignCount);
             if (typeof result.withoutEmailCount === 'number') setCampaignWithoutEmailCount(result.withoutEmailCount);
           }
         })
@@ -837,8 +837,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setCampaignAudienceCount(result.audienceCount);
       if (result.audienceCount === 0 || result.audienceCount > 5000) {
         throw new Error(result.audienceCount === 0
-          ? 'There are no opted-in leads with valid email addresses for this campaign.'
-          : 'Campaigns are limited to 5,000 opted-in recipients.');
+          ? 'There are no eligible leads with valid email addresses for this campaign.'
+          : 'Campaigns are limited to 5,000 recipients.');
       }
       if (await loadCampaignReviewPage(1, intent)) setCampaignDialogMode('review');
     } catch (error) {
@@ -988,7 +988,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         id: campaignId,
         expectedSnapshotHash: campaignReviewSnapshotHash,
       });
-      setSuccessMessage(`Campaign queued for ${result.recipientCount ?? campaignAudienceCount} opted-in leads. ${result.sent ?? 0} sent in the first batch; remaining messages will be processed by the scheduled worker.`);
+      setSuccessMessage(`Campaign queued for ${result.recipientCount ?? campaignAudienceCount} leads. ${result.sent ?? 0} sent in the first batch; remaining messages will be processed by the scheduled worker.`);
       setEditingCampaignId(null);
       setCampaignName('');
       setCampaignSubject('');
@@ -1839,8 +1839,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
                     <p className="mt-0.5 text-xs text-slate-600">{role === 'admin'
-                      ? 'Choose all eligible Contact Leads or select specific contacts. Only leads with a valid email and recorded marketing consent can receive campaign emails.'
-                      : 'Choose all eligible Contact Leads assigned to you or select specific contacts. Only leads with a valid email and recorded marketing consent can receive campaign emails.'}</p>
+                      ? 'Choose all Contact Leads or select specific contacts. Leads on the No Campaign list and contacts without a valid email are excluded.'
+                      : 'Choose from your assigned Contact Leads or select specific contacts. Leads on the No Campaign list and contacts without a valid email are excluded.'}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                     campaignAudienceCount > 5000 ? 'bg-rose-50 text-rose-800' : 'bg-violet-50 text-violet-800'
@@ -1857,23 +1857,23 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   <p role="status" className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                     {campaignAudienceMode === 'selected'
                       ? campaignSelectedLeadIds.length === 0
-                        ? 'Select at least one opted-in Contact Lead to continue.'
-                        : 'None of the selected leads are currently eligible. Check their email addresses and marketing consent.'
+                        ? 'Select at least one eligible Contact Lead to continue.'
+                        : 'None of the selected leads are currently eligible. Check their email addresses and No Campaign status.'
                       : role === 'admin'
-                        ? 'No eligible Contact Leads match. Add a valid email and record marketing consent on a lead, or adjust the audience filters.'
-                        : 'No eligible assigned Contact Leads match. Check that assigned leads have valid emails and recorded marketing consent, or adjust the filters.'}
+                        ? 'No eligible Contact Leads match. Add a valid email, remove excluded leads from the No Campaign list, or adjust the audience filters.'
+                        : 'No eligible assigned Contact Leads match. Check that assigned leads have valid emails and are not on the No Campaign list, or adjust the filters.'}
                   </p>
                 )}
                 {campaignAudienceCount > 5000 && (
                   <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
-                    Campaigns are limited to 5,000 recipients. Narrow the opted-in audience before sending.
+                    Campaigns are limited to 5,000 recipients. Narrow the audience before sending.
                   </p>
                 )}
                 <details className="mt-2 rounded-lg border border-slate-200 px-3 py-2">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">Why might a lead be excluded?</summary>
                   <div className="mt-2 space-y-1 text-xs text-slate-600">
                     <p className="text-[11px] text-slate-500">Counts cover all Contact Leads available to you, before any audience filters are applied.</p>
-                    <p><strong className="text-slate-800">{campaignWithoutConsentCount.toLocaleString()}</strong> lead records do not have marketing consent.</p>
+                    <p><strong className="text-slate-800">{campaignNoCampaignCount.toLocaleString()}</strong> lead records are on the No Campaign list.</p>
                     <p><strong className="text-slate-800">{campaignWithoutEmailCount.toLocaleString()}</strong> lead records have no email address. Invalid email addresses are excluded too.</p>
                     <p className="text-[11px] text-slate-500">These are lead-record counts and may overlap. Campaign recipient counts deduplicate matching email addresses.</p>
                   </div>
@@ -1894,7 +1894,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     {campaignAudienceMode === 'selected' && (
                       <div className="mt-2 rounded-lg bg-slate-50 p-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label htmlFor="campaign-lead-search" className="sr-only">Search opted-in Contact Leads</label>
+                          <label htmlFor="campaign-lead-search" className="sr-only">Search eligible Contact Leads</label>
                           <input
                             id="campaign-lead-search"
                             type="search"
@@ -1946,7 +1946,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                           {isLoadingCampaignLeads ? (
                             <p className="px-3 py-5 text-center text-xs text-slate-500">Loading eligible leads…</p>
                           ) : campaignLeadResults.length === 0 ? (
-                            <p className="px-3 py-5 text-center text-xs text-slate-500">No eligible leads found. A valid email and marketing consent are required.</p>
+                            <p className="px-3 py-5 text-center text-xs text-slate-500">No eligible leads found. A valid email is required and No Campaign contacts are excluded.</p>
                           ) : (
                             <ul className="divide-y divide-slate-100">
                               {campaignLeadResults.map((lead) => {
@@ -2022,7 +2022,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </div>
                   {campaignAudienceMode === 'all' && <details className="rounded-lg border border-slate-200 px-3 py-2">
                     <summary className="cursor-pointer text-xs font-semibold text-slate-700">Optional Contact Leads filters</summary>
-                    <p className="mb-2 mt-1 text-xs text-slate-500">Narrow the eligible contacts by country, lead status, or source. Marketing consent and a valid email are always required.</p>
+                    <p className="mb-2 mt-1 text-xs text-slate-500">Narrow the eligible contacts by country, lead status, or source. No Campaign contacts and invalid email addresses are always excluded.</p>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <label className="text-xs font-medium text-slate-600">
                         Country
@@ -2209,7 +2209,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
                   <p className="mb-3 text-xs text-slate-600">
                     {campaignAudienceMode === 'selected'
-                      ? 'These selected contacts are currently eligible. Consent and email eligibility will be checked again when queued.'
+                      ? 'These selected contacts are currently eligible. No Campaign status and email eligibility will be checked again when queued.'
                       : 'These are the contacts matching your audience filters. Consent and email eligibility will be checked again when queued.'}
                   </p>
                   {isLoadingCampaignReview ? (

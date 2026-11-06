@@ -380,12 +380,12 @@ export function parseLeadsCsv(csvText: string): CsvParseResult {
  */
 export function generateSampleCsv(): string {
   return [
-    'first_name,last_name,email,phone,country,marketing_consent',
-    'Robert,Miller,robert.miller@example.com,+1 (555) 304-8891,United States,no',
-    'Sarah,Jenkins,sarah.j@example.com,+44 20 7946 0958,United Kingdom,no',
-    'David,Kim,dkim.archive@example.com,+61 2 5550 1200,Australia,no',
-    'Margaret,Thurston,margaret.t@example.com,+1 (555) 883-1200,United States,no',
-    'Claire,Delaney,claire.delaney@example.com,+1 (555) 762-4419,United States,no',
+    'first_name,last_name,email,phone,country',
+    'Robert,Miller,robert.miller@example.com,+1 (555) 304-8891,United States',
+    'Sarah,Jenkins,sarah.j@example.com,+44 20 7946 0958,United Kingdom',
+    'David,Kim,dkim.archive@example.com,+61 2 5550 1200,Australia',
+    'Margaret,Thurston,margaret.t@example.com,+1 (555) 883-1200,United States',
+    'Claire,Delaney,claire.delaney@example.com,+1 (555) 762-4419,United States',
   ].join('\n');
 }
 

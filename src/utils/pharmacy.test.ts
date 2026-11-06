@@ -14,6 +14,7 @@ import {
   sortContactLeads,
   sortOrders,
   generateTrackingNumber,
+  generateSampleCsv,
 } from './pharmacyLogic';
 import { countryOptions, getLeadCountryCode, getLeadCountryLabel, phoneInputParts } from './countryOptions';
 import { Patient, ReminderRule } from '../types/pharmacy';
@@ -69,6 +70,12 @@ Maya,Lin,maya@example.com,555-5678,yes,Diabetes,Metformin 1000mg,RX-445566,2026-
   assert.equal(parsed.leads[1].marketingConsent, true);
   assert.equal('healthCategory' in parsed.leads[0], false);
   assert.equal('refillHistory' in parsed.leads[0], false);
+});
+
+test('contact CSV template leaves campaign exclusion management to the CRM', () => {
+  const [header, ...rows] = generateSampleCsv().split('\n');
+  assert.equal(header, 'first_name,last_name,email,phone,country');
+  assert.ok(rows.every((row) => row.split(',').length === header.split(',').length));
 });
 
 test('getLeadCountry detects supported international calling codes without guessing local numbers', () => {

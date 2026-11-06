@@ -147,6 +147,7 @@ function data_ensure_schema(PDO $db): void
             status VARCHAR(24) NOT NULL DEFAULT 'Cold',
             marketing_consent TINYINT(1) NOT NULL DEFAULT 0,
             marketing_consent_at DATETIME NULL,
+            campaign_suppressed TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY leads_email (email)
@@ -652,6 +653,7 @@ function data_ensure_schema(PDO $db): void
         'status' => "VARCHAR(24) NOT NULL DEFAULT 'Cold'",
         'marketing_consent' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'marketing_consent_at' => 'DATETIME NULL',
+        'campaign_suppressed' => 'TINYINT(1) NOT NULL DEFAULT 0',
         'country' => "VARCHAR(100) NOT NULL DEFAULT ''",
     ];
     foreach ($leadColumns as $column => $definition) {
@@ -1508,7 +1510,7 @@ function data_campaign_recipient_snapshot(
 ): array
 {
     if ($leadIds === []) return [];
-    $where = ['marketing_consent = 1', "TRIM(email) <> ''"];
+    $where = ['COALESCE(campaign_suppressed, 0) = 0', "TRIM(email) <> ''"];
     $parameters = [];
     if ($assignedStaffId !== null) {
         $where[] = 'assigned_staff_id = ?';
@@ -1736,10 +1738,10 @@ function data_campaign_process_batch(array $settings, int $limit = 10, ?int $cam
         }
 
         $processed++;
-        $consent = $db->prepare('SELECT marketing_consent, assigned_staff_id FROM leads WHERE id = ? AND LOWER(TRIM(email)) = LOWER(?)');
-        $consent->execute([(int) $recipient['lead_id'], (string) $recipient['recipient_email']]);
-        $leadEligibility = $consent->fetch();
-        if (!is_array($leadEligibility) || (int) $leadEligibility['marketing_consent'] !== 1) {
+        $eligibility = $db->prepare('SELECT campaign_suppressed, assigned_staff_id FROM leads WHERE id = ? AND LOWER(TRIM(email)) = LOWER(?)');
+        $eligibility->execute([(int) $recipient['lead_id'], (string) $recipient['recipient_email']]);
+        $leadEligibility = $eligibility->fetch();
+        if (!is_array($leadEligibility) || (int) $leadEligibility['campaign_suppressed'] === 1) {
             $db->prepare("UPDATE email_campaign_recipients SET status = 'unsubscribed' WHERE id = ?")->execute([(int) $recipient['id']]);
             $unsubscribed++;
             continue;
@@ -2445,6 +2447,7 @@ function data_lead_row(array $row): array
         'status' => $row['status'] ?? 'Cold',
         'marketingConsent' => (bool) ($row['marketing_consent'] ?? false),
         'marketingConsentAt' => $row['marketing_consent_at'] ?? null,
+        'campaignSuppressed' => (bool) ($row['campaign_suppressed'] ?? false),
     ];
     if ($canViewOrders) {
         $lead['address'] = (string) ($row['address'] ?? '');
@@ -3350,7 +3353,7 @@ if ($resource === 'email-unsubscribe') {
         }
         $db->beginTransaction();
         try {
-            $db->prepare('UPDATE leads SET marketing_consent = 0, marketing_consent_at = NULL WHERE email = ?')
+            $db->prepare('UPDATE leads SET marketing_consent = 0, marketing_consent_at = NULL, campaign_suppressed = 1 WHERE LOWER(TRIM(email)) = LOWER(?)')
                 ->execute([(string) $recipient['recipient_email']]);
             $db->prepare("UPDATE email_campaign_recipients SET status = 'unsubscribed' WHERE recipient_email = ? AND status = 'queued'")
                 ->execute([(string) $recipient['recipient_email']]);
@@ -4071,7 +4074,7 @@ if (in_array($resource, [
         $db = data_db();
         $leadScope = $campaignStaffId === null ? '' : ' WHERE assigned_staff_id = ' . (int) $campaignStaffId;
         $exclusionCounts = $db->query(
-            'SELECT SUM(CASE WHEN COALESCE(marketing_consent, 0) <> 1 THEN 1 ELSE 0 END) AS without_consent,
+            'SELECT SUM(CASE WHEN COALESCE(campaign_suppressed, 0) = 1 THEN 1 ELSE 0 END) AS no_campaign,
                     SUM(CASE WHEN TRIM(email) = \'\' THEN 1 ELSE 0 END) AS without_email
              FROM leads' . $leadScope
         )->fetch();
@@ -4124,7 +4127,7 @@ if (in_array($resource, [
         }
         $recipients = data_campaign_recipient_snapshot($db, $filters, $campaignStaffId);
         $facetSql = "SELECT DISTINCT country, status, lead_source
-                     FROM leads WHERE marketing_consent = 1 AND TRIM(email) <> ''";
+                     FROM leads WHERE COALESCE(campaign_suppressed, 0) = 0 AND TRIM(email) <> ''";
         $facets = $campaignStaffId === null
             ? $db->query($facetSql . ' ORDER BY country, status, lead_source')->fetchAll()
             : (function () use ($db, $facetSql, $campaignStaffId): array {
@@ -4135,7 +4138,7 @@ if (in_array($resource, [
         data_respond(200, [
             'audienceCount' => count($recipients),
             'audienceLimit' => 5000,
-            'withoutConsentCount' => (int) ($exclusionCounts['without_consent'] ?? 0),
+            'noCampaignCount' => (int) ($exclusionCounts['no_campaign'] ?? 0),
             'withoutEmailCount' => (int) ($exclusionCounts['without_email'] ?? 0),
             'countries' => array_values(array_unique(array_filter(array_column($facets, 'country'), static fn ($value): bool => is_string($value) && trim($value) !== ''))),
             'statuses' => array_values(array_unique(array_filter(array_column($facets, 'status'), static fn ($value): bool => is_string($value) && trim($value) !== ''))),
@@ -4164,7 +4167,7 @@ if (in_array($resource, [
         }
         $leadIds = $body['selectedLeadIds'] ?? [];
         if (!is_array($leadIds) || count($leadIds) > 5000) {
-            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 opted-in leads.']);
+            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 eligible leads.']);
         }
         $normalizedIds = [];
         foreach ($leadIds as $leadId) {
@@ -4308,7 +4311,7 @@ if (in_array($resource, [
         }
         $selectedLeadIds = $body['selectedLeadIds'] ?? [];
         if (!is_array($selectedLeadIds) || count($selectedLeadIds) > 5000) {
-            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 opted-in leads.']);
+            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 eligible leads.']);
         }
         $normalizedLeadIds = [];
         foreach ($selectedLeadIds as $leadId) {
@@ -4320,7 +4323,7 @@ if (in_array($resource, [
         }
         $normalizedLeadIds = array_values(array_unique($normalizedLeadIds));
         if ($audienceMode === 'selected' && count($normalizedLeadIds) > 5000) {
-            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 opted-in leads.']);
+            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 eligible leads.']);
         }
         $encryptedSelectedIds = $audienceMode === 'selected'
             ? data_mail_encrypt_content(json_encode($normalizedLeadIds, JSON_UNESCAPED_SLASHES) ?: '[]')
@@ -4482,8 +4485,8 @@ if (in_array($resource, [
             $recipientCount = data_campaign_queue($db, $campaignId, $status, $scheduledAt, $expectedSnapshotHash);
         } catch (Throwable $error) {
             $message = match ($error->getMessage()) {
-                'campaign_audience_empty' => 'There are no opted-in leads with valid email addresses for this campaign.',
-                'campaign_audience_too_large' => 'Campaigns are limited to 5,000 opted-in recipients.',
+                'campaign_audience_empty' => 'There are no eligible leads with valid email addresses for this campaign.',
+                'campaign_audience_too_large' => 'Campaigns are limited to 5,000 recipients.',
                 'campaign_audience_changed' => 'The eligible recipients changed since your review. Review the updated list before continuing.',
                 'campaign_not_editable' => 'Only draft campaigns can be sent or scheduled.',
                 default => null,
@@ -4955,7 +4958,7 @@ if ($method === 'GET') {
             }
             data_require_lead_access($db, (int) $id, true);
             $find = $db->prepare(
-                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+                'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.campaign_suppressed, l.created_at,
                         l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                         COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                         COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
@@ -5007,7 +5010,7 @@ if ($method === 'GET') {
                 'activities' => data_lead_activities($db, (int) $id),
             ]);
         }
-        $listSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        $listSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.campaign_suppressed, l.created_at,
                     l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                     COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                     COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
@@ -6820,7 +6823,7 @@ if ($method === 'POST' && $resource === 'leads') {
            marketing_consent_at = IF(VALUES(marketing_consent) = 1, CURRENT_TIMESTAMP, marketing_consent_at),
            assigned_staff_id = IF(assigned_staff_id IS NULL, VALUES(assigned_staff_id), assigned_staff_id)'
     );
-    $findSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+    $findSql = 'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.campaign_suppressed, l.created_at,
                 l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,
@@ -7467,6 +7470,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
     }
     $status = $body['status'] ?? null;
     $marketingConsent = $body['marketingConsent'] ?? null;
+    $campaignSuppressed = $body['campaignSuppressed'] ?? null;
     $statusNote = array_key_exists('statusNote', $body) ? data_string($body, 'statusNote', 2000, false) : null;
     $firstNameProvided = array_key_exists('firstName', $body);
     $firstName = $firstNameProvided ? data_string($body, 'firstName', 100) : null;
@@ -7506,12 +7510,13 @@ if ($method === 'PATCH' && $resource === 'leads') {
     }
     $validStatuses = ['New', 'Cold', 'Contacted', 'Qualified', 'Customer', 'Inactive'];
     if (
-        ($status === null && $marketingConsent === null && !$contactDetailsProvided && !$assignedStaffProvided)
+        ($status === null && $marketingConsent === null && $campaignSuppressed === null && !$contactDetailsProvided && !$assignedStaffProvided)
         || ($status !== null && (!is_string($status) || !in_array($status, $validStatuses, true)))
         || ($marketingConsent !== null && !is_bool($marketingConsent))
+        || ($campaignSuppressed !== null && !is_bool($campaignSuppressed))
         || ($statusNote !== null && $status === null)
     ) {
-        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, contact detail, or marketing consent value.']);
+        data_respond(400, ['error' => 'invalid_lead_update', 'message' => 'Provide a valid lead stage, contact detail, or campaign exclusion value.']);
     }
 
     $db = data_db();
@@ -7529,7 +7534,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
         }
         $find = $db->prepare(
             'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code,
-                    l.status, l.marketing_consent, l.assigned_staff_id,
+                    l.status, l.marketing_consent, l.campaign_suppressed, l.assigned_staff_id,
                     s.display_name AS assigned_staff_name, s.email AS assigned_staff_email
              FROM leads l LEFT JOIN staff_users s ON s.id = l.assigned_staff_id
              WHERE l.id = ? FOR UPDATE'
@@ -7664,6 +7669,13 @@ if ($method === 'PATCH' && $resource === 'leads') {
             $parameters[] = $marketingConsent ? gmdate('Y-m-d H:i:s') : null;
             data_audit($db, $marketingConsent ? 'lead.marketing_opt_in' : 'lead.marketing_opt_out', 'lead', (string) $id);
         }
+        if ($campaignSuppressed !== null && (bool) $campaignSuppressed !== (bool) $current['campaign_suppressed']) {
+            $updates[] = 'campaign_suppressed = ?';
+            $parameters[] = (int) $campaignSuppressed;
+            data_audit($db, $campaignSuppressed ? 'lead.campaign_suppressed' : 'lead.campaign_restored', 'lead', (string) $id, [
+                'actorName' => (string) ($_SESSION['admin_display_name'] ?? $_SESSION['admin_email'] ?? 'Staff'),
+            ]);
+        }
         if ($assignedStaffProvided) {
             $previousStaffId = $current['assigned_staff_id'] === null ? null : (int) $current['assigned_staff_id'];
             if ($previousStaffId !== $assignedStaffId) {
@@ -7710,7 +7722,7 @@ if ($method === 'PATCH' && $resource === 'leads') {
         data_respond(500, ['error' => 'lead_update_failed', 'message' => 'The contact lead could not be updated.']);
     }
     $find = $db->prepare(
-        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.created_at,
+        'SELECT l.id, l.first_name, l.last_name, l.email, l.phone, l.country, l.address, l.postal_code, l.lead_source, l.status, l.marketing_consent, l.marketing_consent_at, l.campaign_suppressed, l.created_at,
                 l.assigned_staff_id, (SELECT display_name FROM staff_users WHERE id = l.assigned_staff_id) AS assigned_staff_name,
                 COUNT(o.id) AS order_count, MAX(o.placed_at) AS last_order_at,
                 COUNT(CASE WHEN o.status <> \'Cancelled\' THEN 1 END) AS active_order_count,

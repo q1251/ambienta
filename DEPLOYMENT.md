@@ -120,12 +120,14 @@ to avoid treating everyone in the same ZIP code as one contact.
 
 Country is saved on the lead and shown in both the table and profile; when
 omitted, the CRM can infer it from an international phone prefix. Imported
-leads start at **Cold**; marketing consent is false unless the CSV explicitly
-contains an affirmative value (`yes`, `true`, `1`, or `opted in`). Do not infer
-consent from possession of an email address. Only the primary administrator
-can retain and view source-row details. Payment-card and medical fields, and
-card-like values that pass a checksum, are excluded; still review spreadsheet
-columns before importing and do not upload payment or clinical records.
+leads start at **Cold**. The legacy `marketing_consent` field remains accepted
+for compatibility but does not control campaign eligibility. Leads with a
+valid email are campaign-eligible unless manually added to the CRM's **No
+Campaign** list; use that list to record unsubscribes received through an
+external email provider. Only the primary administrator can retain and view
+source-row details. Payment-card and medical fields, and card-like values that
+pass a checksum, are excluded; still review spreadsheet columns before
+importing and do not upload payment or clinical records.
 
 Lead profiles support manual stages (Cold, Contacted, Qualified, Customer,
 Inactive), consent changes, and order history matched to contacts, including
@@ -154,8 +156,8 @@ order history.
 
 The CRM seeds 20 clearly labeled synthetic demo contacts for interface testing.
 Their addresses use the reserved `example.com` domain, their phone numbers are
-fictional, and they have no marketing consent. They are not actual prospects or
-customers; remove them before relying on CRM counts for business reporting.
+fictional. They are not actual prospects or customers; remove them before
+relying on CRM counts for business reporting.
 
 The primary administrator can create operator accounts from **Staff access**.
 Each operator receives a temporary password, which is stored as a password
@@ -167,8 +169,8 @@ next protected API request.
 
 The CRM connects to Hostinger mail when mailbox settings have been saved and
 verified. SMTP acceptance does not prove final delivery; open tracking is
-approximate and only available when enabled for a campaign. Use promotional
-campaigns only for contacts with recorded marketing consent.
+approximate and only available when enabled for a campaign. Campaigns exclude
+contacts on the CRM's **No Campaign** list and contacts without a valid email.
 
 Storefront checkout lets customers choose card, PayPal, cryptocurrency, or
 pay-on-delivery/pickup. Card, PayPal, and cryptocurrency orders are saved for

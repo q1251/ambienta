@@ -161,7 +161,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
-  const [marketingConsent, setMarketingConsent] = useState(false);
 
   // Profile details editing
   const [profileFirstName, setProfileFirstName] = useState('');
@@ -180,7 +179,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const [stageFilter, setStageFilter] = useState<'All' | LeadStatus>('All');
   const [countryFilter, setCountryFilter] = useState('All');
   const [contactTypeFilter, setContactTypeFilter] = useState<'All' | LeadContactCompleteness>('All');
-  const [leadTab, setLeadTab] = useState<'all' | 'unassigned' | 'uncalled_repeat_buyers' | 'opted_in' | 'needs_followup'>('all');
+  const [leadTab, setLeadTab] = useState<'all' | 'unassigned' | 'uncalled_repeat_buyers' | 'no_campaign' | 'needs_followup'>('all');
   const [pageSize, setPageSize] = useState<number>(50);
   const [tableFilters, setTableFilters] = useState({
     name: '',
@@ -231,6 +230,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   // Multi-select batch actions
   const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
   const [batchUpdating, setBatchUpdating] = useState(false);
+  const [campaignSuppressionUpdating, setCampaignSuppressionUpdating] = useState<number[]>([]);
 
   // Profile drawer
   const [profile, setProfile] = useState<LeadProfile | null>(null);
@@ -314,7 +314,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   const totalLeadsCount = leads.length;
   const unassignedLeadCount = leads.filter((lead) => lead.assignedStaffId == null).length;
   const customersCount = leads.filter((l) => (l.orderCount ?? 0) > 0 || l.status === 'Customer').length;
-  const eligibleMarketingCount = leads.filter((l) => l.marketingConsent).length;
+  const noCampaignCount = leads.filter((lead) => lead.campaignSuppressed).length;
   const needsFollowupCount = leads.filter((l) => ['Cold', 'Contacted', 'Qualified'].includes(l.status)).length;
   const contactTypeCounts = useMemo(
     () => leads.reduce<Record<LeadContactCompleteness, number>>((counts, lead) => {
@@ -377,8 +377,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       let matchesTab = true;
       if (leadTab === 'uncalled_repeat_buyers') {
         matchesTab = isUncalledRepeatBuyer(lead);
-      } else if (leadTab === 'opted_in') {
-        matchesTab = lead.marketingConsent;
+      } else if (leadTab === 'no_campaign') {
+        matchesTab = lead.campaignSuppressed === true;
       } else if (leadTab === 'needs_followup') {
         matchesTab = ['Cold', 'Contacted', 'Qualified'].includes(lead.status);
       } else if (leadTab === 'unassigned') {
@@ -472,6 +472,41 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setRequestError(error instanceof Error ? error.message : 'Batch stage update failed.');
     } finally {
       setBatchUpdating(false);
+    }
+  };
+
+  const handleBatchCampaignSuppression = async (campaignSuppressed: boolean) => {
+    if (!onUpdateLead || !selectedLeadIds.length) return;
+    setBatchUpdating(true);
+    setRequestError('');
+    setSuccess('');
+    const results = await Promise.allSettled(
+      selectedLeadIds.map(async (id) => onUpdateLead(id, { campaignSuppressed })),
+    );
+    const updatedCount = results.filter((result) => result.status === 'fulfilled').length;
+    const failedCount = results.length - updatedCount;
+    if (updatedCount > 0) {
+      setSuccess(`${updatedCount} contact${updatedCount === 1 ? '' : 's'} ${campaignSuppressed ? 'added to' : 'removed from'} the No Campaign list.`);
+    }
+    if (failedCount > 0) {
+      setRequestError(`${failedCount} contact${failedCount === 1 ? '' : 's'} could not be updated. ${updatedCount > 0 ? 'Successful changes were saved.' : 'No changes were saved.'}`);
+    } else {
+      setSelectedLeadIds([]);
+    }
+    setBatchUpdating(false);
+  };
+
+  const handleCampaignSuppressionChange = async (lead: ContactLead, campaignSuppressed: boolean) => {
+    if (!onUpdateLead || campaignSuppressionUpdating.includes(lead.id)) return;
+    setCampaignSuppressionUpdating((current) => [...current, lead.id]);
+    setRequestError('');
+    try {
+      await onUpdateLead(lead.id, { campaignSuppressed });
+      setSuccess(campaignSuppressed ? 'Contact added to the No Campaign list.' : 'Contact can receive campaigns again.');
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : 'The campaign list status could not be updated.');
+    } finally {
+      setCampaignSuppressionUpdating((current) => current.filter((id) => id !== lead.id));
     }
   };
 
@@ -577,7 +612,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
       setEmail('');
       setPhone('');
       setCountry('');
-      setMarketingConsent(false);
       setMode(null);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : 'Unable to save contact leads.');
@@ -612,7 +646,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     }
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = [
-      ['first_name', 'last_name', 'email', 'phone', 'address', 'postal_code', 'country', 'lead_source', 'status', 'marketing_consent', 'created_at'],
+      ['first_name', 'last_name', 'email', 'phone', 'address', 'postal_code', 'country', 'lead_source', 'status', 'no_campaign', 'created_at'],
       ...contactsToExport.map((lead) => [
         lead.firstName,
         lead.lastName,
@@ -623,7 +657,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         getLeadCountryLabel(lead.country || '', lead.phone),
         lead.leadSource,
         lead.status,
-        lead.marketingConsent ? 'yes' : 'no',
+        lead.campaignSuppressed ? 'yes' : 'no',
         lead.createdAt,
       ]),
     ];
@@ -656,7 +690,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
         country: getLeadCountryLabel(country, phoneValue),
         leadSource: 'Manual Entry',
         status: 'Cold',
-        marketingConsent: Boolean(emailValue && marketingConsent),
+        marketingConsent: false,
       },
     ]);
   };
@@ -1080,9 +1114,9 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   >
                     {profile?.lead.status || selectedLead?.status}
                   </span>
-                  {profile?.lead.marketingConsent && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-800">
-                      <Check className="h-3 w-3" /> Opted in
+                  {profile?.lead.campaignSuppressed && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                      No Campaign
                     </span>
                   )}
                 </div>
@@ -1096,6 +1130,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </div>
               </div>
             </div>
+            {profile && canEditSelectedLead && onUpdateLead && (
+              <button
+                type="button"
+                disabled={profileSaving}
+                onClick={() => void updateProfile({ campaignSuppressed: !profile.lead.campaignSuppressed })}
+                className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-50"
+              >
+                {profileSaving ? 'Saving…' : profile.lead.campaignSuppressed ? 'Remove from No Campaign list' : 'Add to No Campaign list'}
+              </button>
+            )}
 
             {/* Quick KPI stats */}
             <div className="flex flex-wrap gap-3">
@@ -1374,7 +1418,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </section>
                 </div>
 
-                {/* Right Col: Stage management, Agent Assignment & Marketing Consent */}
+                {/* Right Col: Stage management and agent assignment */}
                 <div className="space-y-6">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                     <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">Lead Status & Stage</h2>
@@ -1836,12 +1880,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   )}
                 </div>
 
-                {!profile.lead.marketingConsent && (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                    This contact has not explicitly opted into marketing email. Keep messages strictly operational or consultation-focused.
-                  </p>
-                )}
-
                 {emailError && (
                   <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">{emailError}</p>
                 )}
@@ -1918,13 +1956,13 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
 
         <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Marketing Audience</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">No Campaign List</span>
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
               <Mail className="h-5 w-5" />
             </span>
           </div>
-          <p className="mt-3 text-3xl font-extrabold text-slate-900">{eligibleMarketingCount}</p>
-          <p className="mt-1 text-xs text-slate-500">Opted in for Hostinger campaigns</p>
+          <p className="mt-3 text-3xl font-extrabold text-slate-900">{noCampaignCount}</p>
+          <p className="mt-1 text-xs text-slate-500">Manually excluded from campaigns</p>
         </div>
       </div>
 
@@ -1995,16 +2033,16 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             <button
               type="button"
               onClick={() => {
-                setLeadTab('opted_in');
+                setLeadTab('no_campaign');
                 setLeadPage(1);
               }}
               className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
-                leadTab === 'opted_in'
+                leadTab === 'no_campaign'
                   ? 'bg-blue-800 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
-              Email Opt-in ({eligibleMarketingCount})
+              No Campaign ({noCampaignCount})
             </button>
           </div>
 
@@ -2174,6 +2212,22 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={batchUpdating || !onUpdateLead}
+                onClick={() => void handleBatchCampaignSuppression(true)}
+                className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 font-semibold text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+              >
+                Add to No Campaign
+              </button>
+              <button
+                type="button"
+                disabled={batchUpdating || !onUpdateLead}
+                onClick={() => void handleBatchCampaignSuppression(false)}
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Remove from No Campaign
+              </button>
               <label className="flex items-center gap-1.5 font-medium text-slate-700">
                 Move to stage:
                 <select
@@ -2348,7 +2402,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   </th>
                   <th className="px-4 py-3.5">Last Order</th>
                   {isSuperadmin && <th className="px-4 py-3.5">Assigned Agent</th>}
-                  <th className="px-4 py-3.5 text-right">Actions</th>
+                  <th className="px-4 py-3.5 text-right">Campaign / Actions</th>
                 </tr>
                 <tr className="border-t border-slate-200 bg-white normal-case tracking-normal">
                   <th className="px-2 py-2 text-center">
@@ -2577,14 +2631,27 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                         </td>
                       )}
 
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => void openProfile(lead)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                        >
-                          View
-                        </button>
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-3">
+                          <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={lead.campaignSuppressed}
+                              disabled={!onUpdateLead || campaignSuppressionUpdating.includes(lead.id)}
+                              onChange={(event) => void handleCampaignSuppressionChange(lead, event.target.checked)}
+                              className="rounded border-slate-300 text-amber-700"
+                              aria-label={`${lead.campaignSuppressed ? 'Remove' : 'Add'} ${leadDisplayName(lead)} ${lead.campaignSuppressed ? 'from' : 'to'} No Campaign list`}
+                            />
+                            No Campaign
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => void openProfile(lead)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                          >
+                            View
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -2698,8 +2765,8 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           {lead.orderCount || 0} order{lead.orderCount === 1 ? '' : 's'}
                         </span>
 
-                        {lead.marketingConsent && (
-                          <span className="text-[10px] font-semibold text-blue-700">Opted in</span>
+                        {lead.campaignSuppressed && (
+                          <span className="text-[10px] font-semibold text-amber-700">No Campaign</span>
                         )}
                       </div>
 
@@ -2755,7 +2822,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {mode === 'csv'
-                    ? 'Import up to 20,000 unique contacts using email, phone, address, or postal code. Missing details stay blank; marketing consent is never assumed.'
+                    ? 'Import up to 20,000 unique contacts using email, phone, address, or postal code. Use the No Campaign list to exclude unsubscribed contacts.'
                     : 'Add an individual customer or prospect to the CRM.'}
                 </p>
               </div>
@@ -2817,7 +2884,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                           <th className="px-3 py-2">Name</th>
                           <th className="px-3 py-2">Email</th>
                           <th className="px-3 py-2">Phone</th>
-                          <th className="px-3 py-2">Consent</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -2828,7 +2894,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                             </td>
                             <td className="px-3 py-2 font-mono">{p.email || '—'}</td>
                             <td className="px-3 py-2">{p.phone || '—'}</td>
-                            <td className="px-3 py-2">{p.marketingConsent ? 'Opted in' : 'No'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2889,10 +2954,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (!e.target.value.trim()) setMarketingConsent(false);
-                    }}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   />
                 </label>
@@ -2907,16 +2969,6 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
                   <span className="mt-1 block">
                     <CountrySelect value={country} onChange={setCountry} />
                   </span>
-                </label>
-                <label className="flex items-start gap-2 text-xs text-slate-700 sm:col-span-2">
-                  <input
-                    type="checkbox"
-                    checked={marketingConsent}
-                    disabled={!email.trim()}
-                    onChange={(e) => setMarketingConsent(e.target.checked)}
-                    className="mt-0.5 rounded text-blue-800"
-                  />
-                  <span>Contact explicitly opted in to promotional and educational correspondence.</span>
                 </label>
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 sm:col-span-2">
                   <button
