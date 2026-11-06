@@ -1229,7 +1229,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-2">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
