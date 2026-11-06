@@ -175,43 +175,43 @@ export const AuditLogView: React.FC = () => {
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
 
-      <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-12">
-        <label className="relative col-span-2 block md:col-span-3">
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:grid-cols-6">
+        <label className="relative col-span-2 block lg:col-span-2">
           <span className="sr-only">Search audit activity</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute inset-y-0 left-3 my-auto h-4 w-4 text-slate-400" />
           <input
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search audit activity…"
-            className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+            className="h-[42px] w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
           />
         </label>
-        <label className="col-span-2 block text-xs font-semibold text-slate-600 sm:col-span-1 md:col-span-3">
+        <label className="col-span-2 block lg:col-span-2">
           <span className="sr-only">Filter by action</span>
           <select
             aria-label="Filter by action"
             value={actionFilter}
             onChange={(event) => setActionFilter(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+            className="h-[42px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
           >
             <option value="">All actions</option>
             {actions.map((action) => <option key={action} value={action}>{humanize(action)}</option>)}
           </select>
         </label>
-        <label className="col-span-2 block text-xs font-semibold text-slate-600 sm:col-span-1 md:col-span-2">
+        <label className="col-span-2 block lg:col-span-2">
           <span className="sr-only">Filter by record type</span>
           <select
             aria-label="Filter by record type"
             value={recordFilter}
             onChange={(event) => setRecordFilter(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+            className="h-[42px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
           >
             <option value="">All records</option>
             {recordTypes.map((recordType) => <option key={recordType} value={recordType}>{humanize(recordType)}</option>)}
           </select>
         </label>
-        <label className="col-span-1 block text-xs font-semibold text-slate-600 md:col-span-2">
+        <label className="col-span-1 block text-xs font-semibold text-slate-600 lg:col-span-3">
           <span className="mb-1 block">From</span>
           <input
             aria-label="From date"
@@ -219,10 +219,10 @@ export const AuditLogView: React.FC = () => {
             value={fromDate}
             max={toDate || undefined}
             onChange={(event) => setFromDate(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+            className="h-[42px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-800"
           />
         </label>
-        <label className="col-span-1 block text-xs font-semibold text-slate-600 md:col-span-2">
+        <label className="col-span-1 block text-xs font-semibold text-slate-600 lg:col-span-3">
           <span className="mb-1 block">To</span>
           <input
             aria-label="To date"
@@ -230,10 +230,10 @@ export const AuditLogView: React.FC = () => {
             value={toDate}
             min={fromDate || undefined}
             onChange={(event) => setToDate(event.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+            className="h-[42px] w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-normal text-slate-800"
           />
         </label>
-        <div className="col-span-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2 md:col-span-12">
+        <div className="col-span-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2 lg:col-span-6">
           <p role="status" className="whitespace-nowrap text-sm text-slate-600">
             {filteredEntries.length} of {entries.length} events
           </p>
