@@ -34,6 +34,13 @@ const humanize = (value: string): string => value
   .trim()
   .replace(/^./, (character) => character.toUpperCase());
 
+const auditActionLabel = (entry: AuditEntry): string => {
+  const action = entry.action.startsWith(`${entry.entity_type}.`)
+    ? entry.action.slice(entry.entity_type.length + 1)
+    : entry.action;
+  return humanize(action);
+};
+
 const formatAuditDetails = (details: unknown): Array<{ label: string; value: string }> => {
   if (details === null || typeof details !== 'object' || Array.isArray(details)) return [];
 
@@ -240,32 +247,30 @@ export const AuditLogView: React.FC = () => {
       </div>
 
       <div className="w-full max-h-[calc(100vh-16rem)] overflow-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[760px] table-fixed divide-y divide-slate-200 text-left text-sm">
+        <table className="w-full min-w-[720px] table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
-            <col className="w-[15%]" />
-            <col className="w-[20%]" />
-            <col className="w-[17%]" />
-            <col className="w-[16%]" />
-            <col />
+            <col className="w-[36%]" />
+            <col className="w-[24%]" />
+            <col className="w-[40%]" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
-              <th className="px-4 py-3">Time</th>
+              <th className="px-4 py-3">Activity</th>
               <th className="px-4 py-3">Actor</th>
-              <th className="px-4 py-3">Action</th>
-              <th className="px-4 py-3">Record</th>
               <th className="px-4 py-3">Details</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredEntries.map((entry) => (
               <tr key={entry.id}>
-                <td className="whitespace-nowrap px-4 py-3 text-xs leading-5 text-slate-600">
-                  {entry.created_at.split(' ').map((part, index) => <span key={index} className="block">{part}</span>)}
+                <td className="px-4 py-3 align-top">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <span className="font-semibold text-slate-900">{auditActionLabel(entry)}</span>
+                    <time className="whitespace-nowrap text-xs text-slate-500">{entry.created_at}</time>
+                  </div>
+                  <p className="mt-1 break-all text-xs text-slate-500">{humanize(entry.entity_type)} · {entry.entity_id}</p>
                 </td>
-                <td className="break-all px-4 py-3 text-slate-700">{entry.actor_email}</td>
-                <td className="px-4 py-3 font-medium capitalize text-slate-900">{humanize(entry.action)}</td>
-                <td className="break-all px-4 py-3 text-slate-700">{humanize(entry.entity_type)} · {entry.entity_id}</td>
+                <td className="break-all px-4 py-3 align-top text-slate-700">{entry.actor_email}</td>
                 <td className="px-4 py-3 text-slate-600">
                   {formatAuditDetails(entry.details).length > 0 ? (
                     <dl className="space-y-1.5 break-words">
@@ -281,13 +286,13 @@ export const AuditLogView: React.FC = () => {
               </tr>
             ))}
             {!isLoading && !error && entries.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No recorded changes yet.</td></tr>
+              <tr><td colSpan={3} className="px-4 py-10 text-center text-slate-500">No recorded changes yet.</td></tr>
             )}
             {!isLoading && !error && entries.length > 0 && filteredEntries.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No activity matches these search and filter criteria.</td></tr>
+              <tr><td colSpan={3} className="px-4 py-10 text-center text-slate-500">No activity matches these search and filter criteria.</td></tr>
             )}
             {isLoading && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">Loading audit events…</td></tr>
+              <tr><td colSpan={3} className="px-4 py-10 text-center text-slate-500">Loading audit events…</td></tr>
             )}
           </tbody>
         </table>
