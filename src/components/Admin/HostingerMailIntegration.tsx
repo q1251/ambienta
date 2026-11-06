@@ -92,6 +92,8 @@ interface InboxMessage {
 
 type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history';
 type MailEmailDesign = 'card' | 'plain';
+type CampaignReviewIntent = 'send' | 'schedule';
+type CampaignDialogMode = 'preview' | 'review' | null;
 
 interface MailCampaign {
   id: string;
@@ -151,6 +153,11 @@ interface ApiResponse {
   campaignId?: string;
   audienceCount?: number;
   audienceLimit?: number;
+  snapshotHash?: string;
+  selectedLeadIds?: number[];
+  selectionLimit?: number;
+  withoutConsentCount?: number;
+  withoutEmailCount?: number;
   total?: number;
   page?: number;
   pageSize?: number;
@@ -192,6 +199,18 @@ const campaignTemplates = {
 const formatMailText = (value: string): string => value
   .replace(/\*\*(.*?)\*\*/gs, '$1')
   .replace(/\*(.*?)\*/gs, '$1');
+
+const formatCampaignPreviewHtml = (value: string): string => value
+  .replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  })[character] || character)
+  .replace(/\*\*(.+?)\*\*/gs, '<strong>$1</strong>')
+  .replace(/\*(.+?)\*/gs, '<em>$1</em>')
+  .replace(/\n/g, '<br>');
 
 const extractMessageIds = (value?: string | null): string[] => value?.match(/<[^<>\r\n]{1,990}>/g) || [];
 
@@ -243,6 +262,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [campaignLeadResults, setCampaignLeadResults] = useState<MailRecipientLead[]>([]);
   const [campaignLeadTotal, setCampaignLeadTotal] = useState(0);
   const [isLoadingCampaignLeads, setIsLoadingCampaignLeads] = useState(false);
+  const [isSelectingCampaignMatches, setIsSelectingCampaignMatches] = useState(false);
+  const [campaignWithoutConsentCount, setCampaignWithoutConsentCount] = useState(0);
+  const [campaignWithoutEmailCount, setCampaignWithoutEmailCount] = useState(0);
+  const [campaignDialogMode, setCampaignDialogMode] = useState<CampaignDialogMode>(null);
+  const [campaignReviewIntent, setCampaignReviewIntent] = useState<CampaignReviewIntent>('send');
+  const [campaignReviewPage, setCampaignReviewPage] = useState(1);
+  const [campaignReviewRecipients, setCampaignReviewRecipients] = useState<MailRecipientLead[]>([]);
+  const [campaignReviewTotal, setCampaignReviewTotal] = useState(0);
+  const [campaignReviewSnapshotHash, setCampaignReviewSnapshotHash] = useState('');
+  const [isLoadingCampaignReview, setIsLoadingCampaignReview] = useState(false);
   const [campaignTemplate, setCampaignTemplate] = useState<keyof typeof campaignTemplates>('blank');
   const [campaignAudienceFilter, setCampaignAudienceFilter] = useState<CampaignAudienceFilter>({ country: '', status: '', source: '' });
   const [campaignCountries, setCampaignCountries] = useState<string[]>([]);
@@ -353,11 +382,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             requestMailApi('email-campaign-audience', 'GET'),
           ]);
           if (!Array.isArray(campaignResult.campaigns) || typeof audienceResult.audienceCount !== 'number'
+            || typeof audienceResult.withoutConsentCount !== 'number' || typeof audienceResult.withoutEmailCount !== 'number'
             || !Array.isArray(audienceResult.countries) || !Array.isArray(audienceResult.statuses) || !Array.isArray(audienceResult.sources)) {
             throw new Error('Campaign data returned an invalid response.');
           }
           setCampaigns(campaignResult.campaigns);
           setCampaignAudienceCount(audienceResult.audienceCount);
+          setCampaignWithoutConsentCount(audienceResult.withoutConsentCount);
+          setCampaignWithoutEmailCount(audienceResult.withoutEmailCount);
           setCampaignCountries(audienceResult.countries);
           setCampaignStatuses(audienceResult.statuses);
           setCampaignSources(audienceResult.sources);
@@ -407,7 +439,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         })}`, 'GET');
       void request
         .then((result) => {
-          if (active && typeof result.audienceCount === 'number') setCampaignAudienceCount(result.audienceCount);
+          if (active && typeof result.audienceCount === 'number') {
+            setCampaignAudienceCount(result.audienceCount);
+            if (typeof result.withoutConsentCount === 'number') setCampaignWithoutConsentCount(result.withoutConsentCount);
+            if (typeof result.withoutEmailCount === 'number') setCampaignWithoutEmailCount(result.withoutEmailCount);
+          }
         })
         .catch((error: unknown) => {
           if (active) setErrorMessage(error instanceof Error ? error.message : 'The campaign audience could not be refreshed.');
@@ -428,23 +464,27 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       search: campaignLeadSearch.trim(),
       page: String(campaignLeadPage),
     });
-    void requestMailApi(`email-campaign-audience&${query}`, 'GET')
-      .then((result) => {
-        if (!Array.isArray(result.leads) || typeof result.total !== 'number') {
-          throw new Error('The Contact Leads selection list is invalid.');
-        }
-        if (!active) return;
-        setCampaignLeadResults(result.leads);
-        setCampaignLeadTotal(result.total);
-      })
-      .catch((error: unknown) => {
-        if (active) setErrorMessage(error instanceof Error ? error.message : 'Eligible Contact Leads could not be loaded.');
-      })
-      .finally(() => {
-        if (active) setIsLoadingCampaignLeads(false);
-      });
+    const timeout = window.setTimeout(() => {
+      setIsLoadingCampaignLeads(true);
+      void requestMailApi(`email-campaign-audience&${query}`, 'GET')
+        .then((result) => {
+          if (!Array.isArray(result.leads) || typeof result.total !== 'number') {
+            throw new Error('The Contact Leads selection list is invalid.');
+          }
+          if (!active) return;
+          setCampaignLeadResults(result.leads);
+          setCampaignLeadTotal(result.total);
+        })
+        .catch((error: unknown) => {
+          if (active) setErrorMessage(error instanceof Error ? error.message : 'Eligible Contact Leads could not be loaded.');
+        })
+        .finally(() => {
+          if (active) setIsLoadingCampaignLeads(false);
+        });
+    }, 200);
     return () => {
       active = false;
+      window.clearTimeout(timeout);
     };
   }, [campaignAudienceMode, campaignLeadSearch, campaignLeadPage, mode, campaignAccess, activeFolder]);
 
@@ -756,6 +796,108 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       source: campaignAudienceFilter.source,
     })}`, 'GET');
 
+  const loadCampaignReviewPage = async (page: number, intent: CampaignReviewIntent): Promise<boolean> => {
+    setIsLoadingCampaignReview(true);
+    try {
+      const result = await requestMailApi('email-campaign-audience', 'POST', {
+        action: 'review',
+        audienceMode: campaignAudienceMode,
+        audienceFilter: campaignAudienceFilter,
+        selectedLeadIds: campaignSelectedLeadIds,
+        page,
+      });
+      if (typeof result.audienceCount !== 'number' || typeof result.snapshotHash !== 'string' || !Array.isArray(result.recipients)) {
+        throw new Error('The campaign recipient review could not be loaded.');
+      }
+      if (page > 1 && campaignReviewSnapshotHash && campaignReviewSnapshotHash !== result.snapshotHash) {
+        throw new Error('The eligible audience changed while you were reviewing it. Please reopen the recipient review.');
+      }
+      setCampaignReviewRecipients(result.recipients);
+      setCampaignReviewTotal(result.audienceCount);
+      setCampaignReviewSnapshotHash(result.snapshotHash);
+      setCampaignReviewPage(page);
+      setCampaignReviewIntent(intent);
+      return true;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The campaign recipient review could not be loaded.');
+      return false;
+    } finally {
+      setIsLoadingCampaignReview(false);
+    }
+  };
+
+  const openCampaignReview = async (intent: CampaignReviewIntent) => {
+    if (!editingCampaignId) return;
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsCampaignAction(true);
+    try {
+      const result = await refreshCampaignAudience();
+      if (typeof result.audienceCount !== 'number') throw new Error('The campaign audience count is invalid.');
+      setCampaignAudienceCount(result.audienceCount);
+      if (result.audienceCount === 0 || result.audienceCount > 5000) {
+        throw new Error(result.audienceCount === 0
+          ? 'There are no opted-in leads with valid email addresses for this campaign.'
+          : 'Campaigns are limited to 5,000 opted-in recipients.');
+      }
+      if (await loadCampaignReviewPage(1, intent)) setCampaignDialogMode('review');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The campaign recipient list could not be reviewed.');
+    } finally {
+      setIsCampaignAction(false);
+    }
+  };
+
+  const closeCampaignDialog = () => {
+    if (isCampaignAction || isLoadingCampaignReview) return;
+    setCampaignDialogMode(null);
+  };
+
+  useEffect(() => {
+    if (!campaignDialogMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeCampaignDialog();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [campaignDialogMode, isCampaignAction, isLoadingCampaignReview]);
+
+  const previewCampaignBody = campaignBody
+    .replace(/\{\{\s*first_name\s*\}\}/gi, 'Alex')
+    .replace(/\{\{\s*last_name\s*\}\}/gi, 'Morgan')
+    .replace(/\{\{\s*email\s*\}\}/gi, 'alex.morgan@example.com')
+    .replace(/\{\{\s*country\s*\}\}/gi, 'South Africa');
+  const previewCampaignSubject = campaignSubject
+    .replace(/\{\{\s*first_name\s*\}\}/gi, 'Alex')
+    .replace(/\{\{\s*last_name\s*\}\}/gi, 'Morgan')
+    .replace(/\{\{\s*email\s*\}\}/gi, 'alex.morgan@example.com')
+    .replace(/\{\{\s*country\s*\}\}/gi, 'South Africa');
+
+  const selectMatchingCampaignLeads = async () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsSelectingCampaignMatches(true);
+    try {
+      const result = await requestMailApi('email-campaign-audience', 'POST', {
+        action: 'selectMatching',
+        search: campaignLeadSearch.trim(),
+      });
+      if (!Array.isArray(result.selectedLeadIds) || typeof result.total !== 'number') {
+        throw new Error('The matching Contact Leads could not be selected.');
+      }
+      const selectedLeadIds = result.selectedLeadIds;
+      const newSelection = Array.from(new Set([...campaignSelectedLeadIds, ...selectedLeadIds])).slice(0, 5000);
+      setCampaignSelectedLeadIds(newSelection);
+      setSuccessMessage(result.total > 5000
+        ? `${newSelection.length - campaignSelectedLeadIds.length} matching leads added. The selection is capped at 5,000; narrow your search to choose a different group.`
+        : `${newSelection.length - campaignSelectedLeadIds.length} matching eligible leads added.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Matching Contact Leads could not be selected.');
+    } finally {
+      setIsSelectingCampaignMatches(false);
+    }
+  };
+
   const persistCampaignDraft = async (): Promise<string> => {
     const result = await requestMailApi('email-campaign-save', 'POST', {
       ...(editingCampaignId ? { id: editingCampaignId } : {}),
@@ -810,19 +952,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setSuccessMessage('');
     setIsCampaignAction(true);
     try {
-      const audienceResult = await refreshCampaignAudience();
-      if (typeof audienceResult.audienceCount !== 'number') throw new Error('The campaign audience count is invalid.');
-      setCampaignAudienceCount(audienceResult.audienceCount);
-      if (audienceResult.audienceCount === 0 || audienceResult.audienceCount > 5000) {
-        throw new Error(audienceResult.audienceCount === 0
-          ? 'There are no opted-in leads with valid email addresses for this campaign.'
-          : 'Campaigns are limited to 5,000 opted-in recipients.');
-      }
-      if (!window.confirm(`Schedule "${campaignName}" for ${campaignScheduleAt} to ${audienceResult.audienceCount} opted-in leads?`)) return;
       const campaignId = await persistCampaignDraft();
       await requestMailApi('email-campaign-schedule', 'POST', {
         id: campaignId,
         scheduledAt: new Date(campaignScheduleAt).toISOString(),
+        expectedSnapshotHash: campaignReviewSnapshotHash,
       });
       setSuccessMessage(`Campaign scheduled for ${new Date(campaignScheduleAt).toLocaleString()}.`);
       setEditingCampaignId(null);
@@ -834,6 +968,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setCampaignSelectedLeadIds([]);
       setCampaignLeadSearch('');
       setCampaignLeadPage(1);
+      setCampaignDialogMode(null);
       await loadData();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'The campaign could not be scheduled.');
@@ -848,17 +983,11 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setSuccessMessage('');
     setIsCampaignAction(true);
     try {
-      const audienceResult = await refreshCampaignAudience();
-      if (typeof audienceResult.audienceCount !== 'number') throw new Error('The campaign audience count is invalid.');
-      setCampaignAudienceCount(audienceResult.audienceCount);
-      if (audienceResult.audienceCount === 0 || audienceResult.audienceCount > 5000) {
-        throw new Error(audienceResult.audienceCount === 0
-          ? 'There are no opted-in leads with valid email addresses for this campaign.'
-          : 'Campaigns are limited to 5,000 opted-in recipients.');
-      }
-      if (!window.confirm(`Send "${campaignName}" to ${audienceResult.audienceCount} opted-in leads now? This cannot be undone.`)) return;
       const campaignId = await persistCampaignDraft();
-      const result = await requestMailApi('email-campaign-launch', 'POST', { id: campaignId });
+      const result = await requestMailApi('email-campaign-launch', 'POST', {
+        id: campaignId,
+        expectedSnapshotHash: campaignReviewSnapshotHash,
+      });
       setSuccessMessage(`Campaign queued for ${result.recipientCount ?? campaignAudienceCount} opted-in leads. ${result.sent ?? 0} sent in the first batch; remaining messages will be processed by the scheduled worker.`);
       setEditingCampaignId(null);
       setCampaignName('');
@@ -869,6 +998,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setCampaignSelectedLeadIds([]);
       setCampaignLeadSearch('');
       setCampaignLeadPage(1);
+      setCampaignDialogMode(null);
       await loadData();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'The campaign could not be launched.');
@@ -916,6 +1046,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       const result = await requestMailApi('email-campaign-test-send', 'POST', {
         subject: campaignSubject,
         body: campaignBody,
+        emailDesign: campaignEmailDesign,
       });
       if (result.sent !== true) throw new Error('Hostinger did not accept the test email.');
       setSuccessMessage(`Hostinger accepted the test email for ${result.recipient || settings.emailAccount}.`);
@@ -1707,7 +1838,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
-                    <p className="mt-0.5 text-xs text-slate-600">Choose all eligible Contact Leads or select specific contacts. Only leads with a valid email and recorded marketing consent can receive campaign emails.</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{role === 'admin'
+                      ? 'Choose all eligible Contact Leads or select specific contacts. Only leads with a valid email and recorded marketing consent can receive campaign emails.'
+                      : 'Choose all eligible Contact Leads assigned to you or select specific contacts. Only leads with a valid email and recorded marketing consent can receive campaign emails.'}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                     campaignAudienceCount > 5000 ? 'bg-rose-50 text-rose-800' : 'bg-violet-50 text-violet-800'
@@ -1736,6 +1869,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     Campaigns are limited to 5,000 recipients. Narrow the opted-in audience before sending.
                   </p>
                 )}
+                <details className="mt-2 rounded-lg border border-slate-200 px-3 py-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">Why might a lead be excluded?</summary>
+                  <div className="mt-2 space-y-1 text-xs text-slate-600">
+                    <p className="text-[11px] text-slate-500">Counts cover all Contact Leads available to you, before any audience filters are applied.</p>
+                    <p><strong className="text-slate-800">{campaignWithoutConsentCount.toLocaleString()}</strong> lead records do not have marketing consent.</p>
+                    <p><strong className="text-slate-800">{campaignWithoutEmailCount.toLocaleString()}</strong> lead records have no email address. Invalid email addresses are excluded too.</p>
+                    <p className="text-[11px] text-slate-500">These are lead-record counts and may overlap. Campaign recipient counts deduplicate matching email addresses.</p>
+                  </div>
+                </details>
                 <form onSubmit={(event) => void saveCampaign(event)} className="space-y-2 pt-2">
                   <fieldset className="rounded-lg border border-slate-200 px-3 py-2">
                     <legend className="px-1 text-xs font-semibold text-slate-700">Who should receive this campaign?</legend>
@@ -1776,6 +1918,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                             className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
                           >
                             Select this page
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void selectMatchingCampaignLeads()}
+                            disabled={isLoadingCampaignLeads || isSelectingCampaignMatches || campaignLeadTotal === 0 || campaignSelectedLeadIds.length >= 5000}
+                            className="rounded-md border border-violet-200 bg-white px-2.5 py-1 text-xs font-semibold text-violet-800 disabled:opacity-50"
+                          >
+                            {isSelectingCampaignMatches ? 'Selecting…' : `Select all ${campaignLeadTotal > 5000 ? '5,000+' : campaignLeadTotal} matching`}
                           </button>
                           <button
                             type="button"
@@ -1906,6 +2056,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                       <label htmlFor="campaign-body" className="block text-xs font-semibold text-slate-600">Message</label>
                       <div className="flex flex-wrap items-center gap-1">
+                      <button type="button" onClick={() => setCampaignDialogMode('preview')} disabled={!campaignSubject.trim() && !campaignBody.trim()} className="rounded-md border border-violet-200 px-2 py-1 text-xs font-semibold text-violet-800 disabled:opacity-50">Preview email</button>
                       <button type="button" onClick={() => wrapCampaignSelection('**')} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">Bold</button>
                       <button type="button" onClick={() => wrapCampaignSelection('*')} className="rounded-md border border-slate-300 px-2 py-1 text-xs italic text-slate-700">Italic</button>
                       <span className="px-1 text-xs text-slate-500">Insert:</span>
@@ -1916,16 +2067,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     </div>
                     <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} required onChange={(event) => setCampaignBody(event.target.value)} className="h-[calc(100vh-28rem)] min-h-48 max-h-[60vh] w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2">
+                  <div className="sticky bottom-0 z-10 -mx-2 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white/95 px-2 py-2 shadow-[0_-8px_16px_-16px_rgba(15,23,42,0.6)] backdrop-blur">
                     <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {isCampaignSaving && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
                       {isCampaignSaving ? 'Saving…' : 'Save draft'}
                     </button>
-                    <button type="button" onClick={() => void scheduleCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50">
-                      {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />} Schedule
+                    <button type="button" onClick={() => void openCampaignReview('schedule')} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading || !campaignScheduleAt} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 px-3 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-50 disabled:opacity-50">
+                      {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />} Review & schedule
                     </button>
-                    <button type="button" onClick={() => void launchCampaign()} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
-                      {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />} Send now
+                    <button type="button" onClick={() => void openCampaignReview('send')} disabled={!editingCampaignId || !settings.verified || campaignAudienceCount === 0 || campaignAudienceCount > 5000 || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
+                      {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />} Review & send
                     </button>
                     {role === 'admin' && (
                       <button type="button" onClick={() => void sendCampaignTest()} disabled={!settings.verified || !campaignSubject.trim() || !campaignBody.trim() || isCampaignAction || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
@@ -2011,6 +2162,103 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           )}
         </div>
       </section>}
+
+      {campaignDialogMode && mode === 'mailbox' && activeFolder === 'campaigns' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeCampaignDialog();
+        }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="campaign-dialog-title" className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="campaign-dialog-title" className="font-semibold text-slate-950">
+                  {campaignDialogMode === 'preview' ? 'Email preview' : 'Review campaign recipients'}
+                </h2>
+                <p className="mt-1 text-xs text-slate-600">
+                  {campaignDialogMode === 'preview'
+                    ? 'Personalization is shown with sample contact details.'
+                    : campaignReviewIntent === 'schedule'
+                      ? `${campaignReviewTotal} eligible recipients · Schedule for ${new Date(campaignScheduleAt).toLocaleString()}`
+                      : `${campaignReviewTotal} eligible recipients · This send cannot be undone.`}
+                </p>
+              </div>
+              <button type="button" onClick={closeCampaignDialog} disabled={isCampaignAction || isLoadingCampaignReview} aria-label="Close dialog" className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-50">×</button>
+            </header>
+            {showErrorMessage && errorMessage && (
+              <p role="alert" className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 sm:mx-5">{errorMessage}</p>
+            )}
+            {campaignDialogMode === 'preview' ? (
+              <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6">
+                {campaignEmailDesign === 'card' ? (
+                  <article className="mx-auto max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <header className="bg-[#123b68] px-6 py-5 text-white">
+                      <p className="text-[11px] font-bold tracking-[0.18em] text-blue-100">AMBIENTA · CUSTOMER SUPPORT</p>
+                      <h3 className="mt-2 text-lg font-semibold">{previewCampaignSubject}</h3>
+                    </header>
+                    <div className="px-6 py-6 text-sm leading-7 text-slate-700" dangerouslySetInnerHTML={{ __html: formatCampaignPreviewHtml(previewCampaignBody) }} />
+                    <footer className="border-t border-slate-200 bg-slate-50 px-6 py-3 text-xs text-slate-500">Ambient Customer Support</footer>
+                  </article>
+                ) : (
+                  <article className="mx-auto max-w-xl rounded-lg bg-white p-6 text-sm leading-7 text-slate-700 shadow-sm">
+                    <h3 className="mb-4 text-base font-semibold text-slate-950">{previewCampaignSubject || '(no subject)'}</h3>
+                    <div>{previewCampaignBody ? <span dangerouslySetInnerHTML={{ __html: formatCampaignPreviewHtml(previewCampaignBody) }} /> : '(No message yet)'}</div>
+                  </article>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+                  <p className="mb-3 text-xs text-slate-600">
+                    {campaignAudienceMode === 'selected'
+                      ? 'These selected contacts are currently eligible. Consent and email eligibility will be checked again when queued.'
+                      : 'These are the contacts matching your audience filters. Consent and email eligibility will be checked again when queued.'}
+                  </p>
+                  {isLoadingCampaignReview ? (
+                    <p className="py-8 text-center text-sm text-slate-500">Refreshing eligible recipients…</p>
+                  ) : campaignReviewRecipients.length === 0 ? (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">No currently eligible recipients. Close this review and update your audience selection.</p>
+                  ) : (
+                    <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                      {campaignReviewRecipients.map((recipient) => (
+                        <li key={recipient.id} className="flex min-w-0 items-center justify-between gap-3 px-3 py-2">
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-slate-800">{recipient.name || 'Unnamed lead'}</span>
+                            <span className="block truncate text-xs text-slate-500">{recipient.email}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-600">
+                    <span>{campaignReviewTotal.toLocaleString()} recipients total</span>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => void loadCampaignReviewPage(campaignReviewPage - 1, campaignReviewIntent)} disabled={campaignReviewPage <= 1 || isLoadingCampaignReview} className="rounded-md border border-slate-300 px-2.5 py-1.5 disabled:opacity-50">Previous</button>
+                      <span>Page {campaignReviewPage} of {Math.max(1, Math.ceil(campaignReviewTotal / 50))}</span>
+                      <button type="button" onClick={() => void loadCampaignReviewPage(campaignReviewPage + 1, campaignReviewIntent)} disabled={campaignReviewPage * 50 >= campaignReviewTotal || isLoadingCampaignReview} className="rounded-md border border-slate-300 px-2.5 py-1.5 disabled:opacity-50">Next</button>
+                    </div>
+                  </div>
+                </div>
+                <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
+                  <button type="button" onClick={closeCampaignDialog} disabled={isCampaignAction} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Back to campaign</button>
+                  <button
+                    type="button"
+                    onClick={() => void (campaignReviewIntent === 'schedule' ? scheduleCampaign() : launchCampaign())}
+                    disabled={campaignReviewTotal === 0 || campaignReviewTotal > 5000 || isCampaignAction || isLoadingCampaignReview}
+                    className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isCampaignAction && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                    {campaignReviewIntent === 'schedule' ? 'Confirm schedule' : `Confirm send to ${campaignReviewTotal.toLocaleString()}`}
+                  </button>
+                </footer>
+              </>
+            )}
+            {campaignDialogMode === 'preview' && (
+              <footer className="flex justify-end border-t border-slate-200 px-4 py-3 sm:px-5">
+                <button type="button" onClick={closeCampaignDialog} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">Close preview</button>
+              </footer>
+            )}
+          </section>
+        </div>
+      )}
 
     </div>
   );
