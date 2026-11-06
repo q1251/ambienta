@@ -98,6 +98,7 @@ interface MailCampaign {
   name: string;
   subject: string;
   body: string;
+  emailDesign: MailEmailDesign;
   status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'partial' | 'failed';
   scheduledAt: string | null;
   audienceFilter: CampaignAudienceFilter;
@@ -231,6 +232,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [campaignName, setCampaignName] = useState('');
   const [campaignSubject, setCampaignSubject] = useState('');
   const [campaignBody, setCampaignBody] = useState('');
+  const [campaignEmailDesign, setCampaignEmailDesign] = useState<MailEmailDesign>('plain');
   const [campaignTemplate, setCampaignTemplate] = useState<keyof typeof campaignTemplates>('blank');
   const [campaignAudienceFilter, setCampaignAudienceFilter] = useState<CampaignAudienceFilter>({ country: '', status: '', source: '' });
   const [campaignCountries, setCampaignCountries] = useState<string[]>([]);
@@ -711,6 +713,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       name: campaignName,
       subject: campaignSubject,
       body: campaignBody,
+      emailDesign: campaignEmailDesign,
       audienceFilter: campaignAudienceFilter,
       trackOpens: campaignTrackOpens,
     });
@@ -740,6 +743,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     setCampaignName(campaign.name);
     setCampaignSubject(campaign.subject);
     setCampaignBody(campaign.body);
+    setCampaignEmailDesign(campaign.emailDesign || 'plain');
     setCampaignTemplate('blank');
     setCampaignAudienceFilter(campaign.audienceFilter);
     setCampaignTrackOpens(campaign.trackOpens);
@@ -776,6 +780,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setCampaignName('');
       setCampaignSubject('');
       setCampaignBody('');
+      setCampaignEmailDesign('plain');
       await loadData();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'The campaign could not be scheduled.');
@@ -811,6 +816,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       setCampaignName('');
       setCampaignSubject('');
       setCampaignBody('');
+      setCampaignEmailDesign('plain');
       await loadData();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'The campaign could not be launched.');
@@ -1677,7 +1683,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </p>
                 )}
                 <form onSubmit={(event) => void saveCampaign(event)} className="space-y-2 pt-2">
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="min-w-0">
                       <label htmlFor="campaign-name" className="mb-1 block text-xs font-semibold text-slate-600">Campaign name</label>
                       <input id="campaign-name" value={campaignName} maxLength={160} required onChange={(event) => setCampaignName(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
@@ -1694,6 +1700,13 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         <option value="welcome">Welcome</option>
                         <option value="update">Customer update</option>
                         <option value="seasonal">News announcement</option>
+                      </select>
+                    </label>
+                    <label htmlFor="campaign-email-design" className="block text-xs font-semibold text-slate-600">
+                      Email design
+                      <select id="campaign-email-design" value={campaignEmailDesign} onChange={(event) => setCampaignEmailDesign(event.target.value as MailEmailDesign)} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100">
+                        <option value="plain">Plain email</option>
+                        <option value="card">Designed card</option>
                       </select>
                     </label>
                     <div className="min-w-0">

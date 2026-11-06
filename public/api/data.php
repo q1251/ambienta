@@ -299,6 +299,7 @@ function data_ensure_schema(PDO $db): void
             unsubscribed_count INT UNSIGNED NOT NULL DEFAULT 0,
             audience_filter MEDIUMTEXT NULL,
             track_opens TINYINT(1) NOT NULL DEFAULT 0,
+            email_design VARCHAR(16) NOT NULL DEFAULT 'plain',
             created_by_staff_id BIGINT UNSIGNED NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -437,6 +438,7 @@ function data_ensure_schema(PDO $db): void
         ['email_drafts', 'email_design', "VARCHAR(16) NOT NULL DEFAULT 'plain'"],
         ['email_campaigns', 'audience_filter', 'MEDIUMTEXT NULL'],
         ['email_campaigns', 'track_opens', 'TINYINT(1) NOT NULL DEFAULT 0'],
+        ['email_campaigns', 'email_design', "VARCHAR(16) NOT NULL DEFAULT 'plain'"],
         ['email_campaigns', 'created_by_staff_id', 'BIGINT UNSIGNED NULL'],
         ['email_campaign_recipients', 'open_token_hash', 'CHAR(64) NULL'],
         ['email_campaign_recipients', 'open_token', 'MEDIUMTEXT NULL'],
@@ -1655,7 +1657,7 @@ function data_campaign_process_batch(array $settings, int $limit = 10, ?int $cam
         try {
             $sql =
                 "SELECT r.id, r.campaign_id, r.lead_id, r.recipient_email, r.unsubscribe_token,
-                        r.open_token, c.subject, c.body, c.track_opens,
+                        r.open_token, c.subject, c.body, c.track_opens, c.email_design,
                         c.created_by_staff_id AS campaign_staff_id,
                         l.first_name, l.last_name, l.country,
                         c.status AS campaign_status
@@ -1722,7 +1724,17 @@ function data_campaign_process_batch(array $settings, int $limit = 10, ?int $cam
         $openPixel = (int) $recipient['track_opens'] === 1 && $openToken !== ''
             ? '<img src="https://ambienta.io/api/data.php?resource=email-open&amp;token=' . rawurlencode($openToken) . '" alt="" width="1" height="1" style="display:block;width:1px;height:1px">'
             : '';
-        $htmlBody = substr(data_campaign_html($formattedMessage), 0, -14) . $openPixel . '</body></html>';
+        $emailDesign = $recipient['email_design'] === 'card' ? 'card' : 'plain';
+        $htmlBody = $emailDesign === 'card'
+            ? data_mail_card_html($subject, $formattedMessage)
+            : data_campaign_html($formattedMessage);
+        if ($openPixel !== '') {
+            $closingBodyPosition = strripos($htmlBody, '</body>');
+            if ($closingBodyPosition === false) {
+                throw new RuntimeException('campaign_email_html_invalid');
+            }
+            $htmlBody = substr_replace($htmlBody, $openPixel, $closingBodyPosition, 0);
+        }
         $activityId = null;
         try {
             $db->prepare('INSERT INTO email_activity (recipient_email, subject, body, status, sender_staff_id) VALUES (?, ?, ?, ?, ?)')->execute([
@@ -4046,7 +4058,7 @@ if (in_array($resource, [
     if ($method === 'GET' && $resource === 'email-campaigns') {
         $campaignStaffId = data_campaign_actor_staff_id();
         $db = data_db();
-        $campaignSql = 'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, created_at, completed_at,
+        $campaignSql = 'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, email_design, created_at, completed_at,
                     (SELECT COUNT(*) FROM email_campaign_recipients r WHERE r.campaign_id = email_campaigns.id AND r.opened_at IS NOT NULL) AS open_count
              FROM email_campaigns';
         if ($campaignStaffId === null) {
@@ -4070,6 +4082,7 @@ if (in_array($resource, [
             'openCount' => (int) $row['open_count'],
             'audienceFilter' => data_campaign_filters(json_decode(data_mail_decrypt_content($row['audience_filter']), true) ?: []),
             'trackOpens' => (bool) $row['track_opens'],
+            'emailDesign' => in_array($row['email_design'], ['plain', 'card'], true) ? $row['email_design'] : 'plain',
             'createdAt' => $row['created_at'],
             'completedAt' => $row['completed_at'],
         ], $rows)]);
@@ -4107,15 +4120,20 @@ if (in_array($resource, [
         }
         $trackOpens = $body['trackOpens'] ?? false;
         if (!is_bool($trackOpens)) data_respond(400, ['error' => 'invalid_campaign_tracking', 'message' => 'Open tracking must be enabled or disabled.']);
+        $emailDesign = $body['emailDesign'] ?? 'plain';
+        if (!is_string($emailDesign) || !in_array($emailDesign, ['plain', 'card'], true)) {
+            data_respond(400, ['error' => 'invalid_email_design', 'message' => 'Choose either the designed card or plain email layout.']);
+        }
         $campaignId = $body['id'] ?? null;
         if ($campaignId === null) {
-            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens, created_by_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?)')->execute([
+            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens, email_design, created_by_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
                 $name,
                 $subject,
                 data_mail_encrypt_content($message),
                 'draft',
                 data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
                 $trackOpens ? 1 : 0,
+                $emailDesign,
                 $campaignStaffId,
             ]);
             $campaignId = (string) $db->lastInsertId();
@@ -4124,7 +4142,7 @@ if (in_array($resource, [
             if ($campaignId === false || $campaignId < 1) {
                 data_respond(400, ['error' => 'invalid_campaign_id', 'message' => 'The selected campaign is invalid.']);
             }
-            $updateSql = "UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ? WHERE id = ? AND status = 'draft'";
+            $updateSql = "UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ?, email_design = ? WHERE id = ? AND status = 'draft'";
             if ($campaignStaffId !== null) $updateSql .= ' AND created_by_staff_id = ?';
             $update = $db->prepare($updateSql);
             $parameters = [
@@ -4133,6 +4151,7 @@ if (in_array($resource, [
                 data_mail_encrypt_content($message),
                 data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
                 $trackOpens ? 1 : 0,
+                $emailDesign,
                 $campaignId,
             ];
             if ($campaignStaffId !== null) $parameters[] = $campaignStaffId;
