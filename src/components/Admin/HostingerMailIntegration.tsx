@@ -1762,19 +1762,21 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 </form>
               </section>
 
-              {role === 'admin' && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="font-semibold text-amber-950">Scheduled campaign worker</h2>
-                    <p className="mt-1 max-w-2xl text-sm text-amber-900">Hostinger must call the protected worker every minute to send scheduled campaigns and continue large sends (up to ten recipients per run). Generate a command and add it as a Hostinger cron job.</p>
+              {role === 'admin' && (
+                <details className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">Optional setup: automate scheduled and large campaigns</summary>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-slate-600">Set this up once in Hostinger Cron Jobs to run every minute. It processes scheduled campaigns and sends in batches of up to 10. You can skip this for immediate campaigns.</p>
+                    <button type="button" onClick={() => void generateCampaignWorkerCommand()} className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Generate setup command</button>
                   </div>
-                  <button type="button" onClick={() => void generateCampaignWorkerCommand()} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-950 hover:bg-amber-100">Generate cron command</button>
-                </div>
-                {campaignWorkerCommand && (
-                  <pre className="mt-4 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-800">{campaignWorkerCommand}</pre>
-                )}
-                <p className="mt-3 text-xs text-amber-900">The command contains a private worker token. Keep it secret. Generating a new command immediately invalidates the previous one.</p>
-              </section>}
+                  {campaignWorkerCommand && (
+                    <>
+                      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-800">{campaignWorkerCommand}</pre>
+                      <p className="mt-1 text-[11px] text-slate-500">Keep this command secret. Generating a new one invalidates the previous command.</p>
+                    </>
+                  )}
+                </details>
+              )}
             </div>
           )}
           {activeFolder === 'campaign-history' && campaignAccess && (
