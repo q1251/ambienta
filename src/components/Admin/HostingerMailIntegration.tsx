@@ -1216,17 +1216,29 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-              <div>
-                <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
-                <p className="mt-1 text-sm text-slate-600">Send through {settings.emailAccount}. Drafts are saved in the CRM.</p>
+            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto w-full max-w-5xl space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
+                    <Mail className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
+                    <p className="text-xs text-slate-500">Drafts are saved in the CRM.</p>
+                  </div>
+                </div>
+                <p className="max-w-full truncate rounded-full bg-slate-50 px-3 py-1.5 text-xs text-slate-600 sm:max-w-[45%]">
+                  From <span className="font-medium text-slate-800">{settings.emailAccount}</span>
+                </p>
               </div>
-              <div>
-                <label htmlFor="mail-recipient" className="mb-1 block text-sm font-medium text-slate-700">To</label>
+
+              <div className="grid gap-3 md:grid-cols-12">
+              <div className="md:col-span-8">
+                <label htmlFor="mail-recipient" className="mb-1 block text-xs font-semibold text-slate-600">To</label>
                 {role === 'admin' ? (
-                  <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                  <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                 ) : replyMailbox ? (
-                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">Replying to the selected inbox message; recipient address is hidden.</p>
+                  <p className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">Replying to selected inbox message; recipient hidden.</p>
                 ) : (
                   <select
                     id="mail-recipient"
@@ -1235,7 +1247,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       setRecipientLeadId(event.target.value);
                       setReplyMailbox(null);
                     }}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
                   >
                     <option value="">Select an assigned lead</option>
                     {recipientLeads.map((lead) => (
@@ -1243,6 +1255,22 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     ))}
                   </select>
                 )}
+              </div>
+              <div className="md:col-span-4">
+                <label htmlFor="mail-email-design" className="mb-1 block text-xs font-semibold text-slate-600">Email design</label>
+                <select
+                  id="mail-email-design"
+                  value={emailDesign}
+                  onChange={(event) => setEmailDesign(event.target.value as MailEmailDesign)}
+                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                >
+                  <option value="plain">Plain email</option>
+                  <option value="card">Designed card</option>
+                </select>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  {emailDesign === 'card' ? 'Adds an Ambienta card.' : 'Simple, unstyled message.'}
+                </p>
+              </div>
               </div>
               {role === 'admin' && <details className="rounded-lg border border-slate-200 px-3 py-2">
                 <summary className="cursor-pointer text-sm font-medium text-slate-700">CC and BCC</summary>
@@ -1258,35 +1286,20 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 </div>
               </details>}
               <div>
-                <label htmlFor="mail-subject" className="mb-1 block text-sm font-medium text-slate-700">Subject</label>
-                <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <label htmlFor="mail-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject</label>
+                <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
               </div>
               <div>
-                <label htmlFor="mail-email-design" className="mb-1 block text-sm font-medium text-slate-700">Email design</label>
-                <select
-                  id="mail-email-design"
-                  value={emailDesign}
-                  onChange={(event) => setEmailDesign(event.target.value as MailEmailDesign)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
-                >
-                  <option value="plain">Plain email</option>
-                  <option value="card">Designed card</option>
-                </select>
-                <p className="mt-1 text-xs text-slate-500">
-                  {emailDesign === 'card'
-                    ? 'Adds a clean Ambienta card around your message.'
-                    : 'Sends the message without a card layout.'}
-                </p>
-              </div>
-              <div>
-                <label htmlFor="mail-body" className="mb-1 block text-sm font-medium text-slate-700">Message</label>
-                <div className="mb-2 flex gap-2">
-                  <button type="button" onClick={() => wrapMessageSelection('**')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700">Bold</button>
-                  <button type="button" onClick={() => wrapMessageSelection('*')} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs italic text-slate-700">Italic</button>
-                  <span className="self-center text-xs text-slate-500">Formatting is sent as HTML with a plain-text alternative.</span>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="mail-body" className="block text-xs font-semibold text-slate-600">Message</label>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => wrapMessageSelection('**')} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Bold</button>
+                    <button type="button" onClick={() => wrapMessageSelection('*')} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs italic text-slate-700 hover:bg-slate-50">Italic</button>
+                  </div>
                 </div>
-                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={9} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                <details className="mt-2 rounded-lg border border-slate-200 p-3">
+                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={6} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="min-h-36 w-full resize-y rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <p className="mt-1 text-[11px] text-slate-500">Formatting is sent as HTML with a plain-text alternative.</p>
+                <details className="mt-2 rounded-lg border border-slate-200 px-3 py-2">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">Preview formatted message</summary>
                   {emailDesign === 'card' ? (
                     <div className="mt-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1298,10 +1311,10 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   )}
                 </details>
               </div>
-              {role === 'admin' && <div>
-                <label htmlFor="mail-attachments" className="mb-1 block text-sm font-medium text-slate-700">Attachments</label>
-                <input id="mail-attachments" type="file" multiple onChange={(event) => { void addAttachments(event.target.files); event.target.value = ''; }} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200" />
-                <p className="mt-1 text-xs text-slate-500">Up to five files, 4 MB total.</p>
+              {role === 'admin' && <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                <label htmlFor="mail-attachments" className="mb-1 block text-xs font-semibold text-slate-600">Attachments <span className="font-normal">(optional)</span></label>
+                <input id="mail-attachments" type="file" multiple onChange={(event) => { void addAttachments(event.target.files); event.target.value = ''; }} className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100" />
+                <p className="mt-1 text-[11px] text-slate-500">Up to five files, 4 MB total.</p>
                 {attachments.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {attachments.map((attachment, index) => (
@@ -1313,7 +1326,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </ul>
                 )}
               </div>}
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
                 <button type="button" onClick={() => void saveDraft()} disabled={isLoading || (role === 'admin' ? (!recipientEmail && !subject && !messageBody) : (!recipientLeadId && !replyMailbox))} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   <FileText className="h-4 w-4" /> Save draft
                 </button>
@@ -1321,7 +1334,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   {isSending ? 'Sending…' : 'Send email'}
                 </button>
-                {!settings.verified && <p className="self-center text-xs text-slate-500">Configure and test SMTP + IMAP under Integrations before sending.</p>}
+                {!settings.verified && <p className="mr-auto text-xs text-slate-500">Verify SMTP + IMAP under Integrations before sending.</p>}
               </div>
             </form>
           )}
