@@ -93,7 +93,7 @@ interface InboxMessage {
 type MailboxFolder = 'inbox' | 'compose' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history';
 type MailEmailDesign = 'card' | 'plain';
 type CampaignReviewIntent = 'send' | 'schedule';
-type CampaignDialogMode = 'preview' | 'review' | null;
+type CampaignDialogMode = 'preview' | 'review' | 'selection' | null;
 
 interface MailCampaign {
   id: string;
@@ -852,7 +852,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   };
 
   const closeCampaignDialog = () => {
-    if (isCampaignAction || isLoadingCampaignReview) return;
+    if (isCampaignAction || isLoadingCampaignReview || isSelectingCampaignMatches) return;
     setCampaignDialogMode(null);
   };
 
@@ -863,7 +863,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [campaignDialogMode, isCampaignAction, isLoadingCampaignReview]);
+  }, [campaignDialogMode, isCampaignAction, isLoadingCampaignReview, isSelectingCampaignMatches]);
 
   const previewCampaignBody = campaignBody
     .replace(/\{\{\s*first_name\s*\}\}/gi, 'Alex')
@@ -1917,12 +1917,40 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                         All eligible leads
                       </label>
                       <label className="flex items-center gap-2 text-xs text-slate-700">
-                        <input type="radio" name="campaign-audience-mode" value="selected" checked={campaignAudienceMode === 'selected'} onChange={() => setCampaignAudienceMode('selected')} className="border-slate-300 text-violet-700 focus:ring-violet-500" />
+                        <input type="radio" name="campaign-audience-mode" value="selected" checked={campaignAudienceMode === 'selected'} onChange={() => {
+                          setCampaignAudienceMode('selected');
+                          setCampaignDialogMode('selection');
+                        }} className="border-slate-300 text-violet-700 focus:ring-violet-500" />
                         Select specific leads
                       </label>
                     </div>
                     {campaignAudienceMode === 'selected' && (
-                      <div className="mt-2 rounded-lg bg-slate-50 p-2.5">
+                      <button type="button" onClick={() => setCampaignDialogMode('selection')} className="mt-2 flex w-full items-center justify-between gap-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-left hover:bg-violet-100">
+                        <span>
+                          <span className="block text-xs font-semibold text-violet-950">Choose recipients</span>
+                          <span className="mt-0.5 block text-[11px] text-violet-800">
+                            {campaignSelectedLeadIds.length.toLocaleString()} selected · Use search and categories to manage your list
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-violet-800">Open selector</span>
+                      </button>
+                    )}
+                    {campaignDialogMode === 'selection' && (
+                      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-2 sm:p-5" onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) closeCampaignDialog();
+                      }}>
+                        <section role="dialog" aria-modal="true" aria-labelledby="campaign-selection-title" className="flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                          <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6">
+                            <div>
+                              <h2 id="campaign-selection-title" className="text-base font-semibold text-slate-950">Choose campaign recipients</h2>
+                              <p className="mt-1 text-xs text-slate-600">Search, filter by category, and select individual leads or whole matching groups.</p>
+                            </div>
+                            <button type="button" onClick={closeCampaignDialog} disabled={isSelectingCampaignMatches} aria-label="Close recipient selector" className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 disabled:opacity-50">×</button>
+                          </header>
+                          {showErrorMessage && errorMessage && <p role="alert" className="mx-4 mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 sm:mx-6">{errorMessage}</p>}
+                          {successMessage && <p role="status" className="mx-4 mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 sm:mx-6">{successMessage}</p>}
+                          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                          <div className="rounded-lg bg-slate-50 p-2.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <label htmlFor="campaign-lead-search" className="sr-only">Search eligible Contact Leads</label>
                           <input
@@ -2027,7 +2055,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                           )}
                           <span className="ml-auto text-[11px] text-slate-500">Only eligible leads are listed. Maximum 5,000 recipients.</span>
                         </div>
-                        <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                        <div className="mt-2 max-h-[55vh] overflow-y-auto rounded-lg border border-slate-200 bg-white">
                           {isLoadingCampaignLeads ? (
                             <p className="px-3 py-5 text-center text-xs text-slate-500">Loading eligible leads…</p>
                           ) : campaignLeadResults.length === 0 ? (
@@ -2067,6 +2095,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                             <button type="button" onClick={() => setCampaignLeadPage((page) => page + 1)} disabled={campaignLeadPage * 50 >= Math.min(campaignLeadTotal, 5000) || isLoadingCampaignLeads} className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50">Next</button>
                           </div>
                         </div>
+                      </div>
+                          </div>
+                          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
+                            <div className="text-xs text-slate-600">
+                              <span className="font-semibold text-slate-900">{campaignSelectedLeadIds.length.toLocaleString()} selected</span>
+                              <span> · Maximum 5,000 recipients</span>
+                            </div>
+                            <button type="button" onClick={closeCampaignDialog} disabled={isSelectingCampaignMatches} className="rounded-lg bg-violet-700 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50">Done</button>
+                          </footer>
+                        </section>
                       </div>
                     )}
                   </fieldset>
@@ -2248,7 +2286,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         </div>
       </section>}
 
-      {campaignDialogMode && mode === 'mailbox' && activeFolder === 'campaigns' && (
+      {campaignDialogMode && campaignDialogMode !== 'selection' && mode === 'mailbox' && activeFolder === 'campaigns' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6" onMouseDown={(event) => {
           if (event.target === event.currentTarget) closeCampaignDialog();
         }}>
