@@ -1216,7 +1216,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto w-full max-w-5xl space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto w-full max-w-2xl space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
@@ -1236,9 +1236,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               <div className="md:col-span-8">
                 <label htmlFor="mail-recipient" className="mb-1 block text-xs font-semibold text-slate-600">To</label>
                 {role === 'admin' ? (
-                  <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                  <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                 ) : replyMailbox ? (
-                  <p className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">Replying to selected inbox message; recipient hidden.</p>
+                  <p className="flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">Replying to selected inbox message; recipient hidden.</p>
                 ) : (
                   <select
                     id="mail-recipient"
@@ -1247,7 +1247,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       setRecipientLeadId(event.target.value);
                       setReplyMailbox(null);
                     }}
-                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
                   >
                     <option value="">Select an assigned lead</option>
                     {recipientLeads.map((lead) => (
@@ -1262,7 +1262,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   id="mail-email-design"
                   value={emailDesign}
                   onChange={(event) => setEmailDesign(event.target.value as MailEmailDesign)}
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
                 >
                   <option value="plain">Plain email</option>
                   <option value="card">Designed card</option>
@@ -1274,7 +1274,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               </div>
               {role === 'admin' && <details className="rounded-lg border border-slate-200 px-3 py-2">
                 <summary className="cursor-pointer text-sm font-medium text-slate-700">CC and BCC</summary>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="mt-3 grid max-w-2xl gap-3 sm:grid-cols-2">
                   <div>
                     <label htmlFor="mail-cc" className="mb-1 block text-xs font-medium text-slate-600">CC</label>
                     <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="Separate addresses with commas" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
@@ -1285,9 +1285,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </div>
                 </div>
               </details>}
-              <div>
+              <div className="max-w-xl">
                 <label htmlFor="mail-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject</label>
-                <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
               </div>
               <div>
                 <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
