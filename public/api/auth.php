@@ -311,15 +311,10 @@ function invalidate_stale_data_opcache(): void
 
     $status = opcache_get_status(true);
     if (!is_array($status) || !is_array($status['scripts'] ?? null)) return;
-    $cachedScript = $status['scripts'][$scriptPath] ?? null;
-    $sourceModifiedAt = filemtime($scriptPath);
-    if (!is_array($cachedScript) || !isset($cachedScript['timestamp']) || $sourceModifiedAt === false
-        || (int) $cachedScript['timestamp'] >= $sourceModifiedAt) {
-        return;
-    }
+    if (!isset($status['scripts'][$scriptPath])) return;
 
     if (!opcache_invalidate($scriptPath, true)) {
-        error_log('Ambients stale API bytecode could not be invalidated.');
+        error_log('The cached admin API script could not be invalidated.');
     }
 }
 
