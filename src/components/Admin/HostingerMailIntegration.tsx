@@ -1216,88 +1216,79 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto w-full max-w-2xl space-y-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto w-full max-w-5xl space-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-800">
-                    <Mail className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
-                    <p className="text-xs text-slate-500">Drafts are saved in the CRM.</p>
-                  </div>
+                  <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
                 </div>
-                <p className="max-w-full truncate rounded-full bg-slate-50 px-3 py-1.5 text-xs text-slate-600 sm:max-w-[45%]">
+                <p className="max-w-full truncate text-xs text-slate-500 sm:max-w-[45%]">
                   From <span className="font-medium text-slate-800">{settings.emailAccount}</span>
                 </p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-12">
-              <div className="md:col-span-8">
-                <label htmlFor="mail-recipient" className="mb-1 block text-xs font-semibold text-slate-600">To</label>
-                {role === 'admin' ? (
-                  <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                ) : replyMailbox ? (
-                  <p className="flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">Replying to selected inbox message; recipient hidden.</p>
-                ) : (
+              <div className="grid gap-2 md:grid-cols-12">
+                <div className="md:col-span-5">
+                  <label htmlFor="mail-recipient" className="mb-1 block text-xs font-semibold text-slate-600">To</label>
+                  {role === 'admin' ? (
+                    <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                  ) : replyMailbox ? (
+                    <p className="flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">Replying to selected inbox message; recipient hidden.</p>
+                  ) : (
+                    <select
+                      id="mail-recipient"
+                      value={recipientLeadId}
+                      onChange={(event) => {
+                        setRecipientLeadId(event.target.value);
+                        setReplyMailbox(null);
+                      }}
+                      className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+                    >
+                      <option value="">Select an assigned lead</option>
+                      {recipientLeads.map((lead) => (
+                        <option key={lead.id} value={lead.id}>{lead.name} · {lead.email}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="md:col-span-4">
+                  <label htmlFor="mail-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject</label>
+                  <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                </div>
+                <div className="md:col-span-3">
+                  <label htmlFor="mail-email-design" className="mb-1 block text-xs font-semibold text-slate-600">Design</label>
                   <select
-                    id="mail-recipient"
-                    value={recipientLeadId}
-                    onChange={(event) => {
-                      setRecipientLeadId(event.target.value);
-                      setReplyMailbox(null);
-                    }}
+                    id="mail-email-design"
+                    value={emailDesign}
+                    onChange={(event) => setEmailDesign(event.target.value as MailEmailDesign)}
                     className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
                   >
-                    <option value="">Select an assigned lead</option>
-                    {recipientLeads.map((lead) => (
-                      <option key={lead.id} value={lead.id}>{lead.name} · {lead.email}</option>
-                    ))}
+                    <option value="plain">Plain email</option>
+                    <option value="card">Designed card</option>
                   </select>
-                )}
-              </div>
-              <div className="md:col-span-4">
-                <label htmlFor="mail-email-design" className="mb-1 block text-xs font-semibold text-slate-600">Email design</label>
-                <select
-                  id="mail-email-design"
-                  value={emailDesign}
-                  onChange={(event) => setEmailDesign(event.target.value as MailEmailDesign)}
-                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
-                >
-                  <option value="plain">Plain email</option>
-                  <option value="card">Designed card</option>
-                </select>
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                  {emailDesign === 'card' ? 'Adds an Ambienta card.' : 'Simple, unstyled message.'}
-                </p>
-              </div>
+                </div>
               </div>
               {role === 'admin' && <details className="rounded-lg border border-slate-200 px-3 py-2">
-                <summary className="cursor-pointer text-sm font-medium text-slate-700">CC and BCC</summary>
-                <div className="mt-3 grid max-w-2xl gap-3 sm:grid-cols-2">
+                <summary className="cursor-pointer text-xs font-medium text-slate-700">Add CC or BCC</summary>
+                <div className="mt-2 grid max-w-2xl gap-2 sm:grid-cols-2">
                   <div>
                     <label htmlFor="mail-cc" className="mb-1 block text-xs font-medium text-slate-600">CC</label>
-                    <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="Separate addresses with commas" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="Separate addresses with commas" className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
                   <div>
                     <label htmlFor="mail-bcc" className="mb-1 block text-xs font-medium text-slate-600">BCC</label>
-                    <input id="mail-bcc" type="text" value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="Separate addresses with commas" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    <input id="mail-bcc" type="text" value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="Separate addresses with commas" className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
                 </div>
               </details>}
-              <div className="max-w-xl">
-                <label htmlFor="mail-subject" className="mb-1 block text-xs font-semibold text-slate-600">Subject</label>
-                <input id="mail-subject" maxLength={180} value={subject} onChange={(event) => setSubject(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-              </div>
               <div>
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="mail-body" className="block text-xs font-semibold text-slate-600">Message</label>
                   <div className="flex items-center gap-1.5">
                     <button type="button" onClick={() => wrapMessageSelection('**')} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Bold</button>
                     <button type="button" onClick={() => wrapMessageSelection('*')} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs italic text-slate-700 hover:bg-slate-50">Italic</button>
                   </div>
                 </div>
-                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={6} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="min-h-36 w-full resize-y rounded-lg border border-slate-300 px-3 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={4} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="min-h-24 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                 <p className="mt-1 text-[11px] text-slate-500">Formatting is sent as HTML with a plain-text alternative.</p>
                 <details className="mt-2 rounded-lg border border-slate-200 px-3 py-2">
                   <summary className="cursor-pointer text-xs font-semibold text-slate-700">Preview formatted message</summary>
