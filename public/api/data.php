@@ -1555,6 +1555,7 @@ function data_campaign_recipient_snapshot(
 
 function data_campaign_actor_staff_id(): ?int
 {
+    if (session_status() !== PHP_SESSION_ACTIVE) data_require_admin();
     if (($_SESSION['admin_role'] ?? '') === 'admin') return null;
     data_require_permission('integrations');
     data_require_permission('email_campaigns');
