@@ -274,6 +274,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientType, setRecipientType] = useState<'to' | 'cc' | 'bcc'>('to');
   const [recipientLeadId, setRecipientLeadId] = useState('');
   const [recipientLeads, setRecipientLeads] = useState<MailRecipientLead[]>([]);
   const [replyMailbox, setReplyMailbox] = useState<{ id: string; folder: 'inbox' } | null>(null);
@@ -543,6 +544,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       : await loadMessageDetails(message, 'inbox');
     if (details === null) return;
     setRecipientEmail(address || '');
+    setRecipientType('to');
     setRecipientLeadId('');
     setReplyMailbox(role === 'operator' ? { id: message.id, folder: 'inbox' } : null);
     setSubject(message.subject.toLowerCase().startsWith('re:') ? message.subject : `Re: ${message.subject}`);
@@ -569,6 +571,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       : await loadMessageDetails(message, 'inbox');
     if (details === null) return;
     setRecipientEmail('');
+    setRecipientType('to');
     setRecipientLeadId('');
     setReplyMailbox(null);
     setSubject(message.subject.toLowerCase().startsWith('fwd:') ? message.subject : `Fwd: ${message.subject}`);
@@ -617,6 +620,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const openDraft = (draft: MailDraft) => {
     setEditingDraftId(draft.id);
     setRecipientEmail(role === 'admin' ? draft.recipientEmail : '');
+    setRecipientType('to');
     setRecipientLeadId(draft.recipientLeadId ? String(draft.recipientLeadId) : '');
     setReplyMailbox(draft.replyMailbox || null);
     setSubject(draft.subject);
@@ -632,6 +636,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const startNewCompose = () => {
     setEditingDraftId(null);
     setRecipientEmail('');
+    setRecipientType('to');
     setRecipientLeadId('');
     setReplyMailbox(null);
     setSubject('');
@@ -937,6 +942,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       }
       setEditingDraftId(null);
       setRecipientEmail('');
+      setRecipientType('to');
       setRecipientLeadId('');
       setReplyMailbox(null);
       setSubject('');
@@ -1234,10 +1240,37 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
               </div>
 
               <div className="grid gap-2 md:grid-cols-12">
-                <div className="md:col-span-5">
-                  <label htmlFor="mail-recipient" className="mb-1 block text-xs font-semibold text-slate-600">To</label>
+                <div className="md:col-span-9">
+                  <label htmlFor="mail-recipient" className="mb-1 block text-xs font-semibold text-slate-600">{role === 'admin' ? 'Recipient' : 'To'}</label>
                   {role === 'admin' ? (
-                    <input id="mail-recipient" type="email" maxLength={254} value={recipientEmail} onChange={(event) => setRecipientEmail(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    <div className="flex h-9 overflow-hidden rounded-lg border border-slate-300 focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-100">
+                      <select
+                        aria-label="Recipient type"
+                        value={recipientType}
+                        onChange={(event) => {
+                          const type = event.target.value;
+                          if (type === 'to' || type === 'cc' || type === 'bcc') setRecipientType(type);
+                        }}
+                        className="w-20 shrink-0 border-r border-slate-300 bg-slate-50 px-2 text-sm text-slate-700 focus:outline-none"
+                      >
+                        <option value="to">To</option>
+                        <option value="cc">CC</option>
+                        <option value="bcc">BCC</option>
+                      </select>
+                      <input
+                        id="mail-recipient"
+                        type={recipientType === 'to' ? 'email' : 'text'}
+                        maxLength={recipientType === 'to' ? 254 : undefined}
+                        value={recipientType === 'to' ? recipientEmail : recipientType === 'cc' ? cc : bcc}
+                        onChange={(event) => {
+                          if (recipientType === 'to') setRecipientEmail(event.target.value);
+                          else if (recipientType === 'cc') setCc(event.target.value);
+                          else setBcc(event.target.value);
+                        }}
+                        placeholder={recipientType === 'to' ? 'Email address' : 'Separate addresses with commas'}
+                        className="h-full min-w-0 flex-1 px-3 text-sm focus:outline-none"
+                      />
+                    </div>
                   ) : replyMailbox ? (
                     <p className="flex h-9 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">Replying to selected inbox message; recipient hidden.</p>
                   ) : (
@@ -1257,19 +1290,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     </select>
                   )}
                 </div>
-                {role === 'admin' && (
-                  <div className="grid grid-cols-2 gap-2 md:col-span-4">
-                    <div className="min-w-0">
-                      <label htmlFor="mail-cc" className="mb-1 block text-xs font-semibold text-slate-600">CC</label>
-                      <input id="mail-cc" type="text" value={cc} onChange={(event) => setCc(event.target.value)} placeholder="CC recipients" className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                    </div>
-                    <div className="min-w-0">
-                      <label htmlFor="mail-bcc" className="mb-1 block text-xs font-semibold text-slate-600">BCC</label>
-                      <input id="mail-bcc" type="text" value={bcc} onChange={(event) => setBcc(event.target.value)} placeholder="BCC recipients" className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                    </div>
-                  </div>
-                )}
-                <div className={role === 'admin' ? 'md:col-span-3' : 'md:col-span-7'}>
+                <div className="md:col-span-3">
                   <label htmlFor="mail-email-design" className="mb-1 block text-xs font-semibold text-slate-600">Design</label>
                   <select
                     id="mail-email-design"
