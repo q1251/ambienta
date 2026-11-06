@@ -1066,10 +1066,16 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </p>
         </div>
         {mode === 'mailbox' && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600" aria-label="Email activity summary">
-            <span><strong className="text-slate-900">{activitySentCount}</strong> SMTP accepted</span>
-            <span>Final delivery <strong className="text-slate-900">not confirmed</strong></span>
-            <span>Opens <strong className="text-slate-900">{hasOpenTrackedCampaign ? totalCampaignOpens : 'off'}</strong></span>
+          <div className="flex flex-col items-start gap-1 text-xs text-slate-600 sm:items-end">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Email activity summary">
+              <span><strong className="text-slate-900">{activitySentCount}</strong> SMTP accepted</span>
+              <span>Final delivery <strong className="text-slate-900">not confirmed</strong></span>
+              <span>Opens <strong className="text-slate-900">{hasOpenTrackedCampaign ? totalCampaignOpens : 'off'}</strong></span>
+            </div>
+            <details className="relative text-xs">
+              <summary className="cursor-pointer text-slate-500 hover:text-slate-800">Email sync and tracking information</summary>
+              <p className="mt-1 max-w-md text-left leading-5 text-slate-600 sm:text-right">Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. Hostinger SMTP confirms acceptance only, not final delivery; campaign opens are approximate and available only when open tracking is enabled for a campaign.</p>
+            </details>
           </div>
         )}
       </header>
@@ -1212,12 +1218,12 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
           </span>
         </div>
 
-        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
+        <div className={`min-h-0 min-w-0 flex-1 bg-[#f7f9fb] p-2.5 sm:p-3 ${activeFolder === 'inbox' || activeFolder === 'sent' ? 'flex flex-col overflow-hidden' : activeFolder === 'compose' ? 'flex flex-col overflow-y-auto' : 'overflow-y-auto'}`}>
           {showErrorMessage && errorMessage && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{errorMessage}</p>}
           {successMessage && <p role="status" className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">{successMessage}</p>}
 
           {activeFolder === 'compose' && (
-            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto w-full max-w-5xl space-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+            <form onSubmit={(event) => void sendMessage(event)} className="mx-auto flex min-h-full w-full max-w-5xl flex-1 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-3">
                   <h2 className="font-semibold text-slate-950">{editingDraftId ? 'Edit draft' : 'Compose an email'}</h2>
@@ -1281,7 +1287,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                   </div>
                 </div>
               </details>}
-              <div>
+              <div className="flex min-h-0 flex-1 flex-col">
                 <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="mail-body" className="block text-xs font-semibold text-slate-600">Message</label>
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -1301,15 +1307,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     ))}
                   </div>
                 </div>
-                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} rows={4} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="min-h-24 w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
-                <p className="mt-1 text-[11px] text-slate-500">Formatting is sent as HTML with a plain-text alternative.</p>
+                <textarea ref={mailBodyRef} id="mail-body" maxLength={6000} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} className="min-h-40 w-full flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                <button type="button" onClick={() => void saveDraft()} disabled={isLoading || (role === 'admin' ? (!recipientEmail && !subject && !messageBody) : (!recipientLeadId && !replyMailbox))} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                  <FileText className="h-4 w-4" /> Save draft
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                <button type="button" onClick={() => void saveDraft()} disabled={isLoading || (role === 'admin' ? (!recipientEmail && !subject && !messageBody) : (!recipientLeadId && !replyMailbox))} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  <FileText className="h-3.5 w-3.5" /> Save draft
                 </button>
-                <button type="submit" disabled={!settings.configured || !settings.verified || isSending || isLoading || (role === 'admin' ? !recipientEmail : (!recipientLeadId && !replyMailbox)) || !subject || !messageBody} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
-                  {isSending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <button type="submit" disabled={!settings.configured || !settings.verified || isSending || isLoading || (role === 'admin' ? !recipientEmail : (!recipientLeadId && !replyMailbox)) || !subject || !messageBody} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isSending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                   {isSending ? 'Sending…' : 'Send email'}
                 </button>
                 {!settings.verified && <p className="mr-auto text-xs text-slate-500">Verify SMTP + IMAP under Integrations before sending.</p>}
@@ -1822,10 +1827,6 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         </div>
       </section>}
 
-      {mode === 'mailbox' && <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
-        <summary className="cursor-pointer font-medium text-slate-700">Email sync and tracking information</summary>
-        <p className="mt-2">Inbox, Hostinger Sent, and mailbox Trash connect over IMAP. CRM drafts and CRM-sent activity are stored separately. Hostinger SMTP confirms acceptance only, not final delivery; campaign opens are approximate and available only when open tracking is enabled for a campaign.</p>
-      </details>}
     </div>
   );
 };
