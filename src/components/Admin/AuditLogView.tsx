@@ -176,7 +176,7 @@ export const AuditLogView: React.FC = () => {
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search actor, action, record, details…"
+            placeholder="Search audit activity…"
             className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
           />
         </label>
@@ -243,9 +243,9 @@ export const AuditLogView: React.FC = () => {
         <table className="w-full min-w-[760px] table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
             <col className="w-[15%]" />
-            <col className="w-[22%]" />
-            <col className="w-[17%]" />
             <col className="w-[20%]" />
+            <col className="w-[17%]" />
+            <col className="w-[16%]" />
             <col />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -260,8 +260,10 @@ export const AuditLogView: React.FC = () => {
           <tbody className="divide-y divide-slate-100">
             {filteredEntries.map((entry) => (
               <tr key={entry.id}>
-                <td className="whitespace-nowrap px-4 py-3 text-slate-600">{entry.created_at}</td>
-                <td className="px-4 py-3 text-slate-700">{entry.actor_email}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs leading-5 text-slate-600">
+                  {entry.created_at.split(' ').map((part, index) => <span key={index} className="block">{part}</span>)}
+                </td>
+                <td className="break-all px-4 py-3 text-slate-700">{entry.actor_email}</td>
                 <td className="px-4 py-3 font-medium capitalize text-slate-900">{humanize(entry.action)}</td>
                 <td className="break-all px-4 py-3 text-slate-700">{humanize(entry.entity_type)} · {entry.entity_id}</td>
                 <td className="px-4 py-3 text-slate-600">
