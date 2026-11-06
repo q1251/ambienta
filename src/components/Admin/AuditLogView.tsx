@@ -50,9 +50,16 @@ const formatAuditDetails = (details: unknown): Array<{ label: string; value: str
     if (key === 'from' || key === 'to' || value === null || value === undefined) continue;
     if (typeof value === 'boolean') {
       const changedLabel = key.match(/^(.+)Changed$/);
+      if (changedLabel) {
+        formatted.push({
+          label: '',
+          value: `${humanize(changedLabel[1])} ${value ? 'changed' : 'unchanged'}`,
+        });
+        continue;
+      }
       formatted.push({
-        label: changedLabel ? humanize(changedLabel[1]) : humanize(key),
-        value: changedLabel ? (value ? 'Changed' : 'Unchanged') : (value ? 'Yes' : 'No'),
+        label: humanize(key),
+        value: value ? 'Yes' : 'No',
       });
       continue;
     }
@@ -128,12 +135,12 @@ export const AuditLogView: React.FC = () => {
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
 
       <div className="w-full max-h-[calc(100vh-16rem)] min-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
-        <table className="w-full min-w-[1000px] table-fixed divide-y divide-slate-200 text-left text-sm">
+        <table className="w-full min-w-[760px] table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
-            <col className="w-[170px]" />
-            <col className="w-[190px]" />
-            <col className="w-[180px]" />
-            <col className="w-[175px]" />
+            <col className="w-[17%]" />
+            <col className="w-[19%]" />
+            <col className="w-[18%]" />
+            <col className="w-[18%]" />
             <col />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -157,7 +164,7 @@ export const AuditLogView: React.FC = () => {
                     <dl className="space-y-1.5 break-words">
                       {formatAuditDetails(entry.details).map((detail, index) => (
                         <div key={`${detail.label}-${index}`}>
-                          <dt className="inline font-semibold text-slate-700">{detail.label}: </dt>
+                          {detail.label && <dt className="inline font-semibold text-slate-700">{detail.label}: </dt>}
                           <dd className="inline">{detail.value}</dd>
                         </div>
                       ))}
