@@ -300,6 +300,8 @@ function data_ensure_schema(PDO $db): void
             audience_filter MEDIUMTEXT NULL,
             track_opens TINYINT(1) NOT NULL DEFAULT 0,
             email_design VARCHAR(16) NOT NULL DEFAULT 'plain',
+            audience_mode VARCHAR(16) NOT NULL DEFAULT 'all',
+            selected_lead_ids MEDIUMTEXT NULL,
             created_by_staff_id BIGINT UNSIGNED NULL,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -439,6 +441,8 @@ function data_ensure_schema(PDO $db): void
         ['email_campaigns', 'audience_filter', 'MEDIUMTEXT NULL'],
         ['email_campaigns', 'track_opens', 'TINYINT(1) NOT NULL DEFAULT 0'],
         ['email_campaigns', 'email_design', "VARCHAR(16) NOT NULL DEFAULT 'plain'"],
+        ['email_campaigns', 'audience_mode', "VARCHAR(16) NOT NULL DEFAULT 'all'"],
+        ['email_campaigns', 'selected_lead_ids', 'MEDIUMTEXT NULL'],
         ['email_campaigns', 'created_by_staff_id', 'BIGINT UNSIGNED NULL'],
         ['email_campaign_recipients', 'open_token_hash', 'CHAR(64) NULL'],
         ['email_campaign_recipients', 'open_token', 'MEDIUMTEXT NULL'],
@@ -1495,8 +1499,15 @@ function data_campaign_filters(mixed $value): array
     return $filters;
 }
 
-function data_campaign_recipient_snapshot(PDO $db, array $filters = [], ?int $assignedStaffId = null): array
+function data_campaign_recipient_snapshot(
+    PDO $db,
+    array $filters = [],
+    ?int $assignedStaffId = null,
+    ?array $leadIds = null,
+    string $search = ''
+): array
 {
+    if ($leadIds === []) return [];
     $where = ['marketing_consent = 1', "TRIM(email) <> ''"];
     $parameters = [];
     if ($assignedStaffId !== null) {
@@ -1508,6 +1519,15 @@ function data_campaign_recipient_snapshot(PDO $db, array $filters = [], ?int $as
             $where[] = "{$column} = ?";
             $parameters[] = $filters[$key];
         }
+    }
+    if ($leadIds !== null) {
+        $where[] = 'id IN (' . implode(',', array_fill(0, count($leadIds), '?')) . ')';
+        array_push($parameters, ...$leadIds);
+    }
+    if ($search !== '') {
+        $where[] = '(first_name LIKE ? OR last_name LIKE ? OR email LIKE ?)';
+        $searchTerm = '%' . $search . '%';
+        array_push($parameters, $searchTerm, $searchTerm, $searchTerm);
     }
     $statement = $db->prepare(
         'SELECT MIN(id) AS lead_id, LOWER(TRIM(email)) AS recipient_email
@@ -1543,14 +1563,23 @@ function data_campaign_queue(PDO $db, int $campaignId, string $status, ?string $
         throw new RuntimeException('invalid_campaign_status');
     }
 
-    $campaign = $db->prepare('SELECT audience_filter, track_opens, created_by_staff_id FROM email_campaigns WHERE id = ?');
+    $campaign = $db->prepare('SELECT audience_filter, track_opens, audience_mode, selected_lead_ids, created_by_staff_id FROM email_campaigns WHERE id = ?');
     $campaign->execute([$campaignId]);
     $campaignSettings = $campaign->fetch();
     if (!is_array($campaignSettings)) throw new RuntimeException('campaign_not_found');
     $filters = data_campaign_filters(json_decode(data_mail_decrypt_content($campaignSettings['audience_filter']), true) ?: []);
     $trackOpens = (int) $campaignSettings['track_opens'] === 1;
     $assignedStaffId = $campaignSettings['created_by_staff_id'] === null ? null : (int) $campaignSettings['created_by_staff_id'];
-    $recipients = data_campaign_recipient_snapshot($db, $filters, $assignedStaffId);
+    $selectedLeadIds = $campaignSettings['audience_mode'] === 'selected'
+        ? json_decode(data_mail_decrypt_content($campaignSettings['selected_lead_ids']), true)
+        : null;
+    if ($campaignSettings['audience_mode'] === 'selected' && !is_array($selectedLeadIds)) {
+        throw new RuntimeException('invalid_campaign_audience');
+    }
+    if ($campaignSettings['audience_mode'] === 'selected') {
+        $filters = ['country' => '', 'status' => '', 'source' => ''];
+    }
+    $recipients = data_campaign_recipient_snapshot($db, $filters, $assignedStaffId, $selectedLeadIds);
     if ($recipients === []) {
         throw new RuntimeException('campaign_audience_empty');
     }
@@ -4026,6 +4055,45 @@ if (in_array($resource, [
 
     if ($method === 'GET' && $resource === 'email-campaign-audience') {
         $campaignStaffId = data_campaign_actor_staff_id();
+        $db = data_db();
+        if (($_GET['view'] ?? '') === 'leads') {
+            $search = trim((string) ($_GET['search'] ?? ''));
+            if (strlen($search) > 100 || preg_match('/[\x00-\x1F]/', $search) === 1) {
+                data_respond(400, ['error' => 'invalid_campaign_search', 'message' => 'Search for leads using up to 100 characters.']);
+            }
+            $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
+            if ($page === false || $page < 1 || $page > 100) {
+                data_respond(400, ['error' => 'invalid_campaign_page', 'message' => 'The lead list page is invalid.']);
+            }
+            $search = str_replace(['%', '_'], '', $search);
+            $recipients = data_campaign_recipient_snapshot($db, [], $campaignStaffId, null, $search);
+            $pageRecipients = array_slice($recipients, ($page - 1) * 50, 50);
+            $leadIds = array_map(static fn (array $recipient): int => (int) $recipient['lead_id'], $pageRecipients);
+            $leadDetails = [];
+            if ($leadIds !== []) {
+                $details = $db->prepare(
+                    'SELECT id, first_name, last_name, email FROM leads WHERE id IN ('
+                    . implode(',', array_fill(0, count($leadIds), '?')) . ')'
+                );
+                $details->execute($leadIds);
+                foreach ($details->fetchAll() as $lead) {
+                    $leadDetails[(int) $lead['id']] = $lead;
+                }
+            }
+            data_respond(200, [
+                'leads' => array_values(array_map(static function (array $recipient) use ($leadDetails): array {
+                    $lead = $leadDetails[(int) $recipient['lead_id']] ?? [];
+                    return [
+                        'id' => (int) $recipient['lead_id'],
+                        'name' => trim((string) ($lead['first_name'] ?? '') . ' ' . (string) ($lead['last_name'] ?? '')),
+                        'email' => (string) $recipient['recipient_email'],
+                    ];
+                }, $pageRecipients)),
+                'total' => count($recipients),
+                'page' => $page,
+                'pageSize' => 50,
+            ]);
+        }
         $filters = [];
         foreach (['country', 'status', 'source'] as $filter) {
             $filters[$filter] = $_GET[$filter] ?? '';
@@ -4035,7 +4103,6 @@ if (in_array($resource, [
         } catch (Throwable $error) {
             data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'The campaign audience filter is invalid.']);
         }
-        $db = data_db();
         $recipients = data_campaign_recipient_snapshot($db, $filters, $campaignStaffId);
         $facetSql = "SELECT DISTINCT country, status, lead_source
                      FROM leads WHERE marketing_consent = 1 AND TRIM(email) <> ''";
@@ -4055,10 +4122,30 @@ if (in_array($resource, [
         ]);
     }
 
+    if ($method === 'POST' && $resource === 'email-campaign-audience') {
+        $campaignStaffId = data_campaign_actor_staff_id();
+        $body = data_read_json(150000);
+        $leadIds = $body['selectedLeadIds'] ?? [];
+        if (!is_array($leadIds) || count($leadIds) > 5000) {
+            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 opted-in leads.']);
+        }
+        $normalizedIds = [];
+        foreach ($leadIds as $leadId) {
+            $validId = filter_var($leadId, FILTER_VALIDATE_INT);
+            if ($validId === false || $validId < 1) {
+                data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'One or more selected leads are invalid.']);
+            }
+            $normalizedIds[] = $validId;
+        }
+        $normalizedIds = array_values(array_unique($normalizedIds));
+        $recipients = data_campaign_recipient_snapshot(data_db(), [], $campaignStaffId, $normalizedIds);
+        data_respond(200, ['audienceCount' => count($recipients), 'audienceLimit' => 5000]);
+    }
+
     if ($method === 'GET' && $resource === 'email-campaigns') {
         $campaignStaffId = data_campaign_actor_staff_id();
         $db = data_db();
-        $campaignSql = 'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, email_design, created_at, completed_at,
+        $campaignSql = 'SELECT id, name, subject, body, status, scheduled_at, recipient_count, sent_count, failed_count, unsubscribed_count, audience_filter, track_opens, email_design, audience_mode, selected_lead_ids, created_at, completed_at,
                     (SELECT COUNT(*) FROM email_campaign_recipients r WHERE r.campaign_id = email_campaigns.id AND r.opened_at IS NOT NULL) AS open_count
              FROM email_campaigns';
         if ($campaignStaffId === null) {
@@ -4083,6 +4170,10 @@ if (in_array($resource, [
             'audienceFilter' => data_campaign_filters(json_decode(data_mail_decrypt_content($row['audience_filter']), true) ?: []),
             'trackOpens' => (bool) $row['track_opens'],
             'emailDesign' => in_array($row['email_design'], ['plain', 'card'], true) ? $row['email_design'] : 'plain',
+            'audienceMode' => $row['audience_mode'] === 'selected' ? 'selected' : 'all',
+            'selectedLeadIds' => $row['audience_mode'] === 'selected'
+                ? (json_decode(data_mail_decrypt_content($row['selected_lead_ids']), true) ?: [])
+                : [],
             'createdAt' => $row['created_at'],
             'completedAt' => $row['completed_at'],
         ], $rows)]);
@@ -4091,7 +4182,7 @@ if (in_array($resource, [
     if ($method === 'POST' && $resource === 'email-campaign-save') {
         $db = data_db();
         $campaignStaffId = data_campaign_actor_staff_id();
-        $body = data_read_json(32768);
+        $body = data_read_json(150000);
         $name = trim(data_string($body, 'name', 160));
         $subject = trim(data_string($body, 'subject', 180));
         $message = $body['body'] ?? null;
@@ -4124,9 +4215,32 @@ if (in_array($resource, [
         if (!is_string($emailDesign) || !in_array($emailDesign, ['plain', 'card'], true)) {
             data_respond(400, ['error' => 'invalid_email_design', 'message' => 'Choose either the designed card or plain email layout.']);
         }
+        $audienceMode = $body['audienceMode'] ?? 'all';
+        if (!is_string($audienceMode) || !in_array($audienceMode, ['all', 'selected'], true)) {
+            data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'Choose all eligible leads or select specific leads.']);
+        }
+        $selectedLeadIds = $body['selectedLeadIds'] ?? [];
+        if (!is_array($selectedLeadIds) || count($selectedLeadIds) > 5000) {
+            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 opted-in leads.']);
+        }
+        $normalizedLeadIds = [];
+        foreach ($selectedLeadIds as $leadId) {
+            $validId = filter_var($leadId, FILTER_VALIDATE_INT);
+            if ($validId === false || $validId < 1) {
+                data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'One or more selected leads are invalid.']);
+            }
+            $normalizedLeadIds[] = $validId;
+        }
+        $normalizedLeadIds = array_values(array_unique($normalizedLeadIds));
+        if ($audienceMode === 'selected' && count($normalizedLeadIds) > 5000) {
+            data_respond(400, ['error' => 'invalid_campaign_selection', 'message' => 'Select up to 5,000 opted-in leads.']);
+        }
+        $encryptedSelectedIds = $audienceMode === 'selected'
+            ? data_mail_encrypt_content(json_encode($normalizedLeadIds, JSON_UNESCAPED_SLASHES) ?: '[]')
+            : null;
         $campaignId = $body['id'] ?? null;
         if ($campaignId === null) {
-            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens, email_design, created_by_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute([
+            $db->prepare('INSERT INTO email_campaigns (name, subject, body, status, audience_filter, track_opens, email_design, audience_mode, selected_lead_ids, created_by_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute([
                 $name,
                 $subject,
                 data_mail_encrypt_content($message),
@@ -4134,6 +4248,8 @@ if (in_array($resource, [
                 data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
                 $trackOpens ? 1 : 0,
                 $emailDesign,
+                $audienceMode,
+                $encryptedSelectedIds,
                 $campaignStaffId,
             ]);
             $campaignId = (string) $db->lastInsertId();
@@ -4142,7 +4258,7 @@ if (in_array($resource, [
             if ($campaignId === false || $campaignId < 1) {
                 data_respond(400, ['error' => 'invalid_campaign_id', 'message' => 'The selected campaign is invalid.']);
             }
-            $updateSql = "UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ?, email_design = ? WHERE id = ? AND status = 'draft'";
+            $updateSql = "UPDATE email_campaigns SET name = ?, subject = ?, body = ?, audience_filter = ?, track_opens = ?, email_design = ?, audience_mode = ?, selected_lead_ids = ? WHERE id = ? AND status = 'draft'";
             if ($campaignStaffId !== null) $updateSql .= ' AND created_by_staff_id = ?';
             $update = $db->prepare($updateSql);
             $parameters = [
@@ -4152,6 +4268,8 @@ if (in_array($resource, [
                 data_mail_encrypt_content(json_encode($audienceFilter, JSON_UNESCAPED_SLASHES) ?: '{}'),
                 $trackOpens ? 1 : 0,
                 $emailDesign,
+                $audienceMode,
+                $encryptedSelectedIds,
                 $campaignId,
             ];
             if ($campaignStaffId !== null) $parameters[] = $campaignStaffId;
