@@ -168,8 +168,8 @@ export const AuditLogView: React.FC = () => {
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
 
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.6fr)_minmax(160px,1fr)_minmax(150px,0.8fr)_minmax(140px,0.8fr)_minmax(140px,0.8fr)_auto]">
-        <label className="relative block sm:col-span-2 xl:col-span-1">
+      <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-12">
+        <label className="relative col-span-2 block md:col-span-3">
           <span className="sr-only">Search audit activity</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -180,7 +180,7 @@ export const AuditLogView: React.FC = () => {
             className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
           />
         </label>
-        <label className="block text-xs font-semibold text-slate-600">
+        <label className="col-span-2 block text-xs font-semibold text-slate-600 sm:col-span-1 md:col-span-3">
           <span className="sr-only">Filter by action</span>
           <select
             aria-label="Filter by action"
@@ -192,7 +192,7 @@ export const AuditLogView: React.FC = () => {
             {actions.map((action) => <option key={action} value={action}>{humanize(action)}</option>)}
           </select>
         </label>
-        <label className="block text-xs font-semibold text-slate-600">
+        <label className="col-span-2 block text-xs font-semibold text-slate-600 sm:col-span-1 md:col-span-2">
           <span className="sr-only">Filter by record type</span>
           <select
             aria-label="Filter by record type"
@@ -204,7 +204,7 @@ export const AuditLogView: React.FC = () => {
             {recordTypes.map((recordType) => <option key={recordType} value={recordType}>{humanize(recordType)}</option>)}
           </select>
         </label>
-        <label className="block text-xs font-semibold text-slate-600">
+        <label className="col-span-1 block text-xs font-semibold text-slate-600 md:col-span-2">
           <span className="mb-1 block">From</span>
           <input
             aria-label="From date"
@@ -215,7 +215,7 @@ export const AuditLogView: React.FC = () => {
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
           />
         </label>
-        <label className="block text-xs font-semibold text-slate-600">
+        <label className="col-span-1 block text-xs font-semibold text-slate-600 md:col-span-2">
           <span className="mb-1 block">To</span>
           <input
             aria-label="To date"
@@ -226,7 +226,7 @@ export const AuditLogView: React.FC = () => {
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
           />
         </label>
-        <div className="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
+        <div className="col-span-2 flex items-center justify-between gap-3 border-t border-slate-100 pt-2 md:col-span-12">
           <p role="status" className="whitespace-nowrap text-sm text-slate-600">
             {filteredEntries.length} of {entries.length} events
           </p>
@@ -239,13 +239,13 @@ export const AuditLogView: React.FC = () => {
         </div>
       </div>
 
-      <div className="w-full max-h-[calc(100vh-16rem)] min-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
+      <div className="w-full max-h-[calc(100vh-16rem)] overflow-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[760px] table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
+            <col className="w-[15%]" />
+            <col className="w-[22%]" />
             <col className="w-[17%]" />
-            <col className="w-[19%]" />
-            <col className="w-[18%]" />
-            <col className="w-[18%]" />
+            <col className="w-[20%]" />
             <col />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
