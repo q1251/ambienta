@@ -677,6 +677,7 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
     setActivityNote('');
     setEmailSubject('');
     setEmailBody('');
+    setEmailComposerOpen(false);
     setProfileLoading(true);
     setProfileActiveTab('overview');
 
@@ -987,19 +988,60 @@ export const ContactLeadManager: React.FC<ContactLeadManagerProps> = ({
   // ----------------------------------------------------
   if (selectedLeadId !== null) {
     const selectedLead = leads.find((lead) => lead.id === selectedLeadId);
+    const profileLeadList = sortedLeads.some((lead) => lead.id === selectedLeadId)
+      ? sortedLeads
+      : sortContactLeads(leads, sortField, sortOrder);
+    const profileLeadIndex = profileLeadList.findIndex((lead) => lead.id === selectedLeadId);
+    const canNavigateProfile = !profileLoading && !profileSaving && !contactDetailsEditing
+      && !activitySaving && !activityNote.trim() && !emailComposerOpen && !emailSending;
     const leadStageObj = STAGES.find((s) => s.id === (profile?.lead.status || selectedLead?.status)) || STAGES[0];
 
     return (
       <section className="space-y-6">
         {/* Navigation & Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={closeProfile}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to contacts
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={closeProfile}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to contacts
+            </button>
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                aria-label="Previous lead"
+                title="Previous lead"
+                disabled={!canNavigateProfile || profileLeadIndex <= 0}
+                onClick={() => {
+                  const previousLead = profileLeadList[profileLeadIndex - 1];
+                  if (previousLead) void openProfile(previousLead);
+                }}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Previous</span>
+              </button>
+              <span className="min-w-[4.5rem] text-center text-xs font-medium tabular-nums text-slate-500">
+                {profileLeadIndex >= 0 ? `${profileLeadIndex + 1} / ${profileLeadList.length}` : '—'}
+              </span>
+              <button
+                type="button"
+                aria-label="Next lead"
+                title="Next lead"
+                disabled={!canNavigateProfile || profileLeadIndex < 0 || profileLeadIndex >= profileLeadList.length - 1}
+                onClick={() => {
+                  const nextLead = profileLeadList[profileLeadIndex + 1];
+                  if (nextLead) void openProfile(nextLead);
+                }}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
