@@ -303,6 +303,26 @@ function start_admin_session(): void
     }
 }
 
+function invalidate_stale_data_opcache(): void
+{
+    if (!function_exists('opcache_get_status') || !function_exists('opcache_invalidate')) return;
+    $scriptPath = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'data.php');
+    if ($scriptPath === false) return;
+
+    $status = opcache_get_status(true);
+    if (!is_array($status) || !is_array($status['scripts'] ?? null)) return;
+    $cachedScript = $status['scripts'][$scriptPath] ?? null;
+    $sourceModifiedAt = filemtime($scriptPath);
+    if (!is_array($cachedScript) || !isset($cachedScript['timestamp']) || $sourceModifiedAt === false
+        || (int) $cachedScript['timestamp'] >= $sourceModifiedAt) {
+        return;
+    }
+
+    if (!opcache_invalidate($scriptPath, true)) {
+        error_log('Ambients stale API bytecode could not be invalidated.');
+    }
+}
+
 $config = get_auth_config();
 $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? ''));
 $input = [];
@@ -370,6 +390,9 @@ if ($action === 'session' && $method === 'GET') {
 
     if ($authenticated) {
         $_SESSION['last_activity'] = time();
+        if ($_SESSION['admin_role'] === 'admin') {
+            invalidate_stale_data_opcache();
+        }
     } else {
         $_SESSION = [];
     }
