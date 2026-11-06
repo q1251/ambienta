@@ -1010,8 +1010,17 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const totalCampaignOpens = campaigns.reduce((total, campaign) => total + campaign.openCount, 0);
   const hasOpenTrackedCampaign = campaigns.some((campaign) => campaign.trackOpens);
   const campaignMergeTags = role === 'admin'
-    ? ['{{first_name}}', '{{last_name}}', '{{email}}', '{{country}}']
-    : ['{{first_name}}', '{{last_name}}', '{{country}}'];
+    ? [
+      { tag: '{{first_name}}', label: 'First name' },
+      { tag: '{{last_name}}', label: 'Last name' },
+      { tag: '{{email}}', label: 'Email' },
+      { tag: '{{country}}', label: 'Country' },
+    ]
+    : [
+      { tag: '{{first_name}}', label: 'First name' },
+      { tag: '{{last_name}}', label: 'Last name' },
+      { tag: '{{country}}', label: 'Country' },
+    ];
   const selectedMailboxMessage = inboxMessages.find((message) => message.id === selectedMailboxMessageId) || inboxMessages[0] || null;
   const selectedSentActivity = messages.find((message) => message.id === selectedSentActivityId) || messages[0] || null;
   const selectedHostSentMessage = hostSentMessages.find((message) => message.id === selectedHostSentMessageId) || hostSentMessages[0] || null;
@@ -1733,9 +1742,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       <div className="flex flex-wrap items-center gap-1">
                       <button type="button" onClick={() => wrapCampaignSelection('**')} className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700">Bold</button>
                       <button type="button" onClick={() => wrapCampaignSelection('*')} className="rounded-md border border-slate-300 px-2 py-1 text-xs italic text-slate-700">Italic</button>
-                      <span className="px-1 text-xs text-slate-500">Personalize</span>
-                      {campaignMergeTags.map((tag) => (
-                        <button key={tag} type="button" onClick={() => setCampaignBody((current) => `${current}${tag}`)} className="rounded-md bg-violet-50 px-2 py-1 font-mono text-[11px] text-violet-800">{tag}</button>
+                      <span className="px-1 text-xs text-slate-500">Insert:</span>
+                      {campaignMergeTags.map(({ tag, label }) => (
+                        <button key={tag} type="button" title={`Insert recipient ${label.toLowerCase()}`} onClick={() => setCampaignBody((current) => `${current}${tag}`)} className="rounded-md bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-100">{label}</button>
                       ))}
                       </div>
                     </div>
