@@ -1649,12 +1649,14 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
-                    <p className="mt-0.5 text-xs text-slate-600">{role === 'admin' ? 'Only leads with recorded marketing consent can receive campaigns.' : 'Only assigned leads with recorded marketing consent can receive campaigns.'}</p>
+                    <p className="mt-0.5 text-xs text-slate-600">{role === 'admin'
+                      ? 'Recipients are taken automatically from Contact Leads. Only contacts with a valid email and marketing consent are included.'
+                      : 'Recipients are taken from your assigned Contact Leads. Only contacts with a valid email and marketing consent are included.'}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                     campaignAudienceCount > 5000 ? 'bg-rose-50 text-rose-800' : 'bg-violet-50 text-violet-800'
                   }`}>
-                    {campaignAudienceCount > 5000 ? 'Over 5,000 opted-in recipients' : `${campaignAudienceCount} opted-in recipients`}
+                    {campaignAudienceCount > 5000 ? 'Over 5,000 eligible contacts' : `${campaignAudienceCount} eligible contacts`}
                   </span>
                 </div>
                 {!settings.verified && (
@@ -1665,8 +1667,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                 {campaignAudienceCount === 0 && (
                   <p role="status" className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                     {role === 'admin'
-                      ? 'No eligible recipients match these filters. Campaigns only include leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.'
-                      : 'No eligible assigned leads match these filters. Campaigns only include your assigned leads with recorded marketing consent and a valid email address; save a draft now, then adjust the audience filters when eligible contacts are available.'}
+                      ? 'No eligible Contact Leads match. Add a valid email and record marketing consent on a lead, or adjust the audience filters.'
+                      : 'No eligible assigned Contact Leads match. Check that assigned leads have valid emails and recorded marketing consent, or adjust the filters.'}
                   </p>
                 )}
                 {campaignAudienceCount > 5000 && (
@@ -1704,8 +1706,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     </label>
                   </div>
                   <details className="rounded-lg border border-slate-200 px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-slate-700">{role === 'admin' ? 'Audience filters' : 'Assigned lead filters'}</summary>
-                    <p className="mb-2 mt-1 text-xs text-slate-500">{role === 'admin' ? 'Filters narrow leads with recorded marketing consent.' : 'Filters narrow assigned leads with recorded marketing consent.'}</p>
+                    <summary className="cursor-pointer text-xs font-semibold text-slate-700">Optional Contact Leads filters</summary>
+                    <p className="mb-2 mt-1 text-xs text-slate-500">Narrow the eligible contacts by country, lead status, or source. Marketing consent and a valid email are always required.</p>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <label className="text-xs font-medium text-slate-600">
                         Country
