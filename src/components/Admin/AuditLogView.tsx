@@ -249,9 +249,9 @@ export const AuditLogView: React.FC = () => {
       <div className="w-full max-h-[calc(100vh-16rem)] overflow-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[720px] table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
+            <col className="w-[34%]" />
+            <col className="w-[30%]" />
             <col className="w-[36%]" />
-            <col className="w-[24%]" />
-            <col className="w-[40%]" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
