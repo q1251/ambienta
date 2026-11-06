@@ -1665,7 +1665,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     Campaigns are limited to 5,000 recipients. Narrow the opted-in audience before sending.
                   </p>
                 )}
-                <form onSubmit={(event) => void saveCampaign(event)} className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
+                <form onSubmit={(event) => void saveCampaign(event)} className="space-y-2 pt-2">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <div className="min-w-0">
                       <label htmlFor="campaign-name" className="mb-1 block text-xs font-semibold text-slate-600">Campaign name</label>
@@ -1727,7 +1727,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                     <input type="checkbox" checked={campaignTrackOpens} onChange={(event) => setCampaignTrackOpens(event.target.checked)} className="rounded border-slate-300 text-violet-700 focus:ring-violet-500" />
                     Enable approximate open tracking
                   </label>
-                  <div className="flex min-h-0 flex-1 flex-col">
+                  <div>
                     <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                       <label htmlFor="campaign-body" className="block text-xs font-semibold text-slate-600">Message</label>
                       <div className="flex flex-wrap items-center gap-1">
@@ -1739,7 +1739,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       ))}
                       </div>
                     </div>
-                    <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} required onChange={(event) => setCampaignBody(event.target.value)} className="min-h-40 w-full flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
+                    <textarea ref={campaignBodyRef} id="campaign-body" value={campaignBody} maxLength={20000} required onChange={(event) => setCampaignBody(event.target.value)} className="h-[calc(100vh-28rem)] min-h-48 max-h-[60vh] w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm leading-5 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2">
                     <button type="submit" disabled={isCampaignSaving || isLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
