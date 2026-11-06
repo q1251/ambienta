@@ -11,6 +11,69 @@ interface AuditEntry {
   created_at: string;
 }
 
+const permissionLabels: Record<string, string> = {
+  leads: 'Assigned leads',
+  new_leads: 'View unassigned new leads',
+  add_leads: 'Add contacts',
+  import_leads: 'Import contacts',
+  export_leads: 'Export contacts',
+  view_lead_emails: 'View lead email addresses',
+  view_lead_phone_numbers: 'View lead phone numbers',
+  orders: 'Orders',
+  print_orders: 'Print orders',
+  products: 'Products & stock',
+  integrations: 'Email',
+  email_campaigns: 'Email campaigns',
+  chat: 'Live chat',
+};
+
+const humanize = (value: string): string => value
+  .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+  .replace(/[._-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .replace(/^./, (character) => character.toUpperCase());
+
+const formatAuditDetails = (details: unknown): Array<{ label: string; value: string }> => {
+  if (details === null || typeof details !== 'object' || Array.isArray(details)) return [];
+
+  const values = details as Record<string, unknown>;
+  const formatted: Array<{ label: string; value: string }> = [];
+  if (values.from !== undefined || values.to !== undefined) {
+    formatted.push({
+      label: 'Changed',
+      value: `${String(values.from ?? '—')} → ${String(values.to ?? '—')}`,
+    });
+  }
+
+  for (const [key, value] of Object.entries(values)) {
+    if (key === 'from' || key === 'to' || value === null || value === undefined) continue;
+    if (typeof value === 'boolean') {
+      const changedLabel = key.match(/^(.+)Changed$/);
+      formatted.push({
+        label: changedLabel ? humanize(changedLabel[1]) : humanize(key),
+        value: changedLabel ? (value ? 'Changed' : 'Unchanged') : (value ? 'Yes' : 'No'),
+      });
+      continue;
+    }
+    if (Array.isArray(value)) {
+      const items = value.map((item) => {
+        if (typeof item !== 'string') return String(item);
+        return key === 'permissions' ? (permissionLabels[item] ?? humanize(item)) : item;
+      });
+      formatted.push({ label: humanize(key), value: items.join(', ') || 'None' });
+      continue;
+    }
+    if (typeof value === 'object') {
+      formatted.push({ label: humanize(key), value: JSON.stringify(value) });
+      continue;
+    }
+    formatted.push({ label: humanize(key), value: String(value) });
+  }
+
+  return formatted;
+};
+
 export const AuditLogView: React.FC = () => {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [error, setError] = useState('');
@@ -49,7 +112,7 @@ export const AuditLogView: React.FC = () => {
             <span>Administrative activity</span>
           </div>
           <h2 className="text-xl font-bold text-slate-900">Audit log</h2>
-          <p className="mt-1 text-sm text-slate-600">Recent catalog and order changes. The log retains the latest 200 events.</p>
+          <p className="mt-1 text-sm text-slate-600">Recent administrative and staff activity. The log retains the latest 200 events.</p>
         </div>
         <button
           type="button"
@@ -64,8 +127,15 @@ export const AuditLogView: React.FC = () => {
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
 
-      <div className="max-h-[calc(100vh-16rem)] min-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
-        <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+      <div className="w-full max-h-[calc(100vh-16rem)] min-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-full min-w-[1000px] table-fixed divide-y divide-slate-200 text-left text-sm">
+          <colgroup>
+            <col className="w-[170px]" />
+            <col className="w-[190px]" />
+            <col className="w-[180px]" />
+            <col className="w-[175px]" />
+            <col />
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Time</th>
@@ -80,10 +150,19 @@ export const AuditLogView: React.FC = () => {
               <tr key={entry.id}>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">{entry.created_at}</td>
                 <td className="px-4 py-3 text-slate-700">{entry.actor_email}</td>
-                <td className="px-4 py-3 font-medium text-slate-900">{entry.action.replace(/\./g, ' ')}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-slate-700">{entry.entity_type} · {entry.entity_id}</td>
-                <td className="max-w-sm px-4 py-3 font-mono text-xs text-slate-600">
-                  {entry.details == null ? '—' : JSON.stringify(entry.details)}
+                <td className="px-4 py-3 font-medium capitalize text-slate-900">{humanize(entry.action)}</td>
+                <td className="break-all px-4 py-3 text-slate-700">{humanize(entry.entity_type)} · {entry.entity_id}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {formatAuditDetails(entry.details).length > 0 ? (
+                    <dl className="space-y-1.5 break-words">
+                      {formatAuditDetails(entry.details).map((detail, index) => (
+                        <div key={`${detail.label}-${index}`}>
+                          <dt className="inline font-semibold text-slate-700">{detail.label}: </dt>
+                          <dd className="inline">{detail.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : '—'}
                 </td>
               </tr>
             ))}
