@@ -52,12 +52,12 @@ if (($_SESSION['admin_role'] ?? '') !== 'admin'
     respond(403, ['error' => 'admin_required']);
 }
 
-if (!function_exists('opcache_invalidate')) {
+if (!function_exists('opcache_reset')) {
     respond(503, ['error' => 'opcache_unavailable']);
 }
-$scriptPath = realpath(__DIR__ . DIRECTORY_SEPARATOR . 'data.php');
-if ($scriptPath === false || !opcache_invalidate($scriptPath, true)) {
-    error_log('The admin API bytecode could not be invalidated.');
+$reset = opcache_reset();
+if (!$reset) {
+    error_log('The admin PHP bytecode cache could not be reset.');
     respond(503, ['error' => 'opcache_refresh_failed']);
 }
 
