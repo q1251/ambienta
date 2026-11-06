@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, ShieldCheck } from 'lucide-react';
+import { RefreshCw, Search, ShieldCheck, X } from 'lucide-react';
 
 interface AuditEntry {
   id: number | string;
@@ -85,6 +85,11 @@ export const AuditLogView: React.FC = () => {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [recordFilter, setRecordFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const loadEntries = useCallback(async () => {
     setIsLoading(true);
@@ -110,6 +115,35 @@ export const AuditLogView: React.FC = () => {
     void loadEntries();
   }, [loadEntries]);
 
+  const actions = [...new Set(entries.map((entry) => entry.action))].sort();
+  const recordTypes = [...new Set(entries.map((entry) => entry.entity_type))].sort();
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const filteredEntries = entries.filter((entry) => {
+    const entryDate = entry.created_at.slice(0, 10);
+    if (actionFilter && entry.action !== actionFilter) return false;
+    if (recordFilter && entry.entity_type !== recordFilter) return false;
+    if (fromDate && entryDate < fromDate) return false;
+    if (toDate && entryDate > toDate) return false;
+    if (!normalizedQuery) return true;
+
+    const details = entry.details == null ? '' : JSON.stringify(entry.details);
+    return [
+      entry.actor_email,
+      humanize(entry.action),
+      humanize(entry.entity_type),
+      entry.entity_id,
+      details,
+    ].join(' ').toLocaleLowerCase().includes(normalizedQuery);
+  });
+  const hasFilters = Boolean(searchQuery || actionFilter || recordFilter || fromDate || toDate);
+  const clearFilters = () => {
+    setSearchQuery('');
+    setActionFilter('');
+    setRecordFilter('');
+    setFromDate('');
+    setToDate('');
+  };
+
   return (
     <section className="space-y-5">
       <header className="flex items-start justify-between gap-4">
@@ -134,6 +168,77 @@ export const AuditLogView: React.FC = () => {
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{error}</p>}
 
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1.6fr)_minmax(160px,1fr)_minmax(150px,0.8fr)_minmax(140px,0.8fr)_minmax(140px,0.8fr)_auto]">
+        <label className="relative block sm:col-span-2 xl:col-span-1">
+          <span className="sr-only">Search audit activity</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search actor, action, record, details…"
+            className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        <label className="block text-xs font-semibold text-slate-600">
+          <span className="sr-only">Filter by action</span>
+          <select
+            aria-label="Filter by action"
+            value={actionFilter}
+            onChange={(event) => setActionFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+          >
+            <option value="">All actions</option>
+            {actions.map((action) => <option key={action} value={action}>{humanize(action)}</option>)}
+          </select>
+        </label>
+        <label className="block text-xs font-semibold text-slate-600">
+          <span className="sr-only">Filter by record type</span>
+          <select
+            aria-label="Filter by record type"
+            value={recordFilter}
+            onChange={(event) => setRecordFilter(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+          >
+            <option value="">All records</option>
+            {recordTypes.map((recordType) => <option key={recordType} value={recordType}>{humanize(recordType)}</option>)}
+          </select>
+        </label>
+        <label className="block text-xs font-semibold text-slate-600">
+          <span className="mb-1 block">From</span>
+          <input
+            aria-label="From date"
+            type="date"
+            value={fromDate}
+            max={toDate || undefined}
+            onChange={(event) => setFromDate(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+          />
+        </label>
+        <label className="block text-xs font-semibold text-slate-600">
+          <span className="mb-1 block">To</span>
+          <input
+            aria-label="To date"
+            type="date"
+            value={toDate}
+            min={fromDate || undefined}
+            onChange={(event) => setToDate(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-800"
+          />
+        </label>
+        <div className="flex items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:justify-end">
+          <p role="status" className="whitespace-nowrap text-sm text-slate-600">
+            {filteredEntries.length} of {entries.length} events
+          </p>
+          {hasFilters && (
+            <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50">
+              <X className="h-4 w-4" />
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="w-full max-h-[calc(100vh-16rem)] min-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[760px] table-fixed divide-y divide-slate-200 text-left text-sm">
           <colgroup>
@@ -153,7 +258,7 @@ export const AuditLogView: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {entries.map((entry) => (
+            {filteredEntries.map((entry) => (
               <tr key={entry.id}>
                 <td className="whitespace-nowrap px-4 py-3 text-slate-600">{entry.created_at}</td>
                 <td className="px-4 py-3 text-slate-700">{entry.actor_email}</td>
@@ -175,6 +280,9 @@ export const AuditLogView: React.FC = () => {
             ))}
             {!isLoading && !error && entries.length === 0 && (
               <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No recorded changes yet.</td></tr>
+            )}
+            {!isLoading && !error && entries.length > 0 && filteredEntries.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No activity matches these search and filter criteria.</td></tr>
             )}
             {isLoading && (
               <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">Loading audit events…</td></tr>
