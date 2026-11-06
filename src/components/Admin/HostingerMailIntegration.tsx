@@ -1680,26 +1680,24 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                       <label htmlFor="campaign-name" className="mb-1 block text-xs font-semibold text-slate-600">Campaign name</label>
                       <input id="campaign-name" value={campaignName} maxLength={160} required onChange={(event) => setCampaignName(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                     </div>
+                    <label htmlFor="campaign-template" className="block text-xs font-semibold text-slate-600">
+                      Template
+                      <select id="campaign-template" value={campaignTemplate} onChange={(event) => {
+                        const template = campaignTemplates[event.target.value as keyof typeof campaignTemplates];
+                        setCampaignTemplate(event.target.value as keyof typeof campaignTemplates);
+                        setCampaignSubject(template.subject);
+                        setCampaignBody(template.body);
+                      }} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100">
+                        <option value="blank">Blank campaign</option>
+                        <option value="welcome">Welcome</option>
+                        <option value="update">Customer update</option>
+                        <option value="seasonal">News announcement</option>
+                      </select>
+                    </label>
                     <div className="min-w-0">
                       <label htmlFor="campaign-subject" className="mb-1 block text-xs font-semibold text-slate-600">Email subject</label>
                       <input id="campaign-subject" value={campaignSubject} maxLength={180} required onChange={(event) => setCampaignSubject(event.target.value)} className="h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
                     </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label htmlFor="campaign-template" className="block text-xs font-semibold text-slate-600">
-                      Template
-                    <select id="campaign-template" value={campaignTemplate} onChange={(event) => {
-                      const template = campaignTemplates[event.target.value as keyof typeof campaignTemplates];
-                      setCampaignTemplate(event.target.value as keyof typeof campaignTemplates);
-                      setCampaignSubject(template.subject);
-                      setCampaignBody(template.body);
-                    }} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100">
-                      <option value="blank">Blank campaign</option>
-                      <option value="welcome">Welcome</option>
-                      <option value="update">Customer update</option>
-                      <option value="seasonal">News announcement</option>
-                    </select>
-                    </label>
                     <label htmlFor="campaign-schedule" className="block text-xs font-semibold text-slate-600">
                       Schedule for
                       <input id="campaign-schedule" type="datetime-local" value={campaignScheduleAt} onChange={(event) => setCampaignScheduleAt(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100" />
