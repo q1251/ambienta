@@ -1635,8 +1635,8 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
             </div>
           )}
           {activeFolder === 'campaigns' && campaignAccess && (
-            <div className="flex min-h-full flex-1 flex-col gap-4">
-              <section className="flex min-h-full flex-1 flex-col">
+            <div className="space-y-4">
+              <section>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
                   <div>
                     <h2 className="font-semibold text-slate-950">{editingCampaignId ? 'Edit campaign draft' : 'Create an email campaign'}</h2>
