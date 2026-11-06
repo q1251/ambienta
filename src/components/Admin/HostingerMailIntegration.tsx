@@ -463,6 +463,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       view: 'leads',
       search: campaignLeadSearch.trim(),
       page: String(campaignLeadPage),
+      country: campaignAudienceFilter.country,
+      status: campaignAudienceFilter.status,
+      source: campaignAudienceFilter.source,
     });
     const timeout = window.setTimeout(() => {
       setIsLoadingCampaignLeads(true);
@@ -486,7 +489,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       active = false;
       window.clearTimeout(timeout);
     };
-  }, [campaignAudienceMode, campaignLeadSearch, campaignLeadPage, mode, campaignAccess, activeFolder]);
+  }, [campaignAudienceMode, campaignLeadSearch, campaignLeadPage, campaignAudienceFilter, mode, campaignAccess, activeFolder]);
 
   useEffect(() => {
     if (mode !== 'mailbox' || activeFolder !== 'campaign-history') return;
@@ -881,6 +884,7 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
       const result = await requestMailApi('email-campaign-audience', 'POST', {
         action: 'selectMatching',
         search: campaignLeadSearch.trim(),
+        audienceFilter: campaignAudienceFilter,
       });
       if (!Array.isArray(result.selectedLeadIds) || typeof result.total !== 'number') {
         throw new Error('The matching Contact Leads could not be selected.');
@@ -893,6 +897,32 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
         : `${newSelection.length - campaignSelectedLeadIds.length} matching eligible leads added.`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Matching Contact Leads could not be selected.');
+    } finally {
+      setIsSelectingCampaignMatches(false);
+    }
+  };
+
+  const clearMatchingCampaignLeads = async () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+    setIsSelectingCampaignMatches(true);
+    try {
+      const result = await requestMailApi('email-campaign-audience', 'POST', {
+        action: 'selectMatching',
+        search: campaignLeadSearch.trim(),
+        audienceFilter: campaignAudienceFilter,
+      });
+      if (!Array.isArray(result.selectedLeadIds) || typeof result.total !== 'number') {
+        throw new Error('The matching Contact Leads could not be loaded.');
+      }
+      const matchingIds = new Set(result.selectedLeadIds);
+      const removedCount = campaignSelectedLeadIds.filter((id) => matchingIds.has(id)).length;
+      setCampaignSelectedLeadIds((current) => current.filter((id) => !matchingIds.has(id)));
+      setSuccessMessage(result.total > 5000
+        ? `${removedCount} matching leads removed. Narrow the category or search to clear more; matching results are capped at 5,000.`
+        : `${removedCount} matching leads removed.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Matching Contact Leads could not be cleared.');
     } finally {
       setIsSelectingCampaignMatches(false);
     }
@@ -1907,9 +1937,56 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                             className="h-9 min-w-56 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
                           />
                           <span className="text-xs font-medium text-slate-700">
-                            {campaignSelectedLeadIds.length} selected · {campaignAudienceCount} eligible
+                            {campaignSelectedLeadIds.length} selected
                           </span>
                         </div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                          <label className="text-[11px] font-medium text-slate-600">
+                            Country
+                            <select
+                              value={campaignAudienceFilter.country}
+                              onChange={(event) => {
+                                setCampaignAudienceFilter((current) => ({ ...current, country: event.target.value }));
+                                setCampaignLeadPage(1);
+                              }}
+                              className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800"
+                            >
+                              <option value="">All countries</option>
+                              {campaignCountries.map((country) => <option key={country} value={country}>{country}</option>)}
+                            </select>
+                          </label>
+                          <label className="text-[11px] font-medium text-slate-600">
+                            Lead status
+                            <select
+                              value={campaignAudienceFilter.status}
+                              onChange={(event) => {
+                                setCampaignAudienceFilter((current) => ({ ...current, status: event.target.value }));
+                                setCampaignLeadPage(1);
+                              }}
+                              className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800"
+                            >
+                              <option value="">All statuses</option>
+                              {campaignStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                            </select>
+                          </label>
+                          <label className="text-[11px] font-medium text-slate-600">
+                            Lead source
+                            <select
+                              value={campaignAudienceFilter.source}
+                              onChange={(event) => {
+                                setCampaignAudienceFilter((current) => ({ ...current, source: event.target.value }));
+                                setCampaignLeadPage(1);
+                              }}
+                              className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-800"
+                            >
+                              <option value="">All sources</option>
+                              {campaignSources.map((source) => <option key={source} value={source}>{source}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Filter by category, then search within those eligible leads. Bulk actions apply to the entire matching group, not just this page.
+                        </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
@@ -1925,7 +2002,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
                             disabled={isLoadingCampaignLeads || isSelectingCampaignMatches || campaignLeadTotal === 0 || campaignSelectedLeadIds.length >= 5000}
                             className="rounded-md border border-violet-200 bg-white px-2.5 py-1 text-xs font-semibold text-violet-800 disabled:opacity-50"
                           >
-                            {isSelectingCampaignMatches ? 'Selecting…' : `Select all ${campaignLeadTotal > 5000 ? '5,000+' : campaignLeadTotal} matching`}
+                            {isSelectingCampaignMatches ? 'Applying…' : `Select all ${campaignLeadTotal > 5000 ? '5,000+' : campaignLeadTotal} matching`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void clearMatchingCampaignLeads()}
+                            disabled={isLoadingCampaignLeads || isSelectingCampaignMatches || campaignSelectedLeadIds.length === 0 || campaignLeadTotal === 0}
+                            className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 disabled:opacity-50"
+                          >
+                            Clear matching
                           </button>
                           <button
                             type="button"

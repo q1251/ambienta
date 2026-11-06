@@ -4084,12 +4084,21 @@ if (in_array($resource, [
             if (strlen($search) > 100 || preg_match('/[\x00-\x1F]/', $search) === 1) {
                 data_respond(400, ['error' => 'invalid_campaign_search', 'message' => 'Search for leads using up to 100 characters.']);
             }
+            try {
+                $filters = data_campaign_filters([
+                    'country' => $_GET['country'] ?? '',
+                    'status' => $_GET['status'] ?? '',
+                    'source' => $_GET['source'] ?? '',
+                ]);
+            } catch (Throwable $error) {
+                data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'The campaign audience filter is invalid.']);
+            }
             $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
             if ($page === false || $page < 1 || $page > 100) {
                 data_respond(400, ['error' => 'invalid_campaign_page', 'message' => 'The lead list page is invalid.']);
             }
             $search = str_replace(['%', '_'], '', $search);
-            $recipients = data_campaign_recipient_snapshot($db, [], $campaignStaffId, null, $search);
+            $recipients = data_campaign_recipient_snapshot($db, $filters, $campaignStaffId, null, $search);
             $pageRecipients = array_slice($recipients, ($page - 1) * 50, 50);
             $leadIds = array_map(static fn (array $recipient): int => (int) $recipient['lead_id'], $pageRecipients);
             $leadDetails = [];
@@ -4159,7 +4168,12 @@ if (in_array($resource, [
             if (!is_string($search) || strlen($search) > 100 || preg_match('/[\x00-\x1F]/', $search) === 1) {
                 data_respond(400, ['error' => 'invalid_campaign_search', 'message' => 'Search for leads using up to 100 characters.']);
             }
-            $matches = data_campaign_recipient_snapshot(data_db(), [], $campaignStaffId, null, str_replace(['%', '_'], '', trim($search)));
+            try {
+                $filters = data_campaign_filters($body['audienceFilter'] ?? []);
+            } catch (Throwable $error) {
+                data_respond(400, ['error' => 'invalid_campaign_audience', 'message' => 'The campaign audience filter is invalid.']);
+            }
+            $matches = data_campaign_recipient_snapshot(data_db(), $filters, $campaignStaffId, null, str_replace(['%', '_'], '', trim($search)));
             data_respond(200, [
                 'selectedLeadIds' => array_map(static fn (array $recipient): int => (int) $recipient['lead_id'], array_slice($matches, 0, 5000)),
                 'total' => count($matches),
