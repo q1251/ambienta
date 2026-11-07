@@ -18,7 +18,7 @@ import {
 interface HostingerMailIntegrationProps {
   role: 'admin' | 'operator';
   mode: 'settings' | 'mailbox';
-  initialFolder?: 'inbox' | 'campaigns';
+  initialFolder?: 'inbox' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history';
   canManageCampaigns?: boolean;
 }
 
@@ -297,7 +297,9 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [inboxFolderAvailable, setInboxFolderAvailable] = useState(true);
   const [sentFolderAvailable, setSentFolderAvailable] = useState(false);
   const [trashFolderAvailable, setTrashFolderAvailable] = useState(false);
-  const [activeFolder, setActiveFolder] = useState<MailboxFolder>(initialFolder === 'campaigns' && !campaignAccess ? 'inbox' : initialFolder);
+  const [activeFolder, setActiveFolder] = useState<MailboxFolder>(
+    !campaignAccess && (initialFolder === 'campaigns' || initialFolder === 'campaign-history') ? 'inbox' : initialFolder,
+  );
   const [selectedMailboxMessageId, setSelectedMailboxMessageId] = useState<string | null>(null);
   const [sentSource, setSentSource] = useState<'crm' | 'hostinger'>('crm');
   const [selectedSentActivityId, setSelectedSentActivityId] = useState<string | null>(null);
@@ -327,6 +329,15 @@ export const HostingerMailIntegration: React.FC<HostingerMailIntegrationProps> =
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const showErrorMessage = errorMessage !== 'A valid agent account is required to manage email campaigns.';
+
+  useEffect(() => {
+    if (mode !== 'mailbox') return;
+    const url = new URL(window.location.href);
+    if (activeFolder === 'inbox') url.searchParams.delete('emailFolder');
+    else if (activeFolder === 'compose') url.searchParams.delete('emailFolder');
+    else url.searchParams.set('emailFolder', activeFolder);
+    window.history.replaceState(window.history.state, '', url);
+  }, [activeFolder, mode]);
 
   useEffect(() => {
     if (mode === 'mailbox' && settings.verified) {

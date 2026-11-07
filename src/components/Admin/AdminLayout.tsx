@@ -153,7 +153,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
   });
   const [logoutError, setLogoutError] = useState('');
   const [impersonationError, setImpersonationError] = useState('');
-  const [emailInitialFolder, setEmailInitialFolder] = useState<'inbox' | 'campaigns'>('inbox');
+  const [emailInitialFolder, setEmailInitialFolder] = useState<'inbox' | 'sent' | 'drafts' | 'trash' | 'campaigns' | 'campaign-history'>(() => {
+    const folder = new URLSearchParams(window.location.search).get('emailFolder');
+    return folder === 'sent' || folder === 'drafts' || folder === 'trash' || folder === 'campaigns' || folder === 'campaign-history'
+      ? folder
+      : 'inbox';
+  });
   useEffect(() => {
     if (props.role !== 'admin') {
       setSecurityAlerts([]);
@@ -286,6 +291,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     const url = new URL(window.location.href);
     if (tab === 'overview') url.searchParams.delete('section');
     else url.searchParams.set('section', tab);
+    url.searchParams.delete('emailFolder');
     if (tab !== 'leads') url.searchParams.delete('leadId');
     window.history.replaceState(window.history.state, '', url);
     setActiveTab(tab);
@@ -307,6 +313,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (props) => {
     setActiveTab('overview');
     const url = new URL(window.location.href);
     url.searchParams.delete('section');
+    url.searchParams.delete('emailFolder');
     url.searchParams.delete('leadId');
     window.history.replaceState(window.history.state, '', url);
   }, [activeTab, props.role, visibleNavigation]);
