@@ -5769,6 +5769,116 @@ if ($method === 'POST' && $resource === 'product-images') {
     data_respond(201, ['images' => $uploadedUrls]);
 }
 
+if ($method === 'POST' && $resource === 'catalog-seed-sync') {
+    data_require_permission('products');
+    $body = data_read_json(4194304);
+    if (!is_array($body['products'] ?? null) || count($body['products']) < 1 || count($body['products']) > 500) {
+        data_respond(400, ['error' => 'invalid_products', 'message' => 'Provide between 1 and 500 storefront products per sync batch.']);
+    }
+
+    $db = data_db();
+    $insertedCount = 0;
+    $alreadyPresentCount = 0;
+    $restoredCount = 0;
+    $conflictCount = 0;
+    $db->beginTransaction();
+    try {
+        $findCategory = $db->prepare('SELECT is_active FROM product_categories WHERE name = ? FOR UPDATE');
+        $insertCategory = $db->prepare('INSERT INTO product_categories (name) VALUES (?)');
+        $activateCategory = $db->prepare('UPDATE product_categories SET is_active = 1 WHERE name = ?');
+        $seenCategories = [];
+        foreach ($body['products'] as $entry) {
+            if (!is_array($entry)) {
+                data_respond(400, ['error' => 'invalid_product', 'message' => 'A storefront product is invalid.']);
+            }
+            $category = data_string($entry, 'category', 80);
+            if (isset($seenCategories[$category])) continue;
+            $seenCategories[$category] = true;
+            $findCategory->execute([$category]);
+            $categoryRow = $findCategory->fetch();
+            if (!$categoryRow) {
+                $insertCategory->execute([$category]);
+                data_audit($db, 'category.created_from_catalog_sync', 'category', $category);
+            } elseif (!(bool) $categoryRow['is_active']) {
+                $activateCategory->execute([$category]);
+                data_audit($db, 'category.activated_from_catalog_sync', 'category', $category);
+            }
+        }
+
+        $findById = $db->prepare('SELECT id, sku, is_archived FROM products WHERE id = ? FOR UPDATE');
+        $findBySku = $db->prepare('SELECT id FROM products WHERE sku = ? FOR UPDATE');
+        $restoreProduct = $db->prepare('UPDATE products SET is_archived = 0 WHERE id = ? AND is_archived = 1');
+        $insertProduct = $db->prepare(
+            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, images, price, price_per_pill, pills_per_package, storefront_price_mode, cost_price, copay_price, stock_count, min_stock_threshold, is_active, is_featured, last_restocked)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        foreach ($body['products'] as $entry) {
+            $product = data_product_input($db, $entry, false);
+            $findById->execute([$product['id']]);
+            $existingById = $findById->fetch();
+            $findBySku->execute([$product['sku']]);
+            $existingBySku = $findBySku->fetch();
+
+            if ($existingBySku && $existingBySku['id'] !== $product['id']) {
+                $conflictCount++;
+                continue;
+            }
+            if ($existingById) {
+                if ($existingById['sku'] !== $product['sku']) {
+                    $conflictCount++;
+                    continue;
+                }
+                if ((bool) $existingById['is_archived']) {
+                    $restoreProduct->execute([$product['id']]);
+                    data_audit($db, 'product.restored_from_catalog_sync', 'product', $product['id'], ['sku' => $product['sku']]);
+                    $restoredCount++;
+                } else {
+                    $alreadyPresentCount++;
+                }
+                continue;
+            }
+            if ($existingBySku) {
+                $conflictCount++;
+                continue;
+            }
+
+            $insertProduct->execute([
+                $product['id'], $product['name'], $product['category'], $product['description'],
+                (int) $product['rxRequired'], $product['dosage'], $product['sku'], $product['ndcCode'],
+                $product['image'], json_encode($product['images'], JSON_UNESCAPED_SLASHES), $product['price'],
+                $product['pricePerPill'], $product['pillsPerPackage'], $product['storefrontPriceMode'],
+                $product['costPrice'], $product['copayPrice'], $product['stockCount'], $product['minStockThreshold'],
+                (int) $product['isActive'], (int) $product['isFeatured'],
+                $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
+            ]);
+            data_audit($db, 'product.created_from_catalog_sync', 'product', $product['id'], ['sku' => $product['sku']]);
+            $insertedCount++;
+        }
+
+        data_audit($db, 'catalog.seed_sync_completed', 'catalog', 'storefront', [
+            'inserted' => $insertedCount,
+            'alreadyPresent' => $alreadyPresentCount,
+            'restored' => $restoredCount,
+            'conflicts' => $conflictCount,
+        ]);
+        $db->commit();
+    } catch (Throwable $error) {
+        if ($db->inTransaction()) $db->rollBack();
+        if ($error instanceof PDOException && (string) $error->getCode() === '23000') {
+            data_respond(409, ['error' => 'product_conflict', 'message' => 'A product ID or SKU changed during catalog sync. Retry the sync to reconcile it.']);
+        }
+        error_log('Ambients storefront catalog sync failed: ' . $error->getMessage());
+        data_respond(500, ['error' => 'catalog_sync_failed', 'message' => 'The storefront catalog batch could not be saved.']);
+    }
+
+    data_respond(200, [
+        'inserted' => $insertedCount,
+        'alreadyPresent' => $alreadyPresentCount,
+        'restored' => $restoredCount,
+        'conflicts' => $conflictCount,
+    ]);
+}
+
 if ($method === 'POST' && $resource === 'products') {
     data_require_permission('products');
     $body = data_read_json(4194304);

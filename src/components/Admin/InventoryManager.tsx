@@ -20,6 +20,7 @@ import {
   Eye,
   EyeOff,
   Star,
+  RefreshCw,
 } from 'lucide-react';
 import { CatalogItem } from '../../types/pharmacy';
 import { generateProductTemplateCsv, parseProductsCsv } from '../../utils/productCsv';
@@ -32,6 +33,7 @@ interface InventoryManagerProps {
   catalogError?: string;
   onAddCategory: (name: string) => Promise<string>;
   onBulkAddProducts: (products: ProductCsvItem[]) => Promise<CatalogItem[]>;
+  onSyncStoreCatalog: () => Promise<{ inserted: number; alreadyPresent: number; restored: number; conflicts: number }>;
   onAddProduct: (item: CatalogItem) => Promise<CatalogItem>;
   onUploadProductImages: (files: File[]) => Promise<string[]>;
   onUpdateProduct: (item: CatalogItem) => Promise<CatalogItem>;
@@ -53,6 +55,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   catalogError,
   onAddCategory,
   onBulkAddProducts,
+  onSyncStoreCatalog,
   onAddProduct,
   onUploadProductImages,
   onUpdateProduct,
@@ -438,6 +441,21 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     }
   };
 
+  const handleSyncStoreCatalog = async () => {
+    setActionError('');
+    setIsSaving(true);
+    try {
+      const result = await onSyncStoreCatalog();
+      setNotification(
+        `Catalog sync complete: ${result.inserted} added, ${result.restored} restored, ${result.alreadyPresent} already present, ${result.conflicts} SKU conflicts.`,
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'The storefront catalog could not be synced.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleProductCsvFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -568,6 +586,16 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() => void handleSyncStoreCatalog()}
+            title="Add missing storefront products to the database while preserving existing inventory details."
+            className="px-3.5 py-2 text-xs font-semibold text-blue-800 bg-white hover:bg-blue-50 border border-blue-200 rounded-md transition-colors flex items-center gap-1.5 shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
+            <span>Sync storefront products</span>
+          </button>
           <button
             onClick={() => setIsProductCsvOpen(true)}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors flex items-center gap-1.5 shadow-xs"

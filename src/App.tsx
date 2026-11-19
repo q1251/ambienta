@@ -203,6 +203,11 @@ export default function App() {
               setCatalogItems(result.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
             }
           }));
+          requests.push(fetch('/api/data.php?resource=categories', headers).then(async (response) => {
+            const result = await response.json() as { categories?: string[]; message?: string };
+            if (!response.ok || !Array.isArray(result.categories)) throw new Error(result.message || 'Could not load product categories from the database.');
+            if (isCurrent) setCategories(result.categories);
+          }));
         } else if (adminPermissions.includes('orders')) {
           requests.push(fetch('/api/data.php?resource=catalog', headers).then(async (response) => {
             const result = await response.json() as { products?: CatalogItem[]; categories?: string[]; message?: string };
@@ -512,8 +517,8 @@ export default function App() {
     const payload = products.map((product) => ({
       ...product,
       id: `prod-${crypto.randomUUID()}`,
-      isActive: true,
-      isFeatured: false,
+      isActive: product.isActive ?? true,
+      isFeatured: product.isFeatured ?? false,
       inStock: product.stockCount > 0,
       lastRestocked: product.stockCount > 0 ? now : undefined,
     }));
@@ -535,6 +540,65 @@ export default function App() {
     }));
     setCatalogItems((previous) => [...savedProducts, ...previous]);
     return savedProducts;
+  };
+
+  const handleSyncStoreCatalog = async (): Promise<{ inserted: number; alreadyPresent: number; restored: number; conflicts: number }> => {
+    const totals = { inserted: 0, alreadyPresent: 0, restored: 0, conflicts: 0 };
+    const batchSize = 100;
+    const batchCount = Math.ceil(INITIAL_CATALOG.length / batchSize);
+    for (let offset = 0; offset < INITIAL_CATALOG.length; offset += batchSize) {
+      const batch = INITIAL_CATALOG.slice(offset, offset + batchSize);
+      try {
+        const response = await fetch('/api/data.php?resource=catalog-seed-sync', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ products: batch }),
+        });
+        const result = await response.json() as {
+          inserted?: number;
+          alreadyPresent?: number;
+          restored?: number;
+          conflicts?: number;
+          message?: string;
+        };
+        if (
+          !response.ok
+          || !Number.isInteger(result.inserted)
+          || !Number.isInteger(result.alreadyPresent)
+          || !Number.isInteger(result.restored)
+          || !Number.isInteger(result.conflicts)
+        ) {
+          throw new Error(result.message || 'The database did not accept the catalog batch.');
+        }
+        totals.inserted += result.inserted!;
+        totals.alreadyPresent += result.alreadyPresent!;
+        totals.restored += result.restored!;
+        totals.conflicts += result.conflicts!;
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'The catalog batch failed.';
+        throw new Error(
+          `Catalog sync stopped after ${Math.floor(offset / batchSize)} of ${batchCount} batches. ${detail} Completed batches can be safely retried.`,
+        );
+      }
+    }
+
+    const [productsResponse, categoriesResponse] = await Promise.all([
+      fetch('/api/data.php?resource=products', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+      fetch('/api/data.php?resource=categories', { credentials: 'same-origin', headers: { Accept: 'application/json' } }),
+    ]);
+    const productsResult = await productsResponse.json() as { products?: CatalogItem[]; message?: string };
+    const categoriesResult = await categoriesResponse.json() as { categories?: string[]; message?: string };
+    if (!productsResponse.ok || !Array.isArray(productsResult.products)) {
+      throw new Error(productsResult.message || 'Catalog sync finished, but CRM products could not be refreshed.');
+    }
+    if (!categoriesResponse.ok || !Array.isArray(categoriesResult.categories)) {
+      throw new Error(categoriesResult.message || 'Catalog sync finished, but CRM categories could not be refreshed.');
+    }
+    const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
+    setCatalogItems(productsResult.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
+    setCategories(categoriesResult.categories);
+    return totals;
   };
 
   const handleAddCategory = async (name: string): Promise<string> => {
@@ -897,6 +961,7 @@ export default function App() {
         catalogError={catalogError}
         onAddCategory={handleAddCategory}
         onBulkAddProducts={handleBulkAddProducts}
+        onSyncStoreCatalog={handleSyncStoreCatalog}
         onAddProduct={handleAddProduct}
         onUploadProductImages={handleUploadProductImages}
         onUpdateProduct={handleUpdateProduct}
