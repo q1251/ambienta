@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowRight, Award, Heart, Moon, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react';
+import { ArrowDown, ArrowRight, Award, ChevronLeft, ChevronRight, Heart, Moon, Search, ShieldCheck, Sparkles, Zap } from 'lucide-react';
 import heroImage from '../assets/images/wellness_vitamins_display_1793621456102.jpg';
 import { StoreCategory } from '../types/pharmacy';
 
@@ -18,6 +18,36 @@ export const PharmacyHero: React.FC<PharmacyHeroProps> = ({
   searchQuery,
   setSearchQuery,
 }) => {
+  const categoryRailRef = React.useRef<HTMLDivElement>(null);
+  const [categoryScrollState, setCategoryScrollState] = React.useState({ canScrollLeft: false, canScrollRight: false });
+
+  React.useEffect(() => {
+    const rail = categoryRailRef.current;
+    if (!rail) return;
+
+    const updateScrollState = () => {
+      const maxScrollLeft = rail.scrollWidth - rail.clientWidth;
+      setCategoryScrollState({
+        canScrollLeft: rail.scrollLeft > 1,
+        canScrollRight: maxScrollLeft > 1 && rail.scrollLeft < maxScrollLeft - 1,
+      });
+    };
+
+    updateScrollState();
+    rail.addEventListener('scroll', updateScrollState, { passive: true });
+    window.addEventListener('resize', updateScrollState);
+
+    return () => {
+      rail.removeEventListener('scroll', updateScrollState);
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, [categories]);
+
+  const scrollCategories = (direction: -1 | 1) => {
+    const rail = categoryRailRef.current;
+    rail?.scrollBy({ left: direction * Math.max(180, rail.clientWidth * 0.75), behavior: 'smooth' });
+  };
+
   const categoryIcon = (name: StoreCategory) => {
     switch (name) {
       case 'Sleep': return <Moon className="h-4 w-4" />;
@@ -117,40 +147,72 @@ export const PharmacyHero: React.FC<PharmacyHeroProps> = ({
           </div>
 
           <div className="mt-6 sm:mt-7">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-100 sm:text-xs">
-              Browse by category
-            </p>
-            <div
-              role="group"
-              aria-label="Browse product categories"
-              className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0"
-            >
-              <button
-                type="button"
-                onClick={() => onSelectCategory('All Products')}
-                className={`shrink-0 snap-start rounded-full px-4 py-2 text-xs font-semibold transition ${
-                  selectedCategory === 'All Products'
-                    ? 'bg-white text-[#123b68]'
-                    : 'border border-white/45 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
-                }`}
-              >
-                All products
-              </button>
-              {categories.map((name) => (
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-100 sm:text-xs">
+                Browse by category
+              </p>
+              <p className="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-blue-100 sm:text-xs">
+                {categoryScrollState.canScrollRight ? 'Swipe or use arrows' : 'Categories'}
+                {categoryScrollState.canScrollRight && <ChevronRight className="h-3.5 w-3.5" />}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {categoryScrollState.canScrollLeft && (
                 <button
                   type="button"
-                  key={name}
-                  onClick={() => onSelectCategory(name)}
-                  className={`inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition ${
-                    selectedCategory === name
-                      ? 'bg-white text-[#123b68]'
-                      : 'border border-white/45 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
-                  }`}
+                  aria-label="Scroll categories left"
+                  onClick={() => scrollCategories(-1)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-sm transition hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                 >
-                  {categoryIcon(name)}
-                  {name}
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-              ))}
+              )}
+              <div
+                ref={categoryRailRef}
+                role="group"
+                aria-label="Browse product categories"
+                tabIndex={0}
+                className="no-scrollbar min-w-0 flex-1 snap-x snap-mandatory touch-pan-x overflow-x-auto scroll-smooth overscroll-x-contain pb-2"
+              >
+                <div className="flex w-max gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSelectCategory('All Products')}
+                    className={`shrink-0 snap-start rounded-full px-4 py-2 text-xs font-semibold transition ${
+                      selectedCategory === 'All Products'
+                        ? 'bg-white text-[#123b68]'
+                        : 'border border-white/45 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
+                    }`}
+                  >
+                    All products
+                  </button>
+                  {categories.map((name) => (
+                    <button
+                      type="button"
+                      key={name}
+                      onClick={() => onSelectCategory(name)}
+                      className={`inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition ${
+                        selectedCategory === name
+                          ? 'bg-white text-[#123b68]'
+                          : 'border border-white/45 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20'
+                      }`}
+                    >
+                      {categoryIcon(name)}
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {categoryScrollState.canScrollRight && (
+                <button
+                  type="button"
+                  aria-label="Scroll categories right"
+                  onClick={() => scrollCategories(1)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-sm backdrop-blur-sm transition hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
