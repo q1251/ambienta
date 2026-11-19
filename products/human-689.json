@@ -1,0 +1,13 @@
+{
+  "id": "human-689",
+  "name": "Flunil 60 mg",
+  "category": "Antidepressant",
+  "price": 0.96,
+  "description": "Ingredients: Fluoxetine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-689"
+}

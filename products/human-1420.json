@@ -1,0 +1,13 @@
+{
+  "id": "human-1420",
+  "name": "Mycobutol 800 mg (1 pack / 100 tabs)",
+  "category": "Antibiotics",
+  "price": 36.4,
+  "description": "Ingredients: Ethambutol\nManufacturer: Cadila Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1420"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-2792",
+  "name": "Zoeter Cream 5% 1 tube 5 g",
+  "category": "Antiviral",
+  "price": 2.28,
+  "description": "Ingredients: Acyclovir\nManufacturer: Leeford Healthcare PVT LTD",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2792"
+}

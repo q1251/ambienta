@@ -1,0 +1,13 @@
+{
+  "id": "human-1490",
+  "name": "Gasex Syrup (1 bottle / 200 ml) Ginger / Lemon",
+  "category": "General health",
+  "price": 6.44,
+  "description": "Ingredients: Ginger + Lemon\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1490"
+}

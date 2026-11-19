@@ -1,0 +1,13 @@
+{
+  "id": "human-1007",
+  "name": "Progynon Depot 10 mg/ml (1 pack / 10 amps)",
+  "category": "Men's health",
+  "price": 57.6,
+  "description": "Ingredients: Estradiol Valerate\nManufacturer: Cadila Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1007"
+}

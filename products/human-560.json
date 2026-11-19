@@ -1,0 +1,13 @@
+{
+  "id": "human-560",
+  "name": "Allegra 120 mg",
+  "category": "Antiallergic",
+  "price": 1.24,
+  "description": "Ingredients: Fexofenadine\nManufacturer: Aventis Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-560"
+}

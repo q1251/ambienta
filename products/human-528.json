@@ -1,0 +1,13 @@
+{
+  "id": "human-528",
+  "name": "Generic Prograf 1 mg",
+  "category": "Antibiotics",
+  "price": 5.88,
+  "description": "Ingredients: Tacrolimus\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-528"
+}

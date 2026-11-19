@@ -1,0 +1,13 @@
+{
+  "id": "human-614",
+  "name": "Generic Singulair 4 mg",
+  "category": "Asthma",
+  "price": 1.08,
+  "description": "Ingredients: Montelukast\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-614"
+}

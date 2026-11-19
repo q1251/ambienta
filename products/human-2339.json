@@ -1,0 +1,13 @@
+{
+  "id": "human-2339",
+  "name": "Valclovir 500 mg",
+  "category": "Antiviral",
+  "price": 1.32,
+  "description": "Ingredients: Valacyclovir\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2339"
+}

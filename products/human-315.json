@@ -1,0 +1,13 @@
+{
+  "id": "human-315",
+  "name": "Generic Hytrin 1 mg",
+  "category": "Men's health",
+  "price": 1.36,
+  "description": "Ingredients: Terazosin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-315"
+}

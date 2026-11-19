@@ -1,0 +1,13 @@
+{
+  "id": "human-14",
+  "name": "MyDekla 60 mg (1 pack / 28 tabs)",
+  "category": "Hepatits, HCV range",
+  "price": 96.0,
+  "description": "Ingredients: Daclatasvir\nManufacturer: Mylan",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-14"
+}

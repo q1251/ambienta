@@ -1,0 +1,13 @@
+{
+  "id": "human-70",
+  "name": "Asthalin 2 mg",
+  "category": "Asthma",
+  "price": 0.08,
+  "description": "Ingredients: Salbutamol sulfate\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-70"
+}

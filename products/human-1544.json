@@ -1,0 +1,13 @@
+{
+  "id": "human-1544",
+  "name": "Oxitard ( 1 pack / 10 caps)",
+  "category": "General health",
+  "price": 5.04,
+  "description": "Ingredients: Indian Gooseberry + Mango\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1544"
+}

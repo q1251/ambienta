@@ -1,0 +1,13 @@
+{
+  "id": "human-2707",
+  "name": "Acivir 500 inj",
+  "category": "Antiviral (Herpes)",
+  "price": 33.8,
+  "description": "Ingredients: Acyclovir\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2707"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-945",
+  "name": "Generic Zanaflex 2 mg",
+  "category": "Pain Relief",
+  "price": 0.16,
+  "description": "Ingredients: Tizanidine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-945"
+}

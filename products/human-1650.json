@@ -1,0 +1,13 @@
+{
+  "id": "human-1650",
+  "name": "Dulata 60 mg",
+  "category": "Antidepressant",
+  "price": 0.64,
+  "description": "Ingredients: Duloxetine\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1650"
+}

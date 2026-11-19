@@ -1,0 +1,13 @@
+{
+  "id": "human-1597",
+  "name": "Sotret 10 mg",
+  "category": "Vitamins",
+  "price": 1.36,
+  "description": "Ingredients: Isotretinoin\nManufacturer: Ranbaxy",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1597"
+}

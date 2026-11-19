@@ -1,0 +1,13 @@
+{
+  "id": "human-256",
+  "name": "Generic Duphaston 10 mg",
+  "category": "Women's health",
+  "price": 4.44,
+  "description": "Ingredients: Dydrogesterone\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-256"
+}

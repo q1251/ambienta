@@ -1,0 +1,13 @@
+{
+  "id": "human-686",
+  "name": "Flunil 10 mg",
+  "category": "Antidepressant",
+  "price": 0.4,
+  "description": "Ingredients: Fluoxetine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-686"
+}

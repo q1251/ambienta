@@ -1,0 +1,13 @@
+{
+  "id": "human-745",
+  "name": "LQuin 750 mg",
+  "category": "Antibiotics",
+  "price": 0.72,
+  "description": "Ingredients: Levofloxacin\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-745"
+}

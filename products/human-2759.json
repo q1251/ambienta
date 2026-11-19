@@ -1,0 +1,13 @@
+{
+  "id": "human-2759",
+  "name": "Palbocib 125 mg (1 bottle / 21 caps)",
+  "category": "Anticancer",
+  "price": 192.0,
+  "description": "Ingredients: Palbociclib\nManufacturer: Aprazer Healthcare",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2759"
+}

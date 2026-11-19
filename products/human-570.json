@@ -1,0 +1,13 @@
+{
+  "id": "human-570",
+  "name": "Montair 4 mg",
+  "category": "Asthma",
+  "price": 0.96,
+  "description": "Ingredients: Montelukast Sodium\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-570"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1057",
+  "name": "Thioplan 15 mg",
+  "category": "Anticancer",
+  "price": 792.0,
+  "description": "Ingredients: Thiotepa\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1057"
+}

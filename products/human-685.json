@@ -1,0 +1,13 @@
+{
+  "id": "human-685",
+  "name": "Fludac 20 mg",
+  "category": "Antidepressant",
+  "price": 0.64,
+  "description": "Ingredients: Fluoxetine\nManufacturer: Cadila Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-685"
+}

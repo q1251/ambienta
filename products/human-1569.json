@@ -1,0 +1,13 @@
+{
+  "id": "human-1569",
+  "name": "Shatavari syrup (1 bottle / 200 ml)",
+  "category": "Women's health",
+  "price": 8.84,
+  "description": "Ingredients: Shatavari\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1569"
+}

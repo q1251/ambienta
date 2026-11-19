@@ -1,0 +1,13 @@
+{
+  "id": "human-1585",
+  "name": "Cytosar 100 mg (1 pack / 5 amps)",
+  "category": "Anticancer",
+  "price": 105.6,
+  "description": "Ingredients: Cytarabine\nManufacturer: Pfizer",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1585"
+}

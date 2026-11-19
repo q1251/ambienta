@@ -1,0 +1,13 @@
+{
+  "id": "human-871",
+  "name": "Generic Benzac 5% 15 g",
+  "category": "Skincare",
+  "price": 10.56,
+  "description": "Ingredients: Benzoyl peroxide\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-871"
+}

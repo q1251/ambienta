@@ -1,0 +1,13 @@
+{
+  "id": "human-2389",
+  "name": "Antiflu 75 mg",
+  "category": "Antiviral",
+  "price": 4.44,
+  "description": "Ingredients: Olsetamivir\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2389"
+}

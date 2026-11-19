@@ -1,0 +1,13 @@
+{
+  "id": "human-2535",
+  "name": "Acarjohn 25 mg",
+  "category": "Antidiabetic",
+  "price": 0.48,
+  "description": "Ingredients: Acarbose\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2535"
+}

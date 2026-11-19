@@ -1,0 +1,13 @@
+{
+  "id": "human-87",
+  "name": "Finpecia 1 mg",
+  "category": "Hair loss control",
+  "price": 0.72,
+  "description": "Ingredients: Finasteride\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-87"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-884",
+  "name": "Generic Lyrica 150 mg",
+  "category": "General health",
+  "price": 0.6,
+  "description": "Ingredients: Pregabalin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-884"
+}

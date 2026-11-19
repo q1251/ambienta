@@ -1,0 +1,13 @@
+{
+  "id": "human-942",
+  "name": "Generic Requip 0.5 mg",
+  "category": "Parkinson disease treatment",
+  "price": 0.64,
+  "description": "Ingredients: Ropinirole\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-942"
+}

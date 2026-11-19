@@ -1,0 +1,13 @@
+{
+  "id": "human-308",
+  "name": "Generic Gestanin 5 mg",
+  "category": "Women's health",
+  "price": 0.72,
+  "description": "Ingredients: Allyloestrenol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-308"
+}

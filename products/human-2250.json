@@ -1,0 +1,13 @@
+{
+  "id": "human-2250",
+  "name": "Testenate Deport-250",
+  "category": "Steroids",
+  "price": 5.52,
+  "description": "Ingredients: Testosterone Enanthate\nManufacturer: Interphar",
+  "rxRequired": false,
+  "dosage": "amps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2250"
+}

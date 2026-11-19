@@ -1,0 +1,13 @@
+{
+  "id": "human-2452",
+  "name": "Ripatec Eye Drops 0.4% w/v 5 ml",
+  "category": "Eye care",
+  "price": 19.96,
+  "description": "Ingredients: Ripasudil\nManufacturer: Ajanta Pharma",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2452"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-645",
+  "name": "Generic Zoloft 100 mg",
+  "category": "Antidepressant",
+  "price": 0.4,
+  "description": "Ingredients: Sertraline\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-645"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-842",
+  "name": "Generic Vasotec 2.5 mg",
+  "category": "Blood Pressure",
+  "price": 0.16,
+  "description": "Ingredients: Enalapril\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-842"
+}

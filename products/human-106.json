@@ -1,0 +1,13 @@
+{
+  "id": "human-106",
+  "name": "Generic Accutane 40 mg",
+  "category": "Vitamins",
+  "price": 1.52,
+  "description": "Ingredients: Isotretinoin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-106"
+}

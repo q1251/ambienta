@@ -1,0 +1,13 @@
+{
+  "id": "human-927",
+  "name": "Generic Retin-A 0.1% Gel 20 g",
+  "category": "Skincare",
+  "price": 13.4,
+  "description": "Ingredients: Tretinoin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-927"
+}

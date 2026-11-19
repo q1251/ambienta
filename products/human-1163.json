@@ -1,0 +1,13 @@
+{
+  "id": "human-1163",
+  "name": "Imatib 100 mg (1 pack / 10 tabs)",
+  "category": "Anticancer",
+  "price": 20.8,
+  "description": "Ingredients: Imatinib\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1163"
+}

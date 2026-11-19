@@ -1,0 +1,13 @@
+{
+  "id": "human-1956",
+  "name": "Dariten 7.5 mg",
+  "category": "Other",
+  "price": 2.08,
+  "description": "Ingredients: Darifenacin\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1956"
+}

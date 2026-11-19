@@ -1,0 +1,13 @@
+{
+  "id": "human-734",
+  "name": "Cabgolin 0.25 mg",
+  "category": "Hypoprolactenemia",
+  "price": 3.56,
+  "description": "Ingredients: Cabergoline\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-734"
+}

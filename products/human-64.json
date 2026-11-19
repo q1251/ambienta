@@ -1,0 +1,13 @@
+{
+  "id": "human-64",
+  "name": "Generic Arimidex 1mg",
+  "category": "Women's health",
+  "price": 0.96,
+  "description": "Ingredients: Anastrozole\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-64"
+}

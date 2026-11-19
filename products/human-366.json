@@ -1,0 +1,13 @@
+{
+  "id": "human-366",
+  "name": "Generic Lincocin 500 mg",
+  "category": "Antibiotics",
+  "price": 0.68,
+  "description": "Ingredients: Lincomycin Hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-366"
+}

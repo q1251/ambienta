@@ -1,0 +1,13 @@
+{
+  "id": "human-103",
+  "name": "Generic Accutane 10 mg",
+  "category": "Vitamins",
+  "price": 0.48,
+  "description": "Ingredients: Isotretinoin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-103"
+}

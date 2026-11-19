@@ -1,0 +1,13 @@
+{
+  "id": "human-588",
+  "name": "Buspin 10 mg",
+  "category": "Antidepressant",
+  "price": 0.56,
+  "description": "Ingredients: Buspirone\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-588"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-2093",
+  "name": "Katadol 100 mg",
+  "category": "Anesthetics",
+  "price": 1.08,
+  "description": "Ingredients: Flupirtine\nManufacturer: Lupin Ltd",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2093"
+}

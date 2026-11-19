@@ -1,0 +1,13 @@
+{
+  "id": "human-1840",
+  "name": "Pangraf 1 mg",
+  "category": "Immunosuppressant",
+  "price": 3.0,
+  "description": "Ingredients: Tacrolimus\nManufacturer: Panacea Biotec Ltd",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1840"
+}

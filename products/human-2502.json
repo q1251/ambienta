@@ -1,0 +1,13 @@
+{
+  "id": "human-2502",
+  "name": "Beedan 100 mg (1 pack / 30 tabs)",
+  "category": "Anticancer",
+  "price": 453.92,
+  "description": "Ingredients: Dasatinib\nManufacturer: Adley Formulations",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2502"
+}

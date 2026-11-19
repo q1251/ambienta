@@ -1,0 +1,13 @@
+{
+  "id": "human-969",
+  "name": "Generic Pirfenex 200 mg",
+  "category": "General health",
+  "price": 1.04,
+  "description": "Ingredients: Pirfenidone\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-969"
+}

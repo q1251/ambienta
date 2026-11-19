@@ -1,0 +1,13 @@
+{
+  "id": "human-653",
+  "name": "Generic Lamisil 10 g",
+  "category": "Antifungal",
+  "price": 6.36,
+  "description": "Ingredients: Terbinafine Hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-653"
+}

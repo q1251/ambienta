@@ -1,0 +1,13 @@
+{
+  "id": "human-1064",
+  "name": "Xpreza 100 mg",
+  "category": "Anticancer",
+  "price": 253.0,
+  "description": "Ingredients: Azacitidine\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1064"
+}

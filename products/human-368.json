@@ -1,0 +1,13 @@
+{
+  "id": "human-368",
+  "name": "Generic Lioresal 25 mg",
+  "category": "Pain Relief",
+  "price": 0.4,
+  "description": "Ingredients: Baclofen\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-368"
+}

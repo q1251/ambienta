@@ -1,0 +1,13 @@
+{
+  "id": "human-1543",
+  "name": "Oro-T Oral Rinse (1 bottle / 200 ml)",
+  "category": "Cough reliever",
+  "price": 11.84,
+  "description": "Ingredients: Haridra + Madhu + Triphala\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1543"
+}

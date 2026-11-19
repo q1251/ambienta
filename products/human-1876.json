@@ -1,0 +1,13 @@
+{
+  "id": "human-1876",
+  "name": "Budez CR 3 mg",
+  "category": "Steroids",
+  "price": 1.44,
+  "description": "Ingredients: Budesonide\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1876"
+}

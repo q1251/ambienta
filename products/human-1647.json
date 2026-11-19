@@ -1,0 +1,13 @@
+{
+  "id": "human-1647",
+  "name": "Zytanix 5 mg",
+  "category": "Diuretics",
+  "price": 1.92,
+  "description": "Ingredients: Metolazone\nManufacturer: Zydus",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1647"
+}

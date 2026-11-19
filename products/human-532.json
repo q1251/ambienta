@@ -1,0 +1,13 @@
+{
+  "id": "human-532",
+  "name": "Generic Protonix 20 mg",
+  "category": "Antacid",
+  "price": 0.16,
+  "description": "Ingredients: Pantoprazole\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-532"
+}

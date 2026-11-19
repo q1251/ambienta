@@ -1,0 +1,13 @@
+{
+  "id": "human-141",
+  "name": "Generic Arava 10 mg",
+  "category": "General health",
+  "price": 0.68,
+  "description": "Ingredients: Leflunomide\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-141"
+}

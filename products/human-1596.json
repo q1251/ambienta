@@ -1,0 +1,13 @@
+{
+  "id": "human-1596",
+  "name": "Sotret 20 mg",
+  "category": "Vitamins",
+  "price": 1.92,
+  "description": "Ingredients: Isotretinoin\nManufacturer: Ranbaxy",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1596"
+}

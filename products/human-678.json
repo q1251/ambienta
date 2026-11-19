@@ -1,0 +1,13 @@
+{
+  "id": "human-678",
+  "name": "Daxid 100 mg (1 pack / 30 tabs)",
+  "category": "Antidepressant",
+  "price": 38.6,
+  "description": "Ingredients: Sertraline\nManufacturer: Pfizer",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-678"
+}

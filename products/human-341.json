@@ -1,0 +1,13 @@
+{
+  "id": "human-341",
+  "name": "Generic Isoptin 40 mg",
+  "category": "Blood Pressure",
+  "price": 0.08,
+  "description": "Ingredients: Verapamil\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-341"
+}

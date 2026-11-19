@@ -1,0 +1,13 @@
+{
+  "id": "human-970",
+  "name": "Generic Keppra 1000 mg",
+  "category": "General health",
+  "price": 1.84,
+  "description": "Ingredients: Levetiracetam\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-970"
+}

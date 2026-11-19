@@ -1,0 +1,13 @@
+{
+  "id": "human-996",
+  "name": "Generic Betahistine 16 mg",
+  "category": "General health",
+  "price": 0.68,
+  "description": "Ingredients: Betahistine dihydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-996"
+}

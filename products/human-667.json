@@ -1,0 +1,13 @@
+{
+  "id": "human-667",
+  "name": "Generic Zovirax 800 mg",
+  "category": "Antiviral (Herpes)",
+  "price": 0.72,
+  "description": "Ingredients: Acyclovir\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-667"
+}

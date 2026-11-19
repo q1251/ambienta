@@ -1,0 +1,13 @@
+{
+  "id": "human-143",
+  "name": "Generic Arcoxia 60 mg",
+  "category": "General health",
+  "price": 0.32,
+  "description": "Ingredients: Etoricoxib\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-143"
+}

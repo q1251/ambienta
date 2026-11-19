@@ -1,0 +1,13 @@
+{
+  "id": "human-1192",
+  "name": "Cytotam 20 mg",
+  "category": "Anticancer",
+  "price": 0.4,
+  "description": "Ingredients: Tamoxifen\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1192"
+}

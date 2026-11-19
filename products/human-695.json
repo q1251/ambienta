@@ -1,0 +1,13 @@
+{
+  "id": "human-695",
+  "name": "Cifran 750 mg",
+  "category": "Antibiotics",
+  "price": 1.04,
+  "description": "Ingredients: Ciprofloxacin\nManufacturer: Ranbaxy",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-695"
+}

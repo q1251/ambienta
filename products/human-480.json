@@ -1,0 +1,13 @@
+{
+  "id": "human-480",
+  "name": "Tenvir 300 mg (1 pack / 30 tabs)",
+  "category": "Hepatits, HCV range",
+  "price": 72.0,
+  "description": "Ingredients: Tenofovir Disoproxil Fumarate IP\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-480"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-331",
+  "name": "Generic Imuran 50 mg",
+  "category": "General health",
+  "price": 0.6,
+  "description": "Ingredients: Azathioprine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-331"
+}

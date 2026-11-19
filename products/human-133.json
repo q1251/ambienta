@@ -1,0 +1,13 @@
+{
+  "id": "human-133",
+  "name": "Generic Anafranil 10 mg",
+  "category": "Antidepressant",
+  "price": 0.32,
+  "description": "Ingredients: Clomipramine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-133"
+}

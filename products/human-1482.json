@@ -1,0 +1,13 @@
+{
+  "id": "human-1482",
+  "name": "Clarina (1 tube / 75 ml)",
+  "category": "Skincare",
+  "price": 7.16,
+  "description": "Ingredients: Aloe Vera + Indian Willow +Turmeric\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1482"
+}

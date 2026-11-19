@@ -1,0 +1,13 @@
+{
+  "id": "human-2434",
+  "name": "Progynova 1 mg",
+  "category": "Women's health",
+  "price": 1.04,
+  "description": "Ingredients: Estradiol\nManufacturer: Bayer",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2434"
+}

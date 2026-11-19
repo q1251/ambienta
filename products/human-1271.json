@@ -1,0 +1,13 @@
+{
+  "id": "human-1271",
+  "name": "Generic Januvia 50 mg",
+  "category": "Antidiabetic",
+  "price": 3.24,
+  "description": "Ingredients: Sitagliptin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1271"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-2265",
+  "name": "Buproban 150 mg",
+  "category": "Antidepressant",
+  "price": 0.48,
+  "description": "Ingredients: Bupropion\nManufacturer: Hab Pharmaceuticals",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2265"
+}

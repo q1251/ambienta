@@ -1,0 +1,13 @@
+{
+  "id": "human-1897",
+  "name": "Azoran 50 mg",
+  "category": "Immunosuppressant",
+  "price": 0.96,
+  "description": "Ingredients: Axathioprine\nManufacturer: RPG Life Sciences",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1897"
+}

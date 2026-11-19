@@ -1,0 +1,13 @@
+{
+  "id": "human-2754",
+  "name": "Capeshield 500 mg",
+  "category": "Anticancer",
+  "price": 2.6,
+  "description": "Ingredients: Capecitabine\nManufacturer: Neova",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2754"
+}

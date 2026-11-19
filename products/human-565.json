@@ -1,0 +1,13 @@
+{
+  "id": "human-565",
+  "name": "Dezlorid 5 mg",
+  "category": "Asthma",
+  "price": 0.68,
+  "description": "Ingredients: Desloratadine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-565"
+}

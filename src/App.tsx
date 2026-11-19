@@ -82,40 +82,17 @@ export default function App() {
   const orderRequestId = useRef(0);
   const [leads, setLeads] = useState<ContactLead[]>([]);
   const [adminDataError, setAdminDataError] = useState('');
-  const [catalogError, setCatalogError] = useState('');
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
+  const catalogError = '';
+  const [catalogAvailable, setCatalogAvailable] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(INITIAL_CATALOG);
   const [categories, setCategories] = useState<string[]>(() => [...new Set(INITIAL_CATALOG.map((item) => item.category))]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
-    let active = true;
-    if (currentPath === '/admin') {
-      return () => {
-        active = false;
-      };
-    }
-
-    fetch('/api/data.php?resource=catalog', { headers: { Accept: 'application/json' } })
-      .then(async (response) => {
-        const result = await response.json() as { products?: CatalogItem[]; categories?: string[]; message?: string };
-        if (!response.ok || !Array.isArray(result.products) || !Array.isArray(result.categories)) {
-          throw new Error(result.message || 'The live product catalog could not be loaded.');
-        }
-        if (active) {
-          const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
-          setCatalogItems(result.products.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
-          setCategories(result.categories);
-          setCatalogError('');
-        }
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setCatalogError(error instanceof Error ? error.message : 'The live product catalog could not be loaded.');
-        }
-      });
-    return () => {
-      active = false;
-    };
+    if (currentPath === '/admin') return;
+    setCatalogItems(INITIAL_CATALOG);
+    setCategories([...new Set(INITIAL_CATALOG.map((item) => item.category))]);
+    setCatalogAvailable(false);
   }, [currentPath]);
 
   // Storefront Filter States
@@ -968,6 +945,7 @@ export default function App() {
         {/* Store Catalog & Filterable Products */}
         <CategoriesAndProducts
           catalogItems={catalogItems}
+          catalogAvailable={catalogAvailable}
           categories={categories}
           onSelectItem={handleAddToCart}
           selectedCategory={selectedCategory}
@@ -975,11 +953,9 @@ export default function App() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
-        {catalogError && (
-          <p role="alert" className="mx-auto my-6 max-w-7xl rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
-            {catalogError} Products and checkout are unavailable until the live catalog service is restored.
-          </p>
-        )}
+        <p role="status" className="mx-auto my-6 max-w-7xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          Showing the local sample catalog. Ordering is disabled until these products are connected to the live catalog.
+        </p>
 
         {/* Value & Delivery Banner */}
         <section className="border-t border-blue-100 bg-white py-12">

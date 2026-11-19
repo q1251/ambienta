@@ -1,0 +1,13 @@
+{
+  "id": "human-926",
+  "name": "Generic Retin-A 0.05% Cream 20 g",
+  "category": "Skincare",
+  "price": 1.96,
+  "description": "Ingredients: Tretinoin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-926"
+}

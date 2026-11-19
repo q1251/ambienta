@@ -4,6 +4,7 @@ import { CatalogItem, StoreCategory } from '../types/pharmacy';
 
 interface CategoriesAndProductsProps {
   catalogItems: CatalogItem[];
+  catalogAvailable: boolean;
   categories: StoreCategory[];
   onSelectItem: (item: CatalogItem) => void;
   selectedCategory: StoreCategory | 'All Products';
@@ -14,6 +15,7 @@ interface CategoriesAndProductsProps {
 
 export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
   catalogItems,
+  catalogAvailable,
   categories,
   onSelectItem,
   selectedCategory,
@@ -117,8 +119,8 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
         {/* Product Cards Grid */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredItems.map((item) => {
-            const isOutOfStock = !item.inStock || item.stockCount <= 0;
-            const isLowStock = item.stockCount <= item.minStockThreshold && !isOutOfStock;
+            const isOutOfStock = catalogAvailable && (!item.inStock || item.stockCount <= 0);
+            const isLowStock = catalogAvailable && item.stockCount <= item.minStockThreshold && !isOutOfStock;
             const images = item.images?.length ? item.images : item.image ? [item.image] : [];
             const imageIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
             const selectedImage = images[imageIndex];
@@ -213,7 +215,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                       </div>
                     )}
 
-                    {item.rxRequired && !isOutOfStock && (
+                    {catalogAvailable && item.rxRequired && !isOutOfStock && (
                       <div className="absolute top-2.5 right-2.5">
                         <span className="bg-amber-100/90 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-300/80 shadow-2xs">
                           Clinical Grade
@@ -225,11 +227,13 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                   {/* Body Content */}
                   <div className="space-y-3 p-5">
                     {/* Ratings */}
-                    <div className="flex items-center gap-1 text-[11px] text-amber-500">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span className="font-bold text-slate-800">4.9</span>
-                      <span className="text-slate-400 text-[10px]">(Verified Buyer Review)</span>
-                    </div>
+                    {catalogAvailable && (
+                      <div className="flex items-center gap-1 text-[11px] text-amber-500">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <span className="font-bold text-slate-800">4.9</span>
+                        <span className="text-slate-400 text-[10px]">(Verified Buyer Review)</span>
+                      </div>
+                    )}
 
                     <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-[-0.02em] text-slate-900 transition-colors group-hover:text-[#174c80]">
                       {item.name}
@@ -243,15 +247,17 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                       <span className="font-medium text-slate-600 truncate max-w-[150px]">
                         {item.dosage}
                       </span>
-                      {isLowStock ? (
-                        <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded text-[10px]">
-                          Only {item.stockCount} left
-                        </span>
-                      ) : (
-                        <span className="text-emerald-700 font-medium flex items-center gap-0.5 text-[10px]">
-                          <CheckCircle className="w-3 h-3 text-emerald-600" />
-                          In Stock
-                        </span>
+                      {catalogAvailable && (
+                        isLowStock ? (
+                          <span className="text-amber-700 font-semibold bg-amber-50 px-1.5 py-0.5 rounded text-[10px]">
+                            Only {item.stockCount} left
+                          </span>
+                        ) : (
+                          <span className="text-emerald-700 font-medium flex items-center gap-0.5 text-[10px]">
+                            <CheckCircle className="w-3 h-3 text-emerald-600" />
+                            In Stock
+                          </span>
+                        )
                       )}
                     </div>
                   </div>
@@ -269,12 +275,12 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                   </div>
 
                   <button
-                    disabled={isOutOfStock}
+                    disabled={isOutOfStock || !catalogAvailable}
                     onClick={() => onSelectItem(item)}
                     className="flex items-center gap-1.5 rounded-full bg-[#174c80] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#123b68] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>{isOutOfStock ? 'Sold Out' : 'Add to Order'}</span>
+                    <span>{isOutOfStock ? 'Sold Out' : catalogAvailable ? 'Add to Order' : 'Unavailable'}</span>
                   </button>
                 </div>
               </div>

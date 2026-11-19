@@ -1,0 +1,13 @@
+{
+  "id": "human-1612",
+  "name": "Amoxytor 250 mg",
+  "category": "Antibiotics",
+  "price": 0.16,
+  "description": "Ingredients: Amoxicillin\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1612"
+}

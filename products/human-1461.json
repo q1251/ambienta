@@ -1,0 +1,13 @@
+{
+  "id": "human-1461",
+  "name": "Koflet Lozenges (1 pack / 10 pills)",
+  "category": "Cough reliever",
+  "price": 1.44,
+  "description": "Ingredients: Lavanga + Licorice + Trikatu\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1461"
+}

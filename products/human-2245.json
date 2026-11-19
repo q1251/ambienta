@@ -1,0 +1,13 @@
+{
+  "id": "human-2245",
+  "name": "Dexlanzol 30 mg",
+  "category": "Gastrointestinal",
+  "price": 1.32,
+  "description": "Ingredients: Dexlansoprazole\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2245"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-691",
+  "name": "Lithosun SR 400 mg",
+  "category": "Antidepressant",
+  "price": 0.64,
+  "description": "Ingredients: Lithium Carbonate IP\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-691"
+}

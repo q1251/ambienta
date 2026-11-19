@@ -1,0 +1,13 @@
+{
+  "id": "human-752",
+  "name": "Ovidac 5000 IU",
+  "category": "General health",
+  "price": 31.2,
+  "description": "Ingredients: Human Chorionic Gonadotrophin\nManufacturer: Zydus",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-752"
+}

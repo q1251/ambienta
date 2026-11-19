@@ -1,0 +1,13 @@
+{
+  "id": "human-858",
+  "name": "Generic Duphalac 100 ml",
+  "category": "Gastrointestinal",
+  "price": 9.0,
+  "description": "Ingredients: Lactulose\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-858"
+}

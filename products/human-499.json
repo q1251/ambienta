@@ -1,0 +1,13 @@
+{
+  "id": "human-499",
+  "name": "Endobloc 5 mg",
+  "category": "Blood Pressure",
+  "price": 11.92,
+  "description": "Ingredients: Ambrisentan\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-499"
+}

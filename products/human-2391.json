@@ -1,0 +1,13 @@
+{
+  "id": "human-2391",
+  "name": "Fluxam 100 mg",
+  "category": "Antidepressant",
+  "price": 1.08,
+  "description": "Ingredients: Fluvoxamine\nManufacturer: Tripada Healthcare Pvt Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2391"
+}

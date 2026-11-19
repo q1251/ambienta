@@ -1,0 +1,13 @@
+{
+  "id": "human-208",
+  "name": "Generic Combivir 300 mg/150mg",
+  "category": "AIDS / HIV treatment",
+  "price": 1.08,
+  "description": "Ingredients: Lamivudine + Zidovudine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-208"
+}

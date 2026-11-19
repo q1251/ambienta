@@ -1,0 +1,13 @@
+{
+  "id": "human-225",
+  "name": "Generic Cytotec 200 mcg",
+  "category": "Antacid",
+  "price": 1.04,
+  "description": "Ingredients: Misoprostol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-225"
+}

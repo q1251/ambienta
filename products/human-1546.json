@@ -1,0 +1,13 @@
+{
+  "id": "human-1546",
+  "name": "Pain Relief Oil (1 bottle / 100 ml)",
+  "category": "Pain Relief",
+  "price": 7.16,
+  "description": "Ingredients: OIL  Relieves bodyache and painCedarwood + Country Mallow + Drumstick + Ginger + Sweet Flag\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1546"
+}

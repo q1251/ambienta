@@ -1,0 +1,13 @@
+{
+  "id": "human-2332",
+  "name": "Slimtop 60 mg",
+  "category": "Weight Loss",
+  "price": 0.8,
+  "description": "Ingredients: Orlistat\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2332"
+}

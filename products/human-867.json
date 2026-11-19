@@ -1,0 +1,13 @@
+{
+  "id": "human-867",
+  "name": "Generic Aggrenox 25 mg / 200 mg",
+  "category": "General health",
+  "price": 0.32,
+  "description": "Ingredients: Aspirin + Dipyridamole\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-867"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-150",
+  "name": "Generic Ascorbic Acid 500 mg",
+  "category": "Vitamins",
+  "price": 0.08,
+  "description": "Ingredients: Ascorbic Acid\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-150"
+}

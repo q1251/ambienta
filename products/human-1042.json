@@ -1,0 +1,13 @@
+{
+  "id": "human-1042",
+  "name": "Natclovir 250 mg (1 pack / 100 caps)",
+  "category": "Hepatits, HCV range",
+  "price": 86.4,
+  "description": "Ingredients: Ganciclovir\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1042"
+}

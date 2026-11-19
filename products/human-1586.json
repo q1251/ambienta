@@ -1,0 +1,13 @@
+{
+  "id": "human-1586",
+  "name": "Danogen 50 mg",
+  "category": "General health",
+  "price": 1.12,
+  "description": "Ingredients: Danazol\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1586"
+}

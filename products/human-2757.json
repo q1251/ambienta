@@ -1,0 +1,13 @@
+{
+  "id": "human-2757",
+  "name": "Liofen 25 mg",
+  "category": "Pain Relief",
+  "price": 2.08,
+  "description": "Ingredients: Baclofen\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2757"
+}

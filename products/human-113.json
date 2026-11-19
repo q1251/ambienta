@@ -1,0 +1,13 @@
+{
+  "id": "human-113",
+  "name": "Generic Adalat 5 mg",
+  "category": "Blood Pressure",
+  "price": 0.16,
+  "description": "Ingredients: Nifedipine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-113"
+}

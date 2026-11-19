@@ -1,0 +1,13 @@
+{
+  "id": "human-1672",
+  "name": "Rioteph 1 mg",
+  "category": "Hypotensive",
+  "price": 1.92,
+  "description": "Ingredients: Riociguat\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1672"
+}

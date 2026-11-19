@@ -1,0 +1,13 @@
+{
+  "id": "human-2734",
+  "name": "Tazzle 10 mg",
+  "category": "Erectile dysfunction",
+  "price": 1.6,
+  "description": "Ingredients: Tadalafil\nManufacturer: Dr.Reddys",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2734"
+}

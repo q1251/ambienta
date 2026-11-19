@@ -1,0 +1,13 @@
+{
+  "id": "human-930",
+  "name": "Generic Zyban (Extended Release) 150 mg",
+  "category": "Stop Smoking",
+  "price": 0.64,
+  "description": "Ingredients: Bupropion\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-930"
+}

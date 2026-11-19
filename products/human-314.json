@@ -1,0 +1,13 @@
+{
+  "id": "human-314",
+  "name": "Generic Hydrea 500 mg",
+  "category": "General health",
+  "price": 0.72,
+  "description": "Ingredients: Hydroxyurea\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-314"
+}

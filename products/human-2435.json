@@ -1,0 +1,13 @@
+{
+  "id": "human-2435",
+  "name": "Estraheal 2 mg",
+  "category": "Women's health",
+  "price": 1.16,
+  "description": "Ingredients: Estradiol\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2435"
+}

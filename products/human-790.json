@@ -1,0 +1,13 @@
+{
+  "id": "human-790",
+  "name": "Hisone 20 mg",
+  "category": "General health",
+  "price": 1.2,
+  "description": "Ingredients: Hydrocortisone\nManufacturer: Samarth Life Sciences Pvt Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-790"
+}

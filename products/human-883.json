@@ -1,0 +1,13 @@
+{
+  "id": "human-883",
+  "name": "Generic Lamprene 50 mg",
+  "category": "General health",
+  "price": 0.24,
+  "description": "Ingredients: Clofazimine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-883"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-697",
+  "name": "Ciplox 500 mg",
+  "category": "Antibiotics",
+  "price": 0.48,
+  "description": "Ingredients: Ciprofloxacin\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-697"
+}

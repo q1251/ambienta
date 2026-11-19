@@ -1,0 +1,13 @@
+{
+  "id": "human-1950",
+  "name": "Stud 5000",
+  "category": "Erectile dysfunction",
+  "price": 5.16,
+  "description": "Ingredients: Lidocaine IP\nManufacturer: Universal Life Science",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1950"
+}

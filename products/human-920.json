@@ -1,0 +1,13 @@
+{
+  "id": "human-920",
+  "name": "Generic Zyprexa 10 mg",
+  "category": "General health",
+  "price": 0.24,
+  "description": "Ingredients: Olanzapine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-920"
+}

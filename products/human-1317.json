@@ -1,0 +1,13 @@
+{
+  "id": "human-1317",
+  "name": "Isotroin 20 mg",
+  "category": "Vitamins",
+  "price": 2.2,
+  "description": "Ingredients: Isotretinoin\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1317"
+}

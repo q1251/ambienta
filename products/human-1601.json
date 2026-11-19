@@ -1,0 +1,13 @@
+{
+  "id": "human-1601",
+  "name": "Revocon 25 mg",
+  "category": "General health",
+  "price": 2.08,
+  "description": "Ingredients: Tetrabenazine\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1601"
+}

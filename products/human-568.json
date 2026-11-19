@@ -1,0 +1,13 @@
+{
+  "id": "human-568",
+  "name": "Formoflo 125 Trans Inhaler",
+  "category": "Asthma",
+  "price": 39.68,
+  "description": "Ingredients: Fluticasone + Formoterol\nManufacturer: Lupin Ltd",
+  "rxRequired": false,
+  "dosage": "inhaler",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-568"
+}

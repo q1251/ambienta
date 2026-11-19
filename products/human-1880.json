@@ -1,0 +1,13 @@
+{
+  "id": "human-1880",
+  "name": "Lariago DS 500 mg",
+  "category": "Antimalaria",
+  "price": 0.24,
+  "description": "Ingredients: Chloroquine Phosphate\nManufacturer: Ipca Labaratories",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1880"
+}

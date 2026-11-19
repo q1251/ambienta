@@ -1,0 +1,13 @@
+{
+  "id": "human-569",
+  "name": "Ketasma 1 mg",
+  "category": "Asthma",
+  "price": 0.72,
+  "description": "Ingredients: Ketotifen\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-569"
+}

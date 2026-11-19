@@ -1,0 +1,13 @@
+{
+  "id": "human-1003",
+  "name": "Cernos Depot 1000 mg 4ml",
+  "category": "Men's health",
+  "price": 4.8,
+  "description": "Ingredients: Testosterone\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "amps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1003"
+}

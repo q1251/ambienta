@@ -1,0 +1,13 @@
+{
+  "id": "human-1631",
+  "name": "Zipsydon 40 mg",
+  "category": "Antipsychotic",
+  "price": 1.16,
+  "description": "Ingredients: Ziprasidone\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1631"
+}

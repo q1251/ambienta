@@ -1,0 +1,13 @@
+{
+  "id": "human-1828",
+  "name": "Flunarin 5 mg",
+  "category": "General health",
+  "price": 0.48,
+  "description": "Ingredients: Flunarizine\nManufacturer: FDC",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1828"
+}

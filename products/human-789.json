@@ -1,0 +1,13 @@
+{
+  "id": "human-789",
+  "name": "Hisone 10 mg",
+  "category": "General health",
+  "price": 0.6,
+  "description": "Ingredients: Hydrocortisone\nManufacturer: Samarth Life Sciences Pvt Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-789"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-248",
+  "name": "Generic Diovan 160 mg",
+  "category": "Blood Pressure",
+  "price": 1.44,
+  "description": "Ingredients: Valsartan\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-248"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1928",
+  "name": "MPD 4 mg",
+  "category": "Antiinflammatory",
+  "price": 0.44,
+  "description": "Ingredients: Methylprednisolone\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1928"
+}

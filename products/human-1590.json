@@ -1,0 +1,13 @@
+{
+  "id": "human-1590",
+  "name": "Generic Tapentadol 100 mg",
+  "category": "Pain Relief",
+  "price": 0.8,
+  "description": "Ingredients: Tapentadol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1590"
+}

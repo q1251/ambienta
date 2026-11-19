@@ -1,0 +1,13 @@
+{
+  "id": "human-1004",
+  "name": "Cernos Gel 5 gm",
+  "category": "Men's health",
+  "price": 6.68,
+  "description": "Ingredients: Testosterone\nManufacturer: Zydus",
+  "rxRequired": false,
+  "dosage": "sachets",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1004"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-634",
+  "name": "Generic Seroquel 200 mg",
+  "category": "Antidepressant",
+  "price": 0.72,
+  "description": "Ingredients: Quetiapine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-634"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-267",
+  "name": "Generic Enalapril 10 mg",
+  "category": "Blood Pressure",
+  "price": 0.52,
+  "description": "Ingredients: Enalapril\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-267"
+}

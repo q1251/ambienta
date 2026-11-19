@@ -1,0 +1,13 @@
+{
+  "id": "human-1827",
+  "name": "Rupanex 10 mg",
+  "category": "Antiallergic",
+  "price": 0.84,
+  "description": "Ingredients: Rupatadine\nManufacturer: Dr.Reddys",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1827"
+}

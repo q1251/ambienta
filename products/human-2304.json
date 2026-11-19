@@ -1,0 +1,13 @@
+{
+  "id": "human-2304",
+  "name": "Benoquin Cream 20% 30 g",
+  "category": "General health",
+  "price": 32.24,
+  "description": "Ingredients: Monobenzone\nManufacturer: Mac Remedies",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2304"
+}

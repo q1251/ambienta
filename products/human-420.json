@@ -1,0 +1,13 @@
+{
+  "id": "human-420",
+  "name": "Generic Naltrexone 50 mg",
+  "category": "General health",
+  "price": 4.64,
+  "description": "Ingredients: Naltrexone Hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-420"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1266",
+  "name": "Generic Diltiazem HCI 60 mg",
+  "category": "Blood Pressure",
+  "price": 0.4,
+  "description": "Ingredients: Diltiazem Hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1266"
+}

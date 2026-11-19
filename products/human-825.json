@@ -1,0 +1,13 @@
+{
+  "id": "human-825",
+  "name": "Generic Bystolic 2.5 mg",
+  "category": "Blood Pressure",
+  "price": 0.68,
+  "description": "Ingredients: Nebivolol Hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-825"
+}

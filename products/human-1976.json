@@ -1,0 +1,13 @@
+{
+  "id": "human-1976",
+  "name": "Gabimax 600 mg",
+  "category": "Antiviral (Herpes)",
+  "price": 0.6,
+  "description": "Ingredients: Gabapentin\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "amps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1976"
+}

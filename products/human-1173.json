@@ -1,0 +1,13 @@
+{
+  "id": "human-1173",
+  "name": "Soranib (1 pack / 120 tabs)",
+  "category": "Anticancer",
+  "price": 460.0,
+  "description": "Ingredients: Sorafenib\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1173"
+}

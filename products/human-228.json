@@ -1,0 +1,13 @@
+{
+  "id": "human-228",
+  "name": "Generic Danazol 100 mg",
+  "category": "Women's health",
+  "price": 2.12,
+  "description": "Ingredients: Danazol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-228"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1904",
+  "name": "Aerotrop 9 mcg inhaler",
+  "category": "Antiallergic",
+  "price": 28.6,
+  "description": "Ingredients: Tiotropium\nManufacturer: Macleods",
+  "rxRequired": false,
+  "dosage": "inhaler",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1904"
+}

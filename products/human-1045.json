@@ -1,0 +1,13 @@
+{
+  "id": "human-1045",
+  "name": "Pemnat 500 mg",
+  "category": "Anticancer",
+  "price": 168.0,
+  "description": "Ingredients: Pemetrexed\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1045"
+}

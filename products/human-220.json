@@ -1,0 +1,13 @@
+{
+  "id": "human-220",
+  "name": "Generic Crestor 20 mg",
+  "category": "Cholesterol reduce",
+  "price": 0.48,
+  "description": "Ingredients: Rosuvastatin calcium\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-220"
+}

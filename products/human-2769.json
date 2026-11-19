@@ -1,0 +1,13 @@
+{
+  "id": "human-2769",
+  "name": "Galamer 8 mg",
+  "category": "Alzheimer treatment",
+  "price": 2.72,
+  "description": "Ingredients: Galantamine\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2769"
+}

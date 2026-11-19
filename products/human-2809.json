@@ -1,0 +1,13 @@
+{
+  "id": "human-2809",
+  "name": "Nervigesic 450 mg (1 pack / 150 caps)",
+  "category": "Anticonvulsant",
+  "price": 72.0,
+  "description": "Ingredients: Pregabalin\nManufacturer: Signature Pharmaseuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2809"
+}

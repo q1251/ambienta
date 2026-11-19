@@ -1,0 +1,13 @@
+{
+  "id": "human-2095",
+  "name": "Dutaheal 0.5 mg",
+  "category": "Men's health",
+  "price": 0.88,
+  "description": "Ingredients: Dutasteride\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2095"
+}

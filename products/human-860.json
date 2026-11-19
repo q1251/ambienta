@@ -1,0 +1,13 @@
+{
+  "id": "human-860",
+  "name": "Generic Emulgel 50 g",
+  "category": "Gastrointestinal",
+  "price": 11.24,
+  "description": "Ingredients: Diclofenac diethylamine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-860"
+}

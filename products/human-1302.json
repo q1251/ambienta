@@ -1,0 +1,13 @@
+{
+  "id": "human-1302",
+  "name": "Seroflo Inhaler 120 MD 125 mcg",
+  "category": "Antiallergic",
+  "price": 35.08,
+  "description": "Ingredients: Fluticasone + Salmeterol\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "inhaler",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1302"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1638",
+  "name": "Actoid 25 mg",
+  "category": "Vitamins",
+  "price": 4.56,
+  "description": "Ingredients: Acitretin\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1638"
+}

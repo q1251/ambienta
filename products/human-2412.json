@@ -1,0 +1,13 @@
+{
+  "id": "human-2412",
+  "name": "Resteclin 500 mg",
+  "category": "Antibiotics",
+  "price": 0.48,
+  "description": "Ingredients: Tetracycline\nManufacturer: Abbott Healthcare Pvt Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2412"
+}

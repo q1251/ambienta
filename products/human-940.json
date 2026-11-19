@@ -1,0 +1,13 @@
+{
+  "id": "human-940",
+  "name": "Generic Acticin Cream 30 g",
+  "category": "Skincare",
+  "price": 3.0,
+  "description": "Ingredients: Permethrin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-940"
+}

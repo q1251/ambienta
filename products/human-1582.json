@@ -1,0 +1,13 @@
+{
+  "id": "human-1582",
+  "name": "V-gel (1 tube / 30 g)",
+  "category": "Women's health",
+  "price": 6.0,
+  "description": "Ingredients: Cardamom + Persian Rose + Triphala\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1582"
+}

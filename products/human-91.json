@@ -1,0 +1,13 @@
+{
+  "id": "human-91",
+  "name": "Forcan 150 mg",
+  "category": "Antifungal",
+  "price": 1.04,
+  "description": "Ingredients: Fluconazole\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-91"
+}

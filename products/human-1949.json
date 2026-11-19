@@ -1,0 +1,13 @@
+{
+  "id": "human-1949",
+  "name": "Luramax 40 mg",
+  "category": "Antidepressant",
+  "price": 1.24,
+  "description": "Ingredients: Lurasidone\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1949"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-2561",
+  "name": "Moxmay 500 mg",
+  "category": "Antibiotics",
+  "price": 0.32,
+  "description": "Ingredients: Amoxicillin\nManufacturer: May & Baker",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2561"
+}

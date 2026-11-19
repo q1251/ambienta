@@ -1,0 +1,13 @@
+{
+  "id": "human-1624",
+  "name": "Cipmox CV-625",
+  "category": "Antibiotics",
+  "price": 1.04,
+  "description": "Ingredients: Amoxicillin + Clavulanate\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1624"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1853",
+  "name": "Kabanat 60 mg",
+  "category": "Anticancer",
+  "price": 621.0,
+  "description": "Ingredients: cabazitaxel\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1853"
+}

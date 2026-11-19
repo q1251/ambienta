@@ -1,0 +1,13 @@
+{
+  "id": "human-1919",
+  "name": "Modnite 200 mg",
+  "category": "Nootropics",
+  "price": 0.8,
+  "description": "Ingredients: Modafinil\nManufacturer: Consern Pharma Pvt Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1919"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-577",
+  "name": "Seroflo Rotacap 250 mcg (1 pack / 30 caps)",
+  "category": "Asthma",
+  "price": 29.16,
+  "description": "Ingredients: Fluticasone + Salmeterol\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-577"
+}

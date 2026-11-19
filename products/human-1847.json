@@ -1,0 +1,13 @@
+{
+  "id": "human-1847",
+  "name": "Sacpho 150 mg",
+  "category": "Immunosuppressant",
+  "price": 1015.2,
+  "description": "Ingredients: Secukinumab\nManufacturer: Novartis",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1847"
+}

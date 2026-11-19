@@ -1,0 +1,13 @@
+{
+  "id": "human-812",
+  "name": "Generic Zocor 40 mg",
+  "category": "Cholesterol reduce",
+  "price": 0.48,
+  "description": "Ingredients: Simvastatin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-812"
+}

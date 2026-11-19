@@ -1,0 +1,13 @@
+{
+  "id": "human-1455",
+  "name": "Evecare SYRUP 1 bottle 200 ml",
+  "category": "Women's health",
+  "price": 10.4,
+  "description": "Ingredients: Ashoka Tree + Asparagus + Lodh Tree + Malabar Nut\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1455"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-251",
+  "name": "Generic Ditropan 2.5 mg",
+  "category": "General health",
+  "price": 0.68,
+  "description": "Ingredients: Oxybutynin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-251"
+}

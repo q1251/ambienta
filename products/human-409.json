@@ -1,0 +1,13 @@
+{
+  "id": "human-409",
+  "name": "Generic Mobic 7.5 mg",
+  "category": "Pain Relief",
+  "price": 0.32,
+  "description": "Ingredients: Meloxicam\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-409"
+}

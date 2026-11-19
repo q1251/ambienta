@@ -1,0 +1,13 @@
+{
+  "id": "human-702",
+  "name": "Lonitab 5 mg",
+  "category": "Blood Pressure",
+  "price": 2.48,
+  "description": "Ingredients: Minoxidil\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-702"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-345",
+  "name": "Generic Isordil 40 mg",
+  "category": "General health",
+  "price": 0.48,
+  "description": "Ingredients: Isosorbide dinitrate\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-345"
+}

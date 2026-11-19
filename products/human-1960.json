@@ -1,0 +1,13 @@
+{
+  "id": "human-1960",
+  "name": "PegiHep 80 mcg / 0.5 ml (1 pack / 1 vial)",
+  "category": "Hepatits, HCV range",
+  "price": 322.0,
+  "description": "Ingredients: Pegylated Interferon Alfa-2b\nManufacturer: Zydus",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1960"
+}

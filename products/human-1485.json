@@ -1,0 +1,13 @@
+{
+  "id": "human-1485",
+  "name": "Cystone Syrup (1 bottle / 200 ml)",
+  "category": "General health",
+  "price": 10.76,
+  "description": "Ingredients: Pasanabheda + Shilapushpa + Small Caltrops\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1485"
+}

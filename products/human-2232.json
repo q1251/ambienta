@@ -1,0 +1,13 @@
+{
+  "id": "human-2232",
+  "name": "Asthalin Inhaler 200 doses 100 mcg",
+  "category": "Asthma",
+  "price": 9.88,
+  "description": "Ingredients: Salbutamol\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "inhaler",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2232"
+}

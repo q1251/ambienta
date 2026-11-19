@@ -1,0 +1,13 @@
+{
+  "id": "human-1307",
+  "name": "Adaferin Gel 0.1 % 15 g",
+  "category": "Skincare",
+  "price": 19.4,
+  "description": "Ingredients: Adapalene\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1307"
+}

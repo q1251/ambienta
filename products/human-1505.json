@@ -1,0 +1,13 @@
+{
+  "id": "human-1505",
+  "name": "Hiora K Mouthwash (1 bottle / 150 ml)",
+  "category": "Dental treatment",
+  "price": 5.4,
+  "description": "Ingredients: Clove + Potassium nitrate\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1505"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1009",
+  "name": "Eltroxin 25 mg (1 pack / 60 tabs)",
+  "category": "General health",
+  "price": 29.2,
+  "description": "Ingredients: Levothyroxine Sodium\nManufacturer: GlaxoSmithKline plc",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1009"
+}

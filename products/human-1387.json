@@ -1,0 +1,13 @@
+{
+  "id": "human-1387",
+  "name": "Eliquis 5 mg (1 pack / 20 tabs)",
+  "category": "General health",
+  "price": 85.92,
+  "description": "Ingredients: Apixaban\nManufacturer: Pfizer",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1387"
+}

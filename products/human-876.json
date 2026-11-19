@@ -1,0 +1,13 @@
+{
+  "id": "human-876",
+  "name": "Generic Chloroquine 500 mg",
+  "category": "Antimalaria",
+  "price": 0.24,
+  "description": "Ingredients: Chloroquine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-876"
+}

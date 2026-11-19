@@ -1,0 +1,13 @@
+{
+  "id": "human-261",
+  "name": "Generic Effexor 150 mg",
+  "category": "Antidepressant",
+  "price": 0.6,
+  "description": "Ingredients: Venlafaxine hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-261"
+}

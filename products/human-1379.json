@@ -1,0 +1,13 @@
+{
+  "id": "human-1379",
+  "name": "P-Carzine 50 mg (1 pack / 50 tabs)",
+  "category": "Anticancer",
+  "price": 120.0,
+  "description": "Ingredients: Procarbazine\nManufacturer: Alkem Laboratories Ltd",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1379"
+}

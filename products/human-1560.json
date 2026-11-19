@@ -1,0 +1,13 @@
+{
+  "id": "human-1560",
+  "name": "Renalka syrup (1 bottle / 200 ml)",
+  "category": "General health",
+  "price": 8.28,
+  "description": "Ingredients: Asparagus + Indian Sarsaparilla \" Nut Grass + Small Caltrops\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1560"
+}

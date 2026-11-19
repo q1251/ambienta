@@ -1,0 +1,13 @@
+{
+  "id": "human-899",
+  "name": "Generic Synthroid 50 mcg (1 pack / 100 tabs)",
+  "category": "General health",
+  "price": 7.8,
+  "description": "Ingredients: Levothyroxine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-899"
+}

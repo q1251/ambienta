@@ -1,0 +1,13 @@
+{
+  "id": "human-8",
+  "name": "VelaSof 100 mg / 400 mg (1 pack / 28 tabs)",
+  "category": "Hepatits, HCV range",
+  "price": 471.52,
+  "description": "Ingredients: Velpatasvir + Sofosbuvir\nManufacturer: Hetero",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-8"
+}

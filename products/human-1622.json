@@ -1,0 +1,13 @@
+{
+  "id": "human-1622",
+  "name": "Clindac A gel 1%",
+  "category": "Antibiotics",
+  "price": 13.76,
+  "description": "Ingredients: Clindamycin\nManufacturer: Alkem Laboratories Ltd",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1622"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1837",
+  "name": "Psorid 50 mg",
+  "category": "Immunosuppressant",
+  "price": 1.96,
+  "description": "Ingredients: Cyclosporine\nManufacturer: Biocon",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1837"
+}

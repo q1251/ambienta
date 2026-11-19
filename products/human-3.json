@@ -1,0 +1,13 @@
+{
+  "id": "human-3",
+  "name": "Velpanat 100 mg / 400 mg (1 pack / 28 tabs)",
+  "category": "Hepatits, HCV range",
+  "price": 642.84,
+  "description": "Ingredients: Sofosbuvir + Velpatasvir\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-3"
+}

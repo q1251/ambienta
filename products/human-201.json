@@ -1,0 +1,13 @@
+{
+  "id": "human-201",
+  "name": "Generic Claritin 10 mg",
+  "category": "Antiallergic",
+  "price": 0.72,
+  "description": "Ingredients: Loratadine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-201"
+}

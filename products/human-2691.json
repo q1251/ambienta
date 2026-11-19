@@ -1,0 +1,13 @@
+{
+  "id": "human-2691",
+  "name": "Spectra 10 mg",
+  "category": "Antidepressant",
+  "price": 0.68,
+  "description": "Ingredients: Doxepin\nManufacturer: Eris Lifesciences Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2691"
+}

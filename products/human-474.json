@@ -1,0 +1,13 @@
+{
+  "id": "human-474",
+  "name": "Generic Prednisone 10 mg",
+  "category": "Antiallergic",
+  "price": 0.16,
+  "description": "Ingredients: Prednisone\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-474"
+}

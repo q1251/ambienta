@@ -1,0 +1,13 @@
+{
+  "id": "human-2699",
+  "name": "Avol 500 CR (1 pack / 10 tabs)",
+  "category": "Antiepileptic",
+  "price": 3.28,
+  "description": "Ingredients: Sodium Valproate 333 mg)+ Valproic Acid 145 mg\nManufacturer: Elikem Pharma",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2699"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-318",
+  "name": "Generic Hyzaar 12.5 mg",
+  "category": "Blood Pressure",
+  "price": 0.56,
+  "description": "Ingredients: Hydrochlorothiazide + Losartan\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-318"
+}

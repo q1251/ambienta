@@ -1,0 +1,13 @@
+{
+  "id": "human-724",
+  "name": "Lumigan Eye Drop 0.03% w/v 3 ml",
+  "category": "Eye care",
+  "price": 54.12,
+  "description": "Ingredients: Bimatoprost ophthalmic\nManufacturer: Allergan",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-724"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1412",
+  "name": "Azadine 100 mg",
+  "category": "Anticancer",
+  "price": 96.36,
+  "description": "Ingredients: Azacitidine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1412"
+}

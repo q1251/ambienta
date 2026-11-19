@@ -1,0 +1,13 @@
+{
+  "id": "human-626",
+  "name": "Generic Remeron 15 mg",
+  "category": "Antidepressant",
+  "price": 0.48,
+  "description": "Ingredients: Mirtazapine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-626"
+}

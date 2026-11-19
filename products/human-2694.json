@@ -1,0 +1,13 @@
+{
+  "id": "human-2694",
+  "name": "Augmentin 1000 DUO",
+  "category": "Antibiotics",
+  "price": 4.52,
+  "description": "Ingredients: Amoxicillin + Clavulanic acid 1000mg\nManufacturer: GlaxoSmithKline plc",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2694"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1899",
+  "name": "Rifaxiheal 400 mg",
+  "category": "Antibiotics",
+  "price": 1.8,
+  "description": "Ingredients: Rifaximin\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1899"
+}

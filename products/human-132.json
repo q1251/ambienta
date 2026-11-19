@@ -1,0 +1,13 @@
+{
+  "id": "human-132",
+  "name": "Generic Ampicillin 500 mg",
+  "category": "Antibiotics",
+  "price": 0.44,
+  "description": "Ingredients: Ampicillin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-132"
+}

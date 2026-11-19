@@ -1,0 +1,13 @@
+{
+  "id": "human-999",
+  "name": "Andriol Testocap 40 mg (1 pack / 30 tabs)",
+  "category": "General health",
+  "price": 96.0,
+  "description": "Ingredients: Testosterone Undeconate\nManufacturer: Organon",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-999"
+}

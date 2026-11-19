@@ -1,0 +1,13 @@
+{
+  "id": "human-1430",
+  "name": "Amicline 500 mg",
+  "category": "Antimicrobial",
+  "price": 0.24,
+  "description": "Ingredients: Diloxanide Furoate\nManufacturer: Franco-Indian Pharmaceuticals PVT LTD",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1430"
+}

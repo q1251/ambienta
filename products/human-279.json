@@ -1,0 +1,13 @@
+{
+  "id": "human-279",
+  "name": "Generic Exelon 1.5 mg",
+  "category": "General health",
+  "price": 1.08,
+  "description": "Ingredients: Rivastigmine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-279"
+}

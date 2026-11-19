@@ -1,0 +1,13 @@
+{
+  "id": "human-551",
+  "name": "Zidovir 300 mg",
+  "category": "Hepatits, HCV range",
+  "price": 1.04,
+  "description": "Ingredients: Zidovudine\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-551"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-81",
+  "name": "Fertomid 50 mg",
+  "category": "Women's health",
+  "price": 0.68,
+  "description": "Ingredients: Clomifene\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-81"
+}

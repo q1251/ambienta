@@ -1,0 +1,13 @@
+{
+  "id": "human-1507",
+  "name": "HiOra-GA gel (1 tube /15 ml)",
+  "category": "General health",
+  "price": 3.96,
+  "description": "Ingredients: Black Pepper + Dates + Indian Gooseberry + Pea\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1507"
+}

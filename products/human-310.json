@@ -1,0 +1,13 @@
+{
+  "id": "human-310",
+  "name": "Generic Glucophage 500 mg",
+  "category": "Antidiabetic",
+  "price": 0.16,
+  "description": "Ingredients: Metformin Hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-310"
+}

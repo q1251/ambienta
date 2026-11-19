@@ -1,0 +1,13 @@
+{
+  "id": "human-1607",
+  "name": "Flecarite 100 mg",
+  "category": "Anti-arrhythmic",
+  "price": 2.2,
+  "description": "Ingredients: Flecainide\nManufacturer: Torrent Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1607"
+}

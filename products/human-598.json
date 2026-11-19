@@ -1,0 +1,13 @@
+{
+  "id": "human-598",
+  "name": "Generic Allopurinol 300 mg",
+  "category": "Antacid",
+  "price": 0.68,
+  "description": "Ingredients: Allopurinol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-598"
+}

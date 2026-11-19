@@ -1,0 +1,13 @@
+{
+  "id": "human-2299",
+  "name": "Angiotensin 2.5 mg",
+  "category": "Vitamins",
+  "price": 0.2,
+  "description": "Ingredients: Lisinopril\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2299"
+}

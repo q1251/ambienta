@@ -1,0 +1,13 @@
+{
+  "id": "human-76",
+  "name": "Duprost 0.5 mg",
+  "category": "Men's health",
+  "price": 1.8,
+  "description": "Ingredients: Dutasteride\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-76"
+}

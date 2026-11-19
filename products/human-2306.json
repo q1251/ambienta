@@ -1,0 +1,13 @@
+{
+  "id": "human-2306",
+  "name": "Betnovate 0.1% 20 g",
+  "category": "Skincare",
+  "price": 1.4,
+  "description": "Ingredients: Betamethasone Valerate\nManufacturer: GlaxoSmithKline plc",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2306"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-105",
+  "name": "Generic Accutane 30 mg",
+  "category": "Vitamins",
+  "price": 1.04,
+  "description": "Ingredients: Isotretinoin\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-105"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-666",
+  "name": "Generic Zovirax 400 mg",
+  "category": "Antiviral (Herpes)",
+  "price": 0.64,
+  "description": "Ingredients: Acyclovir\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-666"
+}

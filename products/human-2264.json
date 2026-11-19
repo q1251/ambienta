@@ -1,0 +1,13 @@
+{
+  "id": "human-2264",
+  "name": "Super Lash 0.03% w/v 3 ml",
+  "category": "Eye care",
+  "price": 14.04,
+  "description": "Ingredients: Bimatoprost ophthalmic\nManufacturer: Hab Pharmaceuticals",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2264"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1046",
+  "name": "Pomalid 2 mg (1 pack / 21 tabs)",
+  "category": "Anticancer",
+  "price": 460.0,
+  "description": "Ingredients: Pomalidomide\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1046"
+}

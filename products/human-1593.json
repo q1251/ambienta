@@ -1,0 +1,13 @@
+{
+  "id": "human-1593",
+  "name": "Verpin 6 mg",
+  "category": "Anti-parasite",
+  "price": 0.32,
+  "description": "Ingredients: Ivermectin\nManufacturer: Kosmica Dermacare",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1593"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-668",
+  "name": "Generic Calcort 6 mg",
+  "category": "Antiinflammatory",
+  "price": 0.76,
+  "description": "Ingredients: Deflazacort\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-668"
+}

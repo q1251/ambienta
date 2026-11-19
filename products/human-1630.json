@@ -1,0 +1,13 @@
+{
+  "id": "human-1630",
+  "name": "Zipsydon 20 mg",
+  "category": "Antipsychotic",
+  "price": 0.72,
+  "description": "Ingredients: Ziprasidone\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1630"
+}

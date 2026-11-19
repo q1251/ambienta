@@ -1,0 +1,13 @@
+{
+  "id": "human-367",
+  "name": "Generic Lioresal 10 mg",
+  "category": "Pain Relief",
+  "price": 0.24,
+  "description": "Ingredients: Baclofen\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-367"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1896",
+  "name": "Pacitane 2 mg",
+  "category": "Parkinson disease treatment",
+  "price": 0.24,
+  "description": "Ingredients: Trihexyphenidyl + Benzhexol\nManufacturer: Pfizer",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1896"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1304",
+  "name": "Acivir Cream 5% w/w 5 g",
+  "category": "Antiviral (Herpes)",
+  "price": 9.08,
+  "description": "Ingredients: Acyclovir\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1304"
+}

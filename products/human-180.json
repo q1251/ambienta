@@ -1,0 +1,13 @@
+{
+  "id": "human-180",
+  "name": "Generic Cardizem 60 mg",
+  "category": "Blood Pressure",
+  "price": 0.64,
+  "description": "Ingredients: Diltiazem Hydrochloride 60mg\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-180"
+}

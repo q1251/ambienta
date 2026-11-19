@@ -1,0 +1,13 @@
+{
+  "id": "human-2268",
+  "name": "Busidel 5 mg",
+  "category": "Anti anxiety",
+  "price": 0.16,
+  "description": "Ingredients: Buspirone\nManufacturer: Dellwich Healthcare Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2268"
+}

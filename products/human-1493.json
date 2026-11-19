@@ -1,0 +1,13 @@
+{
+  "id": "human-1493",
+  "name": "Geriforte Syrup (1 bottle / 200 ml)",
+  "category": "General health",
+  "price": 8.28,
+  "description": "Ingredients: Winter Cherry - chyavanaprasha\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1493"
+}

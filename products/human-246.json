@@ -1,0 +1,13 @@
+{
+  "id": "human-246",
+  "name": "Generic Differin 0.1% Gel 15 gm",
+  "category": "Skincare",
+  "price": 11.44,
+  "description": "Ingredients: Adapalene topical\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-246"
+}

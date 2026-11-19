@@ -1,0 +1,13 @@
+{
+  "id": "human-1260",
+  "name": "Evermil 5 mg (1 pack / 10 tabs)",
+  "category": "Immunosuppressant",
+  "price": 276.0,
+  "description": "Ingredients: Everolimus\nManufacturer: Glenmark",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1260"
+}

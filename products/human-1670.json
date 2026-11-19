@@ -1,0 +1,13 @@
+{
+  "id": "human-1670",
+  "name": "Entacom 200 mg",
+  "category": "Parkinson disease treatment",
+  "price": 0.72,
+  "description": "Ingredients: Entacapone\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1670"
+}

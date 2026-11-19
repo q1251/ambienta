@@ -1,0 +1,13 @@
+{
+  "id": "human-506",
+  "name": "Ricovir L 300 mg / 300 mg (1 pack / 30 tabs)",
+  "category": "Hepatits, HCV range",
+  "price": 48.0,
+  "description": "Ingredients: Tamofovir Disoproxil Fumarate + Lamivudine\nManufacturer: Mylan",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-506"
+}

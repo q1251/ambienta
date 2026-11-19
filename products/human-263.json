@@ -1,0 +1,13 @@
+{
+  "id": "human-263",
+  "name": "Generic Elavil 25 mg",
+  "category": "Antidepressant",
+  "price": 0.24,
+  "description": "Ingredients: Amitriptyline\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-263"
+}

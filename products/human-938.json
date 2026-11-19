@@ -1,0 +1,13 @@
+{
+  "id": "human-938",
+  "name": "Generic Betnovate 0.1% 20 g",
+  "category": "Skincare",
+  "price": 1.32,
+  "description": "Ingredients: Betamethasone Valerate\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-938"
+}

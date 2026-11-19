@@ -1,0 +1,13 @@
+{
+  "id": "human-175",
+  "name": "Generic Carafate 1 gm",
+  "category": "Antacid",
+  "price": 0.4,
+  "description": "Ingredients: Sucralfate\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-175"
+}

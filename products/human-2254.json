@@ -1,0 +1,13 @@
+{
+  "id": "human-2254",
+  "name": "Amlode 10 mg",
+  "category": "Blood Pressure",
+  "price": 0.16,
+  "description": "Ingredients: Amlodipine\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2254"
+}

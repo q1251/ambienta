@@ -1,0 +1,13 @@
+{
+  "id": "human-78",
+  "name": "Dutas 0.5 mg",
+  "category": "Men's health",
+  "price": 2.28,
+  "description": "Ingredients: Dutasteride\nManufacturer: Dr.Reddys",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-78"
+}

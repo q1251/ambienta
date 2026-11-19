@@ -1,0 +1,13 @@
+{
+  "id": "human-2042",
+  "name": "Almox 250 mg",
+  "category": "Antibiotics",
+  "price": 0.32,
+  "description": "Ingredients: Amoxycillin\nManufacturer: Alkem Laboratories Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2042"
+}

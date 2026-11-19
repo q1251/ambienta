@@ -1,0 +1,13 @@
+{
+  "id": "human-2406",
+  "name": "Iverheal 6 mg",
+  "category": "Anti-parasite",
+  "price": 0.36,
+  "description": "Ingredients: Ivermectin\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2406"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-2433",
+  "name": "Tretiva 40 mg",
+  "category": "Vitamins",
+  "price": 2.32,
+  "description": "Ingredients: Isotretinoin\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2433"
+}

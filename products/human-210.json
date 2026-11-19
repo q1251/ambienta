@@ -1,0 +1,13 @@
+{
+  "id": "human-210",
+  "name": "Generic Coreg 25 mg",
+  "category": "Blood Pressure",
+  "price": 0.72,
+  "description": "Ingredients: Carvedilol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-210"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1613",
+  "name": "Doxydan 100 mg",
+  "category": "Antibiotics",
+  "price": 0.32,
+  "description": "Ingredients: Doxycycline\nManufacturer: Danish Healthcare",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1613"
+}

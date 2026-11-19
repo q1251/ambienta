@@ -1,0 +1,13 @@
+{
+  "id": "human-2528",
+  "name": "Netarasudil Eye Drop 2.5 ml",
+  "category": "Eye care",
+  "price": 23.56,
+  "description": "Ingredients: Netasaudil Ophthlmic Solution\nManufacturer: Ipca Labaratories",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2528"
+}

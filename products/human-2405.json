@@ -1,0 +1,13 @@
+{
+  "id": "human-2405",
+  "name": "Raloxiheal 60 mg",
+  "category": "Women's health",
+  "price": 1.16,
+  "description": "Ingredients: Raloxifene\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2405"
+}

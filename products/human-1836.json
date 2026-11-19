@@ -1,0 +1,13 @@
+{
+  "id": "human-1836",
+  "name": "Cellcept 500 mg",
+  "category": "Immunosuppressant",
+  "price": 4.68,
+  "description": "Ingredients: Mycophenolate mofetil\nManufacturer: Roche",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1836"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-278",
+  "name": "Generic Evista 60 mg",
+  "category": "General health",
+  "price": 0.96,
+  "description": "Ingredients: Raloxifene\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-278"
+}

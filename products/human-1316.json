@@ -1,0 +1,13 @@
+{
+  "id": "human-1316",
+  "name": "Isotroin 10 mg",
+  "category": "Vitamins",
+  "price": 1.52,
+  "description": "Ingredients: Isotretinoin\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1316"
+}

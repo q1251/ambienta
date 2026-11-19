@@ -1,0 +1,13 @@
+{
+  "id": "human-405",
+  "name": "Generic Minomycin 100 mg",
+  "category": "Antibiotics",
+  "price": 2.72,
+  "description": "Ingredients: Minocycline Hydrochloride 100mg\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-405"
+}

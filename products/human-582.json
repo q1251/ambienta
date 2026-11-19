@@ -1,0 +1,13 @@
+{
+  "id": "human-582",
+  "name": "Thalix 100 mg (1 pack / 30 caps)",
+  "category": "Anticancer",
+  "price": 57.6,
+  "description": "Ingredients: Thalidomide\nManufacturer: Natco",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-582"
+}

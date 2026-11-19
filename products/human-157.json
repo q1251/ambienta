@@ -1,0 +1,13 @@
+{
+  "id": "human-157",
+  "name": "Generic Avapro 150 mg",
+  "category": "Blood Pressure",
+  "price": 0.92,
+  "description": "Ingredients: Irbesartan\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-157"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1833",
+  "name": "Xeljanz 5 mg (1 pack / 60 tab)",
+  "category": "Immunosuppressant",
+  "price": 1512.0,
+  "description": "Ingredients: Tofacitinib\nManufacturer: Pfizer",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1833"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-439",
+  "name": "Generic Norvasc 10 mg",
+  "category": "Blood Pressure",
+  "price": 0.16,
+  "description": "Ingredients: Amlodipine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-439"
+}

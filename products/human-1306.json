@@ -1,0 +1,13 @@
+{
+  "id": "human-1306",
+  "name": "Acivir Eye Ointment 3% w/w 5 g",
+  "category": "Antiviral (Herpes)",
+  "price": 4.16,
+  "description": "Ingredients: Acyclovir\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1306"
+}

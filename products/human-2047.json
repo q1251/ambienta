@@ -1,0 +1,13 @@
+{
+  "id": "human-2047",
+  "name": "Clomiford 50 mg",
+  "category": "Women's health",
+  "price": 0.32,
+  "description": "Ingredients: Clomifene\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2047"
+}

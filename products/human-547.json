@@ -1,0 +1,13 @@
+{
+  "id": "human-547",
+  "name": "Lamivir HBV 100 mg",
+  "category": "Hepatits, HCV range",
+  "price": 1.16,
+  "description": "Ingredients: Lamivudine\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-547"
+}

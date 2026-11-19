@@ -1,0 +1,13 @@
+{
+  "id": "human-1314",
+  "name": "Anabrez 1 mg",
+  "category": "Women's health",
+  "price": 3.92,
+  "description": "Ingredients: Anastrozole\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1314"
+}

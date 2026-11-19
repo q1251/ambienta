@@ -1,0 +1,13 @@
+{
+  "id": "human-1321",
+  "name": "Sildigra 120 mg",
+  "category": "Erectile dysfunction",
+  "price": 0.6,
+  "description": "Ingredients: Sildenafil\nManufacturer: Centurion Laboratories",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1321"
+}

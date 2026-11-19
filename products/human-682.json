@@ -1,0 +1,13 @@
+{
+  "id": "human-682",
+  "name": "Duzela 60 mg",
+  "category": "Antidepressant",
+  "price": 1.68,
+  "description": "Ingredients: Duloxetine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-682"
+}

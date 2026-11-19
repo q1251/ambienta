@@ -1,0 +1,13 @@
+{
+  "id": "human-901",
+  "name": "Generic Strattera 10 mg",
+  "category": "General health",
+  "price": 0.4,
+  "description": "Ingredients: Atomoxetine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-901"
+}

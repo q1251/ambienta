@@ -1,0 +1,13 @@
+{
+  "id": "human-125",
+  "name": "Generic Altace 10 mg",
+  "category": "Blood Pressure",
+  "price": 0.48,
+  "description": "Ingredients: Ramipril\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-125"
+}

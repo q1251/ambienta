@@ -1,0 +1,13 @@
+{
+  "id": "human-2394",
+  "name": "Hvtek Plus 12 mg",
+  "category": "Anti-parasite",
+  "price": 0.24,
+  "description": "Ingredients: Ivermectin\nManufacturer: Healhub Pharmaceutircals",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2394"
+}

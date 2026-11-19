@@ -1,0 +1,13 @@
+{
+  "id": "human-1608",
+  "name": "Nitrobest 100 mg",
+  "category": "Antibiotics",
+  "price": 0.96,
+  "description": "Ingredients: Nitrofurantion\nManufacturer: Lupin Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1608"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-994",
+  "name": "Generic Colchicine 0.5 mg",
+  "category": "General health",
+  "price": 0.48,
+  "description": "Ingredients: Colchicine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-994"
+}

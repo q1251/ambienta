@@ -1,0 +1,13 @@
+{
+  "id": "human-2533",
+  "name": "Nervigesic 300 mg (1 pack / 150 caps)",
+  "category": "Anticonvulsant",
+  "price": 57.6,
+  "description": "Ingredients: Pregabalin\nManufacturer: Signature Pharmaseuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2533"
+}

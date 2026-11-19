@@ -1,0 +1,13 @@
+{
+  "id": "human-1263",
+  "name": "Vega 100 mg",
+  "category": "Erectile dysfunction",
+  "price": 0.64,
+  "description": "Ingredients: Sildenafil Citrate\nManufacturer: Signature Pharmaseuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1263"
+}

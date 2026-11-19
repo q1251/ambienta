@@ -1,0 +1,13 @@
+{
+  "id": "human-2308",
+  "name": "Caberdost 0.5 mg",
+  "category": "Hypoprolactenemia",
+  "price": 3.08,
+  "description": "Ingredients: Cabergoline\nManufacturer: Hab Pharmaceuticals",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2308"
+}

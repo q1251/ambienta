@@ -1,0 +1,13 @@
+{
+  "id": "human-1434",
+  "name": "Bupron XL 150 mg",
+  "category": "Antidepressant",
+  "price": 1.08,
+  "description": "Ingredients: Bupropion\nManufacturer: Sun Pharmaceuticals Industries",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1434"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-1846",
+  "name": "Maball 500 mg",
+  "category": "Immunosuppressant",
+  "price": 713.0,
+  "description": "Ingredients: Rituximab\nManufacturer: Mylan",
+  "rxRequired": false,
+  "dosage": "vial",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1846"
+}

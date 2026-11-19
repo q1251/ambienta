@@ -1,0 +1,13 @@
+{
+  "id": "human-333",
+  "name": "Generic Inderal 20 mg",
+  "category": "Blood Pressure",
+  "price": 0.32,
+  "description": "Ingredients: Propranolol\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-333"
+}

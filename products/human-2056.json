@@ -1,0 +1,13 @@
+{
+  "id": "human-2056",
+  "name": "Iverjohn 6 mg",
+  "category": "Anti-parasite",
+  "price": 0.56,
+  "description": "Ingredients: Ivermectine\nManufacturer: JohnLee Pharmaceutical",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2056"
+}

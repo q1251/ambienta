@@ -1,0 +1,13 @@
+{
+  "id": "human-2236",
+  "name": "Itin 6 mg",
+  "category": "Anti-parasite",
+  "price": 1.32,
+  "description": "Ingredients: Ivermectin\nManufacturer: Canixa Life Sciences Pvt Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2236"
+}

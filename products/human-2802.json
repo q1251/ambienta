@@ -1,0 +1,13 @@
+{
+  "id": "human-2802",
+  "name": "Oxlone 10 mg",
+  "category": "Steroids",
+  "price": 0.68,
+  "description": "Ingredients: Oxandrolone\nManufacturer: Skyrock Inc Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2802"
+}

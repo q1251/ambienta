@@ -1,0 +1,13 @@
+{
+  "id": "human-1140",
+  "name": "Atorlip 10 mg",
+  "category": "Cholesterol reduce",
+  "price": 0.68,
+  "description": "Ingredients: Atrovastatin\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1140"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-727",
+  "name": "Axepta 18 mg",
+  "category": "General health",
+  "price": 1.16,
+  "description": "Ingredients: Atomoxetine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-727"
+}

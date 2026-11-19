@@ -1,0 +1,13 @@
+{
+  "id": "human-546",
+  "name": "Lamivir 150 mg",
+  "category": "Hepatits, HCV range",
+  "price": 1.04,
+  "description": "Ingredients: Lamividine\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-546"
+}

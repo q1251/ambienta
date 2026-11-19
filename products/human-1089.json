@@ -1,0 +1,13 @@
+{
+  "id": "human-1089",
+  "name": "Tretiva 10 mg",
+  "category": "Vitamins",
+  "price": 1.08,
+  "description": "Ingredients: Isotretinoin\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1089"
+}

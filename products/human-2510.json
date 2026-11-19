@@ -1,0 +1,13 @@
+{
+  "id": "human-2510",
+  "name": "Glycoheal 1000 mg (1 pack / 10 pills)",
+  "category": "Antidiabetic",
+  "price": 2.08,
+  "description": "Ingredients: Metformin Hydrochloride\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2510"
+}

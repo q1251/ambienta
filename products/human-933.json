@@ -1,0 +1,13 @@
+{
+  "id": "human-933",
+  "name": "Generic Elocon Cream 0.1% 10 g",
+  "category": "Skincare",
+  "price": 15.24,
+  "description": "Ingredients: Mometasone Furoate\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-933"
+}

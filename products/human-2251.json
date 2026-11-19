@@ -1,0 +1,13 @@
+{
+  "id": "human-2251",
+  "name": "Testoheal gel 5 gm",
+  "category": "Steroids",
+  "price": 3.68,
+  "description": "Ingredients: Testosterone\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "sachets",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2251"
+}

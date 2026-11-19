@@ -1,0 +1,13 @@
+{
+  "id": "human-107",
+  "name": "Generic Acetaminophen 500 mg",
+  "category": "Pain Relief",
+  "price": 0.08,
+  "description": "Ingredients: Acetaminophen\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "caps",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-107"
+}

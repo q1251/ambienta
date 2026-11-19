@@ -1,0 +1,13 @@
+{
+  "id": "human-328",
+  "name": "Generic Imitrex 25 mg",
+  "category": "Pain Relief",
+  "price": 2.6,
+  "description": "Ingredients: Sumatriptan Succinate\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-328"
+}

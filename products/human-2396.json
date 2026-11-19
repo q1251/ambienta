@@ -1,0 +1,13 @@
+{
+  "id": "human-2396",
+  "name": "Budecort 200 mcg",
+  "category": "Steroids",
+  "price": 26.0,
+  "description": "Ingredients: Budesonide\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "inhaler",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2396"
+}

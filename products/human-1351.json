@@ -1,0 +1,13 @@
+{
+  "id": "human-1351",
+  "name": "HardOn 100 mg",
+  "category": "Erectile dysfunction",
+  "price": 1.04,
+  "description": "Ingredients: Sildenafil\nManufacturer: Aurochem labs",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1351"
+}

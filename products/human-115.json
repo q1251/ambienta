@@ -1,0 +1,13 @@
+{
+  "id": "human-115",
+  "name": "Generic Albenza 400 mg",
+  "category": "Gastrointestinal",
+  "price": 0.72,
+  "description": "Ingredients: Albendazole\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-115"
+}

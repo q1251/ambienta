@@ -1,0 +1,13 @@
+{
+  "id": "human-1415",
+  "name": "Flonida 5% cream 10 g",
+  "category": "Anticancer",
+  "price": 16.16,
+  "description": "Ingredients: Fluorouracil\nManufacturer: Menarini",
+  "rxRequired": false,
+  "dosage": "tube",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1415"
+}

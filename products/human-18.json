@@ -1,0 +1,13 @@
+{
+  "id": "human-18",
+  "name": "Hepcvel 400 mg / 100 mg (1 pack / 28 tabs)",
+  "category": "Hepatits, HCV range",
+  "price": 529.0,
+  "description": "Ingredients: Sofosbuvir + Velpatasvir\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-18"
+}

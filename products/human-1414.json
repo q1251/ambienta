@@ -1,0 +1,13 @@
+{
+  "id": "human-1414",
+  "name": "Cyclophil ME 100 mg (1 pack / 30 caps)",
+  "category": "Immunosuppressant",
+  "price": 158.4,
+  "description": "Ingredients: Cyclosporine\nManufacturer: Biocon",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1414"
+}

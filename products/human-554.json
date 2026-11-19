@@ -1,0 +1,13 @@
+{
+  "id": "human-554",
+  "name": "Zovirax 400 mg",
+  "category": "Antiviral (Herpes)",
+  "price": 1.04,
+  "description": "Ingredients: Acyclovir\nManufacturer: GlaxoSmithKline plc",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-554"
+}

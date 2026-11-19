@@ -1,0 +1,13 @@
+{
+  "id": "human-280",
+  "name": "Generic Exelon 3 mg",
+  "category": "General health",
+  "price": 1.2,
+  "description": "Ingredients: Rivastigmine\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-280"
+}

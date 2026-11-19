@@ -1,0 +1,13 @@
+{
+  "id": "human-553",
+  "name": "Zovirax 200 mg",
+  "category": "Antiviral (Herpes)",
+  "price": 0.72,
+  "description": "Ingredients: Acyclovir\nManufacturer: GlaxoSmithKline plc",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-553"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "human-2500",
+  "name": "Iverheal 12 mg",
+  "category": "Anti-parasite",
+  "price": 0.4,
+  "description": "Ingredients: Ivermectin\nManufacturer: Healing Pharma",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-2500"
+}

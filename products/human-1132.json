@@ -1,0 +1,13 @@
+{
+  "id": "human-1132",
+  "name": "Rocas 1 mg ( 1 pack / 6 tabs)",
+  "category": "Immunosuppressant",
+  "price": 28.08,
+  "description": "Ingredients: Sirolimus\nManufacturer: Emcure Pharmaceuticals Ltd.",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1132"
+}

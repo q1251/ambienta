@@ -1,0 +1,13 @@
+{
+  "id": "human-1438",
+  "name": "Rizact 5 mg",
+  "category": "Pain Relief",
+  "price": 3.16,
+  "description": "Ingredients: Rizatriptan\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1438"
+}

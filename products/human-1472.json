@@ -1,0 +1,13 @@
+{
+  "id": "human-1472",
+  "name": "Bonnisan Liquid (1 bottle / 200 ml)",
+  "category": "Gastrointestinal",
+  "price": 5.76,
+  "description": "Ingredients: Dill Oil + Indian Gooseberry + Tinospora Gulancha\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1472"
+}

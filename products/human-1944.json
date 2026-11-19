@@ -1,0 +1,13 @@
+{
+  "id": "human-1944",
+  "name": "Xylutide 40 mg (1 pack / 28 caps)",
+  "category": "Anticancer",
+  "price": 506.0,
+  "description": "Ingredients: Enzalutamide\nManufacturer: Cipla",
+  "rxRequired": false,
+  "dosage": "pack",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1944"
+}

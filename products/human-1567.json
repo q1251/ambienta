@@ -1,0 +1,13 @@
+{
+  "id": "human-1567",
+  "name": "Septilyn syrup (1 bottle / 200 ml)",
+  "category": "Immunostimulator",
+  "price": 8.64,
+  "description": "Ingredients: Indian Bdellium + Licorice + Tinospora Gulancha\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1567"
+}

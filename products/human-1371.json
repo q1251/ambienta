@@ -1,0 +1,13 @@
+{
+  "id": "human-1371",
+  "name": "Generic Candesartan 16 mg",
+  "category": "Blood Pressure",
+  "price": 0.96,
+  "description": "Ingredients: Candesartan\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1371"
+}

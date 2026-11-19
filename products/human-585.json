@@ -1,0 +1,13 @@
+{
+  "id": "human-585",
+  "name": "Amitone 75 mg",
+  "category": "Antidepressant",
+  "price": 0.48,
+  "description": "Ingredients: Amitriptyline\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "tabs",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-585"
+}

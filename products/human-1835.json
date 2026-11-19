@@ -1,0 +1,13 @@
+{
+  "id": "human-1835",
+  "name": "Azapure 50 mg",
+  "category": "Immunosuppressant",
+  "price": 1.56,
+  "description": "Ingredients: Azathioprine\nManufacturer: Intas Pharmaceuticals Ltd",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1835"
+}

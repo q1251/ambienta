@@ -1,0 +1,13 @@
+{
+  "id": "human-306",
+  "name": "Generic Geodon 40 mg",
+  "category": "Antidepressant",
+  "price": 1.16,
+  "description": "Ingredients: Ziprasidone hydrochloride\nManufacturer: India",
+  "rxRequired": false,
+  "dosage": "pills",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-306"
+}

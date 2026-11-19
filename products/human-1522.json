@@ -1,0 +1,13 @@
+{
+  "id": "human-1522",
+  "name": "Koflet syrup (1 bottle / 100 ml)",
+  "category": "Cough reliever",
+  "price": 5.4,
+  "description": "Ingredients: Holy Basil + Honey + Licorice\nManufacturer: Himalaya",
+  "rxRequired": false,
+  "dosage": "bottle",
+  "inStock": false,
+  "stockCount": 0,
+  "minStockThreshold": 0,
+  "sku": "human-1522"
+}
