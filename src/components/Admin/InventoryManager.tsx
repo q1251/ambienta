@@ -17,6 +17,8 @@ import {
   Layers,
   ArrowUpDown,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   EyeOff,
   Star,
@@ -48,6 +50,7 @@ interface PendingProductImage {
 
 const getProductImages = (item: CatalogItem): string[] =>
   item.images?.length ? item.images : item.image ? [item.image] : [];
+const PRODUCTS_PER_PAGE = 25;
 
 export const InventoryManager: React.FC<InventoryManagerProps> = ({
   catalogItems,
@@ -65,6 +68,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [stockStatusFilter, setStockStatusFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -216,6 +220,63 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
     return matchesSearch && matchesCategory && matchesStock;
   });
+  const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+  const visiblePage = Math.min(currentPage, pageCount);
+  const pageProducts = filteredProducts.slice(
+    (visiblePage - 1) * PRODUCTS_PER_PAGE,
+    visiblePage * PRODUCTS_PER_PAGE,
+  );
+  const pageStart = filteredProducts.length === 0 ? 0 : (visiblePage - 1) * PRODUCTS_PER_PAGE + 1;
+  const pageEnd = Math.min(visiblePage * PRODUCTS_PER_PAGE, filteredProducts.length);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter, stockStatusFilter]);
+
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [currentPage, pageCount]);
+
+  const changePage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, pageCount)));
+    document.getElementById('inventory-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const renderPagination = (placement: 'top' | 'bottom') => (
+    filteredProducts.length > PRODUCTS_PER_PAGE && (
+      <nav
+        aria-label={`Product inventory pagination ${placement}`}
+        className="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row"
+      >
+        <p className="text-xs text-slate-500" aria-live="polite">
+          Showing {pageStart}–{pageEnd} of {filteredProducts.length} products
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={visiblePage <= 1}
+            onClick={() => changePage(visiblePage - 1)}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
+          <span className="min-w-20 text-center text-xs font-semibold text-slate-600" aria-current="page">
+            Page {visiblePage} of {pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={visiblePage >= pageCount}
+            onClick={() => changePage(visiblePage + 1)}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </nav>
+    )
+  );
 
   const handleStockAdjust = async (item: CatalogItem, delta: number) => {
     const newCount = Math.max(0, item.stockCount + delta);
@@ -736,8 +797,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       </div>
 
       {/* Inventory & Price Adjustments Table */}
+      {renderPagination('top')}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div id="inventory-products" className="overflow-x-auto scroll-mt-24">
           <table className="w-full min-w-[1100px] text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
               <tr>
@@ -752,7 +814,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((item) => {
+              {pageProducts.map((item) => {
                 const isLow = item.stockCount <= item.minStockThreshold && item.stockCount > 0;
                 const isOut = item.stockCount <= 0;
 
@@ -970,6 +1032,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
           </div>
         )}
       </div>
+      {renderPagination('bottom')}
 
       {isProductCsvOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="product-csv-title">
