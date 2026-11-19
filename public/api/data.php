@@ -496,6 +496,9 @@ function data_ensure_schema(PDO $db): void
             cost_price DECIMAL(10,2) NULL,
             copay_price DECIMAL(10,2) NULL,
             price DECIMAL(10,2) NOT NULL,
+            price_per_pill DECIMAL(10,2) NULL,
+            pills_per_package INT UNSIGNED NULL,
+            storefront_price_mode VARCHAR(16) NOT NULL DEFAULT 'package',
             stock_count INT UNSIGNED NOT NULL,
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             is_featured TINYINT(1) NOT NULL DEFAULT 0,
@@ -504,6 +507,17 @@ function data_ensure_schema(PDO $db): void
             UNIQUE KEY products_sku (sku)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    foreach ([
+        ['price_per_pill', 'DECIMAL(10,2) NULL'],
+        ['pills_per_package', 'INT UNSIGNED NULL'],
+        ['storefront_price_mode', "VARCHAR(16) NOT NULL DEFAULT 'package'"],
+    ] as [$column, $definition]) {
+        $columnExists = $db->prepare('SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $columnExists->execute([$databaseName, 'products', $column]);
+        if ((int) $columnExists->fetchColumn() === 0) {
+            $db->exec("ALTER TABLE products ADD COLUMN {$column} {$definition}");
+        }
+    }
     $db->exec(
         "CREATE TABLE IF NOT EXISTS product_categories (
             name VARCHAR(80) NOT NULL PRIMARY KEY,
@@ -2591,6 +2605,9 @@ function data_product_row(array $row): array
         'image' => $images[0] ?? $row['image'],
         'images' => $images,
         'price' => (float) $row['price'],
+        ...($row['price_per_pill'] === null ? [] : ['pricePerPill' => (float) $row['price_per_pill']]),
+        ...($row['pills_per_package'] === null ? [] : ['pillsPerPackage' => (int) $row['pills_per_package']]),
+        'storefrontPriceMode' => $row['storefront_price_mode'] === 'per_pill' ? 'per_pill' : 'package',
         'costPrice' => $row['cost_price'] === null ? null : (float) $row['cost_price'],
         'copayPrice' => $row['copay_price'] === null ? null : (float) $row['copay_price'],
         'stockCount' => $stock,
@@ -2652,12 +2669,36 @@ function data_product_input(PDO $db, array $body, bool $isUpdate): array
         data_respond(400, ['error' => 'invalid_product_images', 'message' => 'A product can have up to 10 images.']);
     }
     $price = $body['price'] ?? null;
+    $pricePerPill = $body['pricePerPill'] ?? null;
+    $pillsPerPackage = $body['pillsPerPackage'] ?? null;
+    $storefrontPriceMode = $body['storefrontPriceMode'] ?? 'package';
     $stock = $body['stockCount'] ?? null;
     $minimum = $body['minStockThreshold'] ?? 0;
     $cost = $body['costPrice'] ?? null;
     $copay = $body['copayPrice'] ?? null;
-    if (!is_numeric($price) || (float) $price < 0 || (float) $price > 99999999.99) {
+    $hasPillPricing = $pricePerPill !== null || $pillsPerPackage !== null;
+    if ($hasPillPricing) {
+        if (
+            $pricePerPill === null
+            || !is_numeric($pricePerPill)
+            || (float) $pricePerPill < 0
+            || (float) $pricePerPill > 99999999.99
+            || !is_int($pillsPerPackage)
+            || $pillsPerPackage < 1
+            || $pillsPerPackage > 100000000
+        ) {
+            data_respond(400, ['error' => 'invalid_pill_pricing', 'message' => 'Enter a valid price per pill and whole-number pill count.']);
+        }
+        $pricePerPill = round((float) $pricePerPill, 2);
+        $price = round($pricePerPill * $pillsPerPackage, 2);
+        if ($price > 99999999.99) {
+            data_respond(400, ['error' => 'invalid_pill_pricing', 'message' => 'The calculated package price exceeds the supported maximum.']);
+        }
+    } elseif (!is_numeric($price) || (float) $price < 0 || (float) $price > 99999999.99) {
         data_respond(400, ['error' => 'invalid_price', 'message' => 'Enter a valid product price.']);
+    }
+    if (!in_array($storefrontPriceMode, ['package', 'per_pill'], true) || ($storefrontPriceMode === 'per_pill' && !$hasPillPricing)) {
+        data_respond(400, ['error' => 'invalid_storefront_price_mode', 'message' => 'Choose a valid storefront price display.']);
     }
     if (!is_int($stock) || $stock < 0 || $stock > 100000000 || !is_int($minimum) || $minimum < 0 || $minimum > 100000000) {
         data_respond(400, ['error' => 'invalid_stock', 'message' => 'Stock values must be non-negative whole numbers.']);
@@ -2695,6 +2736,9 @@ function data_product_input(PDO $db, array $body, bool $isUpdate): array
         'image' => $validatedImages[0] ?? null,
         'images' => $validatedImages,
         'price' => round((float) $price, 2),
+        'pricePerPill' => $hasPillPricing ? $pricePerPill : null,
+        'pillsPerPackage' => $hasPillPricing ? $pillsPerPackage : null,
+        'storefrontPriceMode' => $storefrontPriceMode,
         'costPrice' => $cost === null ? null : round((float) $cost, 2),
         'copayPrice' => $copay === null ? null : round((float) $copay, 2),
         'stockCount' => $stock,
@@ -5757,14 +5801,16 @@ if ($method === 'POST' && $resource === 'products') {
     $db->beginTransaction();
     try {
         $insert = $db->prepare(
-            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, images, price, cost_price, copay_price, stock_count, min_stock_threshold, is_active, is_featured, last_restocked)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO products (id, name, category, description, rx_required, dosage, sku, ndc_code, image, images, price, price_per_pill, pills_per_package, storefront_price_mode, cost_price, copay_price, stock_count, min_stock_threshold, is_active, is_featured, last_restocked)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         foreach ($products as $product) {
             $insert->execute([
                 $product['id'], $product['name'], $product['category'], $product['description'],
                 (int) $product['rxRequired'], $product['dosage'], $product['sku'], $product['ndcCode'],
-                $product['image'], json_encode($product['images'], JSON_UNESCAPED_SLASHES), $product['price'], $product['costPrice'], $product['copayPrice'],
+                $product['image'], json_encode($product['images'], JSON_UNESCAPED_SLASHES), $product['price'],
+                $product['pricePerPill'], $product['pillsPerPackage'], $product['storefrontPriceMode'],
+                $product['costPrice'], $product['copayPrice'],
                 $product['stockCount'], $product['minStockThreshold'], (int) $product['isActive'], (int) $product['isFeatured'],
                 $product['stockCount'] > 0 ? gmdate('Y-m-d') : null,
             ]);
@@ -6003,13 +6049,14 @@ if ($method === 'PATCH' && $resource === 'products') {
     try {
         $update = $db->prepare(
             'UPDATE products SET name = ?, category = ?, description = ?, rx_required = ?, dosage = ?, sku = ?, ndc_code = ?, image = ?, images = ?,
-             price = ?, cost_price = ?, copay_price = ?, stock_count = ?, min_stock_threshold = ?, is_active = ?, is_featured = ?,
+             price = ?, price_per_pill = ?, pills_per_package = ?, storefront_price_mode = ?, cost_price = ?, copay_price = ?, stock_count = ?, min_stock_threshold = ?, is_active = ?, is_featured = ?,
              last_restocked = IF(stock_count < ?, CURDATE(), last_restocked) WHERE id = ? AND is_archived = 0'
         );
         $update->execute([
             $product['name'], $product['category'], $product['description'], (int) $product['rxRequired'],
             $product['dosage'], $product['sku'], $product['ndcCode'], $product['image'],
             json_encode($product['images'], JSON_UNESCAPED_SLASHES), $product['price'],
+            $product['pricePerPill'], $product['pillsPerPackage'], $product['storefrontPriceMode'],
             $product['costPrice'], $product['copayPrice'], $product['stockCount'], $product['minStockThreshold'],
             (int) $product['isActive'], (int) $product['isFeatured'],
             $product['stockCount'], $product['id'],

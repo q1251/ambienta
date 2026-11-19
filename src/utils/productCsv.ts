@@ -1,5 +1,6 @@
 import { CatalogItem } from '../types/pharmacy';
 import { parseCsvRows } from './csv';
+import { calculatePackagePrice } from './productPricing';
 
 export type ProductCsvItem = Omit<CatalogItem, 'id' | 'inStock' | 'lastRestocked'>;
 
@@ -47,6 +48,9 @@ export function parseProductsCsv(
     copay: column('copay_price', 'copay'),
     ndc: column('ndc_code', 'ndc'),
     image: column('image', 'image_url'),
+    pricePerPill: column('price_per_pill'),
+    pillsPerPackage: column('pills_per_package', 'pill_count'),
+    storefrontPriceMode: column('storefront_price_mode'),
   };
   const required = ['name', 'category', 'sku', 'price', 'stock'] as const;
   const missing = required.filter((key) => columns[key] === -1);
@@ -78,7 +82,7 @@ export function parseProductsCsv(
     const sku = value(cells, columns.sku);
     const rawPrice = value(cells, columns.price);
     const rawStock = value(cells, columns.stock);
-    const price = Number(rawPrice);
+    let price = Number(rawPrice);
     const stockCount = Number(rawStock);
 
     if (!name || byteLength(name) > 180 || !category || byteLength(category) > 80 || !sku || byteLength(sku) > 80) {
@@ -93,12 +97,47 @@ export function parseProductsCsv(
       errors.push(`Row ${rowNumber}: SKU "${sku}" is duplicated in this file or already exists.`);
       continue;
     }
-    if (!rawPrice || !Number.isFinite(price) || price < 0 || price > 99999999.99) {
-      errors.push(`Row ${rowNumber}: price must be a non-negative number.`);
-      continue;
-    }
     if (!rawStock || !Number.isInteger(stockCount) || stockCount < 0 || stockCount > 100000000) {
       errors.push(`Row ${rowNumber}: stock must be a non-negative whole number.`);
+      continue;
+    }
+
+    const rawPricePerPill = value(cells, columns.pricePerPill);
+    const pricePerPill = parseOptionalPrice(rawPricePerPill, 'Price per pill', rowNumber);
+    const rawPillsPerPackage = value(cells, columns.pillsPerPackage);
+    const pillsPerPackage = rawPillsPerPackage ? Number(rawPillsPerPackage) : undefined;
+    if (
+      (rawPricePerPill && pricePerPill === undefined)
+      || (rawPillsPerPackage && (!Number.isInteger(pillsPerPackage) || pillsPerPackage! < 1 || pillsPerPackage! > 100000000))
+    ) {
+      if (rawPillsPerPackage && (!Number.isInteger(pillsPerPackage) || pillsPerPackage! < 1 || pillsPerPackage! > 100000000)) {
+        errors.push(`Row ${rowNumber}: pills_per_package must be a whole number between 1 and 100,000,000.`);
+      }
+      continue;
+    }
+    if ((pricePerPill === undefined) !== (pillsPerPackage === undefined)) {
+      errors.push(`Row ${rowNumber}: provide both price_per_pill and pills_per_package, or leave both blank.`);
+      continue;
+    }
+    if (pricePerPill !== undefined && pillsPerPackage !== undefined) {
+      const packagePrice = calculatePackagePrice(pricePerPill, pillsPerPackage);
+      if (packagePrice === null) {
+        errors.push(`Row ${rowNumber}: the calculated package price must not exceed 99,999,999.99.`);
+        continue;
+      }
+      price = packagePrice;
+    } else if (!rawPrice || !Number.isFinite(price) || price < 0 || price > 99999999.99) {
+      errors.push(`Row ${rowNumber}: price must be a non-negative number unless per-pill pricing is provided.`);
+      continue;
+    }
+
+    const rawStorefrontPriceMode = value(cells, columns.storefrontPriceMode) || 'package';
+    if (!['package', 'per_pill'].includes(rawStorefrontPriceMode)) {
+      errors.push(`Row ${rowNumber}: storefront_price_mode must be "package" or "per_pill".`);
+      continue;
+    }
+    if (rawStorefrontPriceMode === 'per_pill' && pricePerPill === undefined) {
+      errors.push(`Row ${rowNumber}: per-pill storefront pricing requires price_per_pill and pills_per_package.`);
       continue;
     }
 
@@ -143,6 +182,9 @@ export function parseProductsCsv(
       rxRequired: ['yes', 'true', '1'].includes(rawRxRequired),
       ...(costPrice !== undefined ? { costPrice } : {}),
       ...(copayPrice !== undefined ? { copayPrice } : {}),
+      ...(pricePerPill !== undefined ? { pricePerPill } : {}),
+      ...(pillsPerPackage !== undefined ? { pillsPerPackage } : {}),
+      storefrontPriceMode: rawStorefrontPriceMode as 'package' | 'per_pill',
       ndcCode: ndcCode || undefined,
       image: image || undefined,
     });
@@ -153,7 +195,7 @@ export function parseProductsCsv(
 
 export function generateProductTemplateCsv(): string {
   return [
-    'name,category,sku,price,stock_count,description,dosage,min_stock_threshold,rx_required,cost_price,copay_price,ndc_code,image_url',
-    '"Daily Wellness Sample","Daily Wellness",SKU-SAMPLE-001,19.99,50,"Product description","60 capsules",10,no,8.50,5.00,,',
+    'name,category,sku,price,stock_count,description,dosage,min_stock_threshold,rx_required,cost_price,copay_price,ndc_code,image_url,price_per_pill,pills_per_package,storefront_price_mode',
+    '"Daily Wellness Sample","Daily Wellness",SKU-SAMPLE-001,11.70,50,"Product description","30 tablets",10,no,8.50,5.00,,,0.39,30,package',
   ].join('\n');
 }

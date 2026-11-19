@@ -24,6 +24,7 @@ import {
 import { CatalogItem } from '../../types/pharmacy';
 import { generateProductTemplateCsv, parseProductsCsv } from '../../utils/productCsv';
 import type { ProductCsvItem, ProductCsvParseResult } from '../../utils/productCsv';
+import { calculatePackagePrice } from '../../utils/productPricing';
 
 interface InventoryManagerProps {
   catalogItems: CatalogItem[];
@@ -81,6 +82,9 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CatalogItem['category']>('Sleep');
   const [price, setPrice] = useState<string>('19.99');
+  const [pricePerPill, setPricePerPill] = useState('');
+  const [pillsPerPackage, setPillsPerPackage] = useState('');
+  const [storefrontPriceMode, setStorefrontPriceMode] = useState<'package' | 'per_pill'>('package');
   const [copayPrice, setCopayPrice] = useState<string>('5.00');
   const [costPrice, setCostPrice] = useState<string>('8.50');
   const [stockCount, setStockCount] = useState<string>('50');
@@ -101,6 +105,11 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const productCsvPreview: ProductCsvParseResult = productCsv.trim()
     ? parseProductsCsv(productCsv, catalogItems.map((item) => item.sku), categories)
     : { products: [], errors: [] };
+  const parsedPricePerPill = pricePerPill.trim() ? Number(pricePerPill) : null;
+  const parsedPillsPerPackage = pillsPerPackage.trim() ? Number(pillsPerPackage) : null;
+  const calculatedPackagePrice = parsedPricePerPill !== null && parsedPillsPerPackage !== null
+    ? calculatePackagePrice(parsedPricePerPill, parsedPillsPerPackage)
+    : null;
 
   useEffect(() => {
     if (!isProductCsvOpen) return;
@@ -246,9 +255,31 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const parsedPrice = Number(price);
+    const hasPillPricing = pricePerPill.trim() !== '' || pillsPerPackage.trim() !== '';
+    if (
+      hasPillPricing
+      && (
+        parsedPricePerPill === null
+        || !Number.isFinite(parsedPricePerPill)
+        || parsedPricePerPill < 0
+        || parsedPricePerPill > 99999999.99
+        || parsedPillsPerPackage === null
+        || !Number.isInteger(parsedPillsPerPackage)
+        || parsedPillsPerPackage < 1
+        || parsedPillsPerPackage > 100000000
+        || calculatedPackagePrice === null
+      )
+    ) {
+      setActionError('Enter a valid price per pill and a whole-number pill count between 1 and 100,000,000.');
+      return;
+    }
+    if (storefrontPriceMode === 'per_pill' && !hasPillPricing) {
+      setActionError('Enter per-pill pricing before choosing to show the per-pill price on the storefront.');
+      return;
+    }
+    const parsedPrice = hasPillPricing ? calculatedPackagePrice : Number(price);
     const parsedStock = Number(stockCount);
-    if (!Number.isFinite(parsedPrice) || parsedPrice < 0 || !Number.isInteger(parsedStock) || parsedStock < 0) {
+    if (parsedPrice === null || !Number.isFinite(parsedPrice) || parsedPrice < 0 || !Number.isInteger(parsedStock) || parsedStock < 0) {
       setActionError('Enter a non-negative price and whole-number stock count.');
       return;
     }
@@ -258,6 +289,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       name: name.trim(),
       category,
       price: parsedPrice,
+      ...(parsedPricePerPill !== null && parsedPillsPerPackage !== null
+        ? { pricePerPill: parsedPricePerPill, pillsPerPackage: parsedPillsPerPackage }
+        : {}),
+      storefrontPriceMode,
       copayPrice: Number(copayPrice) || 0,
       costPrice: Number(costPrice) || 0,
       stockCount: parsedStock,
@@ -291,6 +326,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
       setDosage('');
       setSku('');
       setNdcCode('');
+      setPricePerPill('');
+      setPillsPerPackage('');
+      setPrice('19.99');
+      setStorefrontPriceMode('package');
       setIsFeatured(false);
       setIsPublished(true);
     } catch (error) {
@@ -303,6 +342,27 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
+    const hasPillPricing = editingItem.pricePerPill !== undefined || editingItem.pillsPerPackage !== undefined;
+    if (
+      hasPillPricing
+      && (
+        editingItem.pricePerPill === undefined
+        || !Number.isFinite(editingItem.pricePerPill)
+        || editingItem.pricePerPill < 0
+        || editingItem.pillsPerPackage === undefined
+        || !Number.isInteger(editingItem.pillsPerPackage)
+        || editingItem.pillsPerPackage < 1
+        || editingItem.pillsPerPackage > 100000000
+        || calculatePackagePrice(editingItem.pricePerPill, editingItem.pillsPerPackage) === null
+      )
+    ) {
+      setActionError('Enter a valid price per pill and a whole-number pill count between 1 and 100,000,000.');
+      return;
+    }
+    if (editingItem.storefrontPriceMode === 'per_pill' && !hasPillPricing) {
+      setActionError('Enter per-pill pricing before choosing to show the per-pill price on the storefront.');
+      return;
+    }
     setActionError('');
     setIsSaving(true);
     try {
@@ -310,7 +370,14 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
         ? await onUploadProductImages(editingProductImages.map(({ file }) => file))
         : [];
       const images = [...(editingItem.images ?? []), ...uploadedImages];
-      await onUpdateProduct({ ...editingItem, image: images[0], images });
+      const packagePrice = hasPillPricing && editingItem.pricePerPill !== undefined && editingItem.pillsPerPackage !== undefined
+        ? calculatePackagePrice(editingItem.pricePerPill, editingItem.pillsPerPackage)
+        : editingItem.price;
+      if (packagePrice === null) {
+        setActionError('The calculated package price is invalid.');
+        return;
+      }
+      await onUpdateProduct({ ...editingItem, price: packagePrice, image: images[0], images });
       setNotification(`Saved changes for ${editingItem.name}.`);
       setEditingItem(null);
       clearPendingProductImages(editingProductImages, setEditingProductImages);
@@ -457,6 +524,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">NDC code</p><p className="mt-1 font-mono text-sm text-slate-800">{viewingItem.ndcCode || 'Not specified'}</p></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Product SKU</p><p className="mt-1 font-mono text-sm text-slate-800">{viewingItem.sku || 'Not specified'}</p></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Listing status</p><p className="mt-1 text-sm font-medium text-slate-800">{viewingItem.isActive === false ? 'Hidden from storefront' : 'Published on storefront'}{viewingItem.isFeatured ? ' · Featured' : ''}</p></div>
+              {viewingItem.pricePerPill !== undefined && <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Per-pill price</p><p className="mt-1 text-sm font-medium text-slate-800">${viewingItem.pricePerPill.toFixed(2)} × {viewingItem.pillsPerPackage ?? '—'} pills = ${viewingItem.price.toFixed(2)} per package</p></div>}
+              <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Storefront price display</p><p className="mt-1 text-sm font-medium text-slate-800">{viewingItem.storefrontPriceMode === 'per_pill' ? 'Per pill' : 'Package total'}</p></div>
             </div>
           </div>
 
@@ -716,6 +785,11 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                           Copay: ${item.copayPrice.toFixed(2)}
                         </div>
                       )}
+                      {item.pricePerPill !== undefined && (
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          ${item.pricePerPill.toFixed(2)} / pill · {item.pillsPerPackage} pills / package
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3 px-3 text-center font-mono">
@@ -910,10 +984,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               {productCsvPreview.products.length > 0 && (
                 <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">SKU</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Price</th><th className="px-3 py-2">Stock</th></tr></thead>
+                    <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2">Name</th><th className="px-3 py-2">SKU</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Package price</th><th className="px-3 py-2">Pills / pack</th><th className="px-3 py-2">Storefront shows</th><th className="px-3 py-2">Stock</th></tr></thead>
                     <tbody>{productCsvPreview.products.map((product) => (
                       <tr key={product.sku} className="border-t border-slate-100">
-                        <td className="px-3 py-2">{product.name}</td><td className="px-3 py-2 font-mono">{product.sku}</td><td className="px-3 py-2">{product.category}</td><td className="px-3 py-2">${product.price.toFixed(2)}</td><td className="px-3 py-2">{product.stockCount}</td>
+                        <td className="px-3 py-2">{product.name}</td><td className="px-3 py-2 font-mono">{product.sku}</td><td className="px-3 py-2">{product.category}</td><td className="px-3 py-2">${product.price.toFixed(2)}{product.pricePerPill !== undefined && <span className="block text-slate-500">${product.pricePerPill.toFixed(2)} / pill</span>}</td><td className="px-3 py-2">{product.pillsPerPackage ?? '—'}</td><td className="px-3 py-2">{product.storefrontPriceMode === 'per_pill' ? 'Per pill' : 'Package total'}</td><td className="px-3 py-2">{product.stockCount}</td>
                       </tr>
                     ))}</tbody>
                   </table>
@@ -1022,22 +1096,54 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
                 <div className="sm:col-span-2 border-b border-slate-200 pb-2 pt-2">
                   <h4 className="font-bold text-slate-900">Pricing</h4>
-                  <p className="mt-1 text-[11px] text-slate-500">Set the customer-facing price and optional copay estimate.</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Enter per-pill pricing to calculate the package total, or set a product price directly.</p>
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Retail Price ($) <span className="text-rose-500">*</span>
+                    Price per pill ($)
                   </label>
                   <input
                     type="number"
+                    min="0"
+                    max="99999999.99"
                     step="0.01"
-                    required
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
+                    value={pricePerPill}
+                    onChange={(e) => setPricePerPill(e.target.value)}
+                    placeholder="Optional"
                     className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
                   />
                 </div>
 
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Pills per package
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100000000"
+                    step="1"
+                    value={pillsPerPackage}
+                    onChange={(e) => setPillsPerPackage(e.target.value)}
+                    placeholder="Optional"
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Total package price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required={!pricePerPill.trim() && !pillsPerPackage.trim()}
+                    readOnly={Boolean(pricePerPill.trim() || pillsPerPackage.trim())}
+                    value={calculatedPackagePrice !== null ? calculatedPackagePrice.toFixed(2) : (pricePerPill.trim() || pillsPerPackage.trim() ? '' : price)}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder={pricePerPill.trim() || pillsPerPackage.trim() ? 'Enter both values above' : 'Enter a package price'}
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono read-only:bg-slate-50"
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Insurance Copay Estimate ($)
@@ -1049,6 +1155,20 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     onChange={(e) => setCopayPrice(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
                   />
+                </div>
+                <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="font-semibold text-slate-700">Storefront price display</p>
+                  <p className="mt-1 text-[11px] text-slate-500">The package total remains the product price used for orders.</p>
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 font-medium text-slate-700">
+                      <input type="radio" name="new-storefront-price-mode" checked={storefrontPriceMode === 'package'} onChange={() => setStorefrontPriceMode('package')} className="text-blue-700 focus:ring-blue-700" />
+                      Show package total
+                    </label>
+                    <label className="flex items-center gap-2 font-medium text-slate-700">
+                      <input type="radio" name="new-storefront-price-mode" checked={storefrontPriceMode === 'per_pill'} disabled={calculatedPackagePrice === null} onChange={() => setStorefrontPriceMode('per_pill')} className="text-blue-700 focus:ring-blue-700 disabled:opacity-50" />
+                      Show price per pill
+                    </label>
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2 border-b border-slate-200 pb-2 pt-2">
@@ -1283,24 +1403,73 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
 
                 <div className="col-span-full border-b border-slate-200 pb-2 pt-2">
                   <h4 className="font-bold text-slate-900">Pricing</h4>
-                  <p className="mt-1 text-[11px] text-slate-500">Adjust customer-facing price information.</p>
+                  <p className="mt-1 text-[11px] text-slate-500">The package total is calculated from price per pill and pill count when provided.</p>
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Retail Price ($)
+                    Price per pill ($)
                   </label>
                   <input
                     type="number"
+                    min="0"
+                    max="99999999.99"
                     step="0.01"
-                    required
-                    value={editingItem.price}
-                    onChange={(e) =>
-                      setEditingItem({ ...editingItem, price: parseFloat(e.target.value) || 0 })
-                    }
+                    value={editingItem.pricePerPill ?? ''}
+                    onChange={(event) => {
+                      const nextPricePerPill = event.target.value === '' ? undefined : Number(event.target.value);
+                      const nextItem = { ...editingItem, pricePerPill: nextPricePerPill };
+                      const packagePrice = nextPricePerPill !== undefined && nextItem.pillsPerPackage !== undefined
+                        ? calculatePackagePrice(nextPricePerPill, nextItem.pillsPerPackage)
+                        : null;
+                      setEditingItem(packagePrice === null ? nextItem : { ...nextItem, price: packagePrice });
+                    }}
                     className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
                   />
                 </div>
 
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Pills per package
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100000000"
+                    step="1"
+                    value={editingItem.pillsPerPackage ?? ''}
+                    onChange={(event) => {
+                      const nextPillsPerPackage = event.target.value === '' ? undefined : Number(event.target.value);
+                      const nextItem = { ...editingItem, pillsPerPackage: nextPillsPerPackage };
+                      const packagePrice = nextItem.pricePerPill !== undefined && nextPillsPerPackage !== undefined
+                        ? calculatePackagePrice(nextItem.pricePerPill, nextPillsPerPackage)
+                        : null;
+                      setEditingItem(packagePrice === null ? nextItem : { ...nextItem, price: packagePrice });
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Total package price ($)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required={editingItem.pricePerPill === undefined && editingItem.pillsPerPackage === undefined}
+                    readOnly={editingItem.pricePerPill !== undefined || editingItem.pillsPerPackage !== undefined}
+                    value={
+                      editingItem.pricePerPill !== undefined && editingItem.pillsPerPackage !== undefined
+                        ? (calculatePackagePrice(editingItem.pricePerPill, editingItem.pillsPerPackage)?.toFixed(2) ?? '')
+                        : editingItem.pricePerPill !== undefined || editingItem.pillsPerPackage !== undefined
+                          ? ''
+                          : editingItem.price
+                    }
+                    onChange={(event) => setEditingItem({ ...editingItem, price: Number(event.target.value) || 0 })}
+                    placeholder={editingItem.pricePerPill !== undefined || editingItem.pillsPerPackage !== undefined ? 'Enter both values above' : 'Enter a package price'}
+                    className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono read-only:bg-slate-50"
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Estimated Copay ($)
@@ -1317,6 +1486,20 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                     }
                     className="w-full bg-white border border-slate-300 rounded-md px-3 py-2 text-slate-900 font-mono"
                   />
+                </div>
+                <div className="col-span-full rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="font-semibold text-slate-700">Storefront price display</p>
+                  <p className="mt-1 text-[11px] text-slate-500">The package total remains the product price used for orders.</p>
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 font-medium text-slate-700">
+                      <input type="radio" name={`storefront-price-mode-${editingItem.id}`} checked={editingItem.storefrontPriceMode !== 'per_pill'} onChange={() => setEditingItem({ ...editingItem, storefrontPriceMode: 'package' })} className="text-blue-700 focus:ring-blue-700" />
+                      Show package total
+                    </label>
+                    <label className="flex items-center gap-2 font-medium text-slate-700">
+                      <input type="radio" name={`storefront-price-mode-${editingItem.id}`} checked={editingItem.storefrontPriceMode === 'per_pill'} disabled={editingItem.pricePerPill === undefined || editingItem.pillsPerPackage === undefined} onChange={() => setEditingItem({ ...editingItem, storefrontPriceMode: 'per_pill' })} className="text-blue-700 focus:ring-blue-700 disabled:opacity-50" />
+                      Show price per pill
+                    </label>
+                  </div>
                 </div>
 
                 <div className="col-span-full border-b border-slate-200 pb-2 pt-2">

@@ -330,6 +330,9 @@ export interface CatalogItem {
   name: string;
   category: StoreCategory;
   price: number;
+  pricePerPill?: number;
+  pillsPerPackage?: number;
+  storefrontPriceMode?: 'package' | 'per_pill';
   costPrice?: number;
   copayPrice?: number;
   description: string;

@@ -190,6 +190,8 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
             const images = item.images?.length ? item.images : item.image ? [item.image] : [];
             const imageIndex = Math.min(imageIndexes[item.id] ?? 0, Math.max(images.length - 1, 0));
             const selectedImage = images[imageIndex];
+            const showPricePerPill = item.storefrontPriceMode === 'per_pill' && item.pricePerPill !== undefined;
+            const storefrontPrice = showPricePerPill ? item.pricePerPill ?? item.price : item.price;
 
             return (
               <div
@@ -333,10 +335,10 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                 <div className="flex items-center justify-between border-t border-blue-50 bg-[#f8fbff] px-5 py-4">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider block">
-                      Price
+                      {showPricePerPill ? 'Price per pill' : 'Package price'}
                     </span>
                     <span className="font-mono text-lg font-bold tracking-tight text-slate-900">
-                      ${item.price.toFixed(2)}
+                      ${storefrontPrice.toFixed(2)}
                     </span>
                   </div>
 

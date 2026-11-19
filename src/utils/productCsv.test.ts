@@ -17,6 +17,31 @@ test('parseProductsCsv parses optional data and commas in quoted descriptions', 
   assert.equal(result.products[0].minStockThreshold, 8);
 });
 
+test('parseProductsCsv calculates package price from per-pill price and pill count', () => {
+  const csv = [
+    'name,category,sku,price,stock_count,price_per_pill,pills_per_package,storefront_price_mode',
+    'Sample,Daily Wellness,SKU-PILL-001,,10,0.39,30,per_pill',
+  ].join('\n');
+
+  const result = parseProductsCsv(csv, [], ['Daily Wellness']);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.products[0].price, 11.7);
+  assert.equal(result.products[0].pricePerPill, 0.39);
+  assert.equal(result.products[0].pillsPerPackage, 30);
+  assert.equal(result.products[0].storefrontPriceMode, 'per_pill');
+});
+
+test('parseProductsCsv requires per-pill price and pill count together', () => {
+  const csv = [
+    'name,category,sku,price,stock_count,price_per_pill,pills_per_package',
+    'Sample,Daily Wellness,SKU-PILL-001,10,10,0.39,',
+  ].join('\n');
+
+  const result = parseProductsCsv(csv, [], ['Daily Wellness']);
+  assert.equal(result.products.length, 0);
+  assert.match(result.errors[0], /provide both price_per_pill and pills_per_package/);
+});
+
 test('parseProductsCsv rejects unknown categories, duplicate SKUs, and invalid stock', () => {
   const csv = [
     'name,category,sku,price,stock_count',
