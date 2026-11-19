@@ -954,7 +954,7 @@ export default function App() {
           setSearchQuery={setSearchQuery}
         />
         <p role="status" className="mx-auto my-6 max-w-7xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          Showing the local sample catalog. Ordering is disabled until these products are connected to the live catalog.
+          Showing the browse-only catalog. Ordering is disabled.
         </p>
 
         {/* Value & Delivery Banner */}
