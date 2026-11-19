@@ -2,6 +2,8 @@ import React from 'react';
 import { Search, Sparkles, AlertCircle, ShoppingCart, Star, CheckCircle, Moon, Flame, Zap, Heart, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CatalogItem, StoreCategory } from '../types/pharmacy';
 
+const PRODUCTS_PER_PAGE = 24;
+
 interface CategoriesAndProductsProps {
   catalogItems: CatalogItem[];
   catalogAvailable: boolean;
@@ -24,6 +26,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
   setSearchQuery,
 }) => {
   const [imageIndexes, setImageIndexes] = React.useState<Record<string, number>>({});
+  const [currentPage, setCurrentPage] = React.useState(1);
   const storeCategories: (StoreCategory | 'All Products')[] = ['All Products', ...categories];
   const filteredItems = catalogItems.filter((item) => {
     const matchesCategory =
@@ -34,6 +37,60 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
       item.dosage.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   }).sort((a, b) => Number(b.isFeatured === true) - Number(a.isFeatured === true) || a.name.localeCompare(b.name));
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PRODUCTS_PER_PAGE));
+  const visiblePage = Math.min(currentPage, pageCount);
+  const pageItems = filteredItems.slice(
+    (visiblePage - 1) * PRODUCTS_PER_PAGE,
+    visiblePage * PRODUCTS_PER_PAGE
+  );
+  const pageStart = filteredItems.length === 0 ? 0 : (visiblePage - 1) * PRODUCTS_PER_PAGE + 1;
+  const pageEnd = Math.min(visiblePage * PRODUCTS_PER_PAGE, filteredItems.length);
+
+  const changePage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, pageCount)));
+    document.getElementById('product-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const renderPagination = (placement: 'top' | 'bottom') => (
+    filteredItems.length > PRODUCTS_PER_PAGE && (
+      <nav
+        aria-label={`Product pagination ${placement}`}
+        className="flex flex-col items-center justify-between gap-3 sm:flex-row"
+      >
+        <p className="text-xs text-slate-500" aria-live="polite">
+          Showing {pageStart}–{pageEnd} of {filteredItems.length} products
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={visiblePage <= 1}
+            onClick={() => changePage(visiblePage - 1)}
+            className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-blue-100 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-[#f1f7fc] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
+          <span className="min-w-20 text-center text-xs font-semibold text-slate-600" aria-current="page">
+            Page {visiblePage} of {pageCount}
+          </span>
+          <button
+            type="button"
+            disabled={visiblePage >= pageCount}
+            onClick={() => changePage(visiblePage + 1)}
+            className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-blue-100 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-[#f1f7fc] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </nav>
+    )
+  );
 
   const getCategoryIcon = (cat: string) => {
     switch (cat) {
@@ -66,7 +123,7 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
                 : `${selectedCategory} Formulations`}
             </h2>
             <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">
-              Showing {filteredItems.length} clinical-grade wellness {filteredItems.length === 1 ? 'item' : 'items'} available for rapid delivery
+              {filteredItems.length} clinical-grade wellness {filteredItems.length === 1 ? 'item' : 'items'} found
             </p>
           </div>
 
@@ -123,8 +180,11 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredItems.map((item) => {
+        <div className="mb-5">
+          {renderPagination('top')}
+        </div>
+        <div id="product-results" className="scroll-mt-32 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {pageItems.map((item) => {
             const isOutOfStock = catalogAvailable && (!item.inStock || item.stockCount <= 0);
             const isLowStock = catalogAvailable && item.stockCount <= item.minStockThreshold && !isOutOfStock;
             const images = item.images?.length ? item.images : item.image ? [item.image] : [];
@@ -313,6 +373,9 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
             </button>
           </div>
         )}
+        <div className="mt-8">
+          {renderPagination('bottom')}
+        </div>
       </div>
     </section>
   );
