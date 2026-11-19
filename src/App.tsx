@@ -54,6 +54,18 @@ const mergeCatalogItem = (item: CatalogItem, seededItem?: CatalogItem): CatalogI
   };
 };
 
+const HIDDEN_STOREFRONT_CATEGORIES = new Set([
+  'antidepressant',
+  'antidepressants',
+  'general health',
+  'erectile dysfunction',
+  'pain relief',
+  'blood pressure',
+]);
+
+const isStorefrontProduct = (item: CatalogItem) =>
+  !HIDDEN_STOREFRONT_CATEGORIES.has(item.category.trim().toLowerCase());
+
 export default function App() {
   // Current route state: inspect window.location.pathname
   const [currentPath, setCurrentPath] = useState<string>(() => {
@@ -82,17 +94,57 @@ export default function App() {
   const orderRequestId = useRef(0);
   const [leads, setLeads] = useState<ContactLead[]>([]);
   const [adminDataError, setAdminDataError] = useState('');
-  const catalogError = '';
+  const [catalogError, setCatalogError] = useState('');
   const [catalogAvailable, setCatalogAvailable] = useState(false);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>(INITIAL_CATALOG);
   const [categories, setCategories] = useState<string[]>(() => [...new Set(INITIAL_CATALOG.map((item) => item.category))]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
     if (currentPath === '/admin') return;
-    setCatalogItems(INITIAL_CATALOG);
-    setCategories([...new Set(INITIAL_CATALOG.map((item) => item.category))]);
+    let isCurrent = true;
+    const fallbackItems = INITIAL_CATALOG.filter(isStorefrontProduct);
+    setCatalogItems(fallbackItems);
+    setCategories([...new Set(fallbackItems.map((item) => item.category))]);
     setCatalogAvailable(false);
+    setCatalogError('');
+    setCatalogLoading(true);
+
+    const loadCatalog = async () => {
+      try {
+        const response = await fetch('/api/data.php?resource=catalog', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json() as {
+          products?: CatalogItem[];
+          categories?: string[];
+          message?: string;
+        };
+        if (!response.ok || !Array.isArray(result.products) || !Array.isArray(result.categories)) {
+          throw new Error(result.message || 'The live product catalog could not be loaded.');
+        }
+        if (!isCurrent) return;
+
+        const storefrontItems = result.products.filter(isStorefrontProduct);
+        const seededById = new Map(INITIAL_CATALOG.map((item) => [item.id, item]));
+        setCatalogItems(storefrontItems.map((item) => mergeCatalogItem(item, seededById.get(item.id))));
+        setCategories([...new Set(storefrontItems.map((item) => item.category))].sort((a, b) => a.localeCompare(b)));
+        setCatalogAvailable(true);
+      } catch (error) {
+        if (isCurrent) {
+          setCatalogError(error instanceof Error ? error.message : 'The live product catalog could not be loaded.');
+        }
+      } finally {
+        if (isCurrent) setCatalogLoading(false);
+      }
+    };
+
+    void loadCatalog();
+    return () => {
+      isCurrent = false;
+    };
   }, [currentPath]);
 
   // Storefront Filter States
@@ -1018,8 +1070,17 @@ export default function App() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
         />
-        <p role="status" className="mx-auto my-6 max-w-7xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          Showing the browse-only catalog. Ordering is disabled.
+        <p
+          role={catalogError ? 'alert' : 'status'}
+          className="mx-auto my-6 max-w-7xl rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900"
+        >
+          {catalogLoading
+            ? 'Loading the live product catalog...'
+            : catalogError
+              ? `The live catalog could not be loaded. Showing the browse-only catalog; ordering is disabled. ${catalogError}`
+              : catalogAvailable
+                ? 'Showing active products from live inventory. Out-of-stock items cannot be ordered.'
+                : 'Showing the browse-only catalog. Ordering is disabled.'}
         </p>
 
         {/* Value & Delivery Banner */}
