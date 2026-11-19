@@ -27,6 +27,11 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
 }) => {
   const [imageIndexes, setImageIndexes] = React.useState<Record<string, number>>({});
   const [currentPage, setCurrentPage] = React.useState(1);
+  const categoryRailRef = React.useRef<HTMLDivElement>(null);
+  const [categoryScrollState, setCategoryScrollState] = React.useState({
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
   const storeCategories: (StoreCategory | 'All Products')[] = ['All Products', ...categories];
   const filteredItems = catalogItems.filter((item) => {
     const matchesCategory =
@@ -50,6 +55,32 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
   );
   const pageStart = filteredItems.length === 0 ? 0 : (visiblePage - 1) * PRODUCTS_PER_PAGE + 1;
   const pageEnd = Math.min(visiblePage * PRODUCTS_PER_PAGE, filteredItems.length);
+
+  React.useEffect(() => {
+    const rail = categoryRailRef.current;
+    if (!rail) return;
+
+    const updateScrollState = () => {
+      const maxScrollLeft = rail.scrollWidth - rail.clientWidth;
+      setCategoryScrollState({
+        canScrollLeft: rail.scrollLeft > 1,
+        canScrollRight: maxScrollLeft > 1 && rail.scrollLeft < maxScrollLeft - 1,
+      });
+    };
+
+    updateScrollState();
+    rail.addEventListener('scroll', updateScrollState, { passive: true });
+    window.addEventListener('resize', updateScrollState);
+    return () => {
+      rail.removeEventListener('scroll', updateScrollState);
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, [categories.length]);
+
+  const scrollCategories = (direction: -1 | 1) => {
+    const rail = categoryRailRef.current;
+    rail?.scrollBy({ left: direction * Math.max(180, rail.clientWidth * 0.75), behavior: 'smooth' });
+  };
 
   const changePage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, pageCount)));
@@ -141,42 +172,76 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
         </div>
 
         {/* Category Navigation Bar */}
-        <div
-          role="group"
-          aria-label="Filter products by category"
-          className="no-scrollbar mb-6 flex snap-x snap-proximity touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain pb-3 sm:mb-8 sm:pb-4"
-        >
-          {storeCategories.map((cat) => {
-            const count =
-              cat === 'All Products'
-                ? catalogItems.length
-                : catalogItems.filter((i) => i.category === cat).length;
-            const isSelected = selectedCategory === cat;
-
-            return (
+        <div className="mb-6 sm:mb-8">
+          <div className="mb-2 flex items-center justify-between gap-3 text-[11px] font-medium text-slate-500">
+            <span>Browse by category</span>
+            {(categoryScrollState.canScrollLeft || categoryScrollState.canScrollRight) && (
+              <span>Swipe or use arrows to see all categories</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {categoryScrollState.canScrollLeft && (
               <button
-                key={cat}
                 type="button"
-                aria-pressed={isSelected}
-                onClick={() => onSelectCategory(cat)}
-                className={`flex shrink-0 snap-start cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
-                  isSelected
-                    ? 'bg-[#174c80] text-white shadow-sm'
-                    : 'border border-blue-100 bg-white text-slate-700 hover:border-blue-300 hover:bg-[#f8fbff]'
-                }`}
+                aria-label="Scroll categories left"
+                onClick={() => scrollCategories(-1)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-700 shadow-sm transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
               >
-                {cat !== 'All Products' && getCategoryIcon(cat)}
-                <span>{cat}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                    isSelected ? 'bg-white/15 text-blue-100' : 'bg-[#edf4fb] text-slate-500'
-                  }`}
-                >
-                  {count}
-                </span>
+                <ChevronLeft className="h-4 w-4" />
               </button>
-            );
-          })}
+            )}
+            <div
+              ref={categoryRailRef}
+              role="group"
+              aria-label="Filter products by category"
+              tabIndex={0}
+              className="no-scrollbar min-w-0 flex-1 snap-x snap-proximity touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain scroll-smooth pb-3 sm:pb-4"
+            >
+              <div className="flex w-max gap-2">
+                {storeCategories.map((cat) => {
+                  const count =
+                    cat === 'All Products'
+                      ? catalogItems.length
+                      : catalogItems.filter((i) => i.category === cat).length;
+                  const isSelected = selectedCategory === cat;
+
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => onSelectCategory(cat)}
+                      className={`flex shrink-0 snap-start cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+                        isSelected
+                          ? 'bg-[#174c80] text-white shadow-sm'
+                          : 'border border-blue-100 bg-white text-slate-700 hover:border-blue-300 hover:bg-[#f8fbff]'
+                      }`}
+                    >
+                      {cat !== 'All Products' && getCategoryIcon(cat)}
+                      <span>{cat}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                          isSelected ? 'bg-white/15 text-blue-100' : 'bg-[#edf4fb] text-slate-500'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {categoryScrollState.canScrollRight && (
+              <button
+                type="button"
+                aria-label="Scroll categories right"
+                onClick={() => scrollCategories(1)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-700 shadow-sm transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Product Cards Grid */}
