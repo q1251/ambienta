@@ -51,21 +51,21 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
   };
 
   return (
-    <section id="store-catalog" className="min-h-screen bg-[#f4f8fc] py-16 sm:py-20">
+    <section id="store-catalog" className="min-h-screen bg-[#f4f8fc] py-10 sm:py-16 lg:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header & Search */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+        <div className="mb-6 flex flex-col justify-between gap-5 sm:mb-8 md:flex-row md:items-end">
           <div>
             <div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#174c80]">
               <Sparkles className="h-3.5 w-3.5 text-blue-700" />
               <span>Small rituals. Better days.</span>
             </div>
-            <h2 className="text-3xl font-semibold tracking-[-0.05em] text-slate-900 sm:text-4xl">
+            <h2 className="text-2xl font-semibold leading-tight tracking-[-0.05em] text-slate-900 sm:text-4xl">
               {selectedCategory === 'All Products'
                 ? 'All Health & Wellness Products'
                 : `${selectedCategory} Formulations`}
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">
               Showing {filteredItems.length} clinical-grade wellness {filteredItems.length === 1 ? 'item' : 'items'} available for rapid delivery
             </p>
           </div>
@@ -84,7 +84,11 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
         </div>
 
         {/* Category Navigation Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar">
+        <div
+          role="group"
+          aria-label="Filter products by category"
+          className="no-scrollbar mb-6 flex snap-x snap-proximity touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain pb-3 sm:mb-8 sm:pb-4"
+        >
           {storeCategories.map((cat) => {
             const count =
               cat === 'All Products'
@@ -95,8 +99,10 @@ export const CategoriesAndProducts: React.FC<CategoriesAndProductsProps> = ({
             return (
               <button
                 key={cat}
+                type="button"
+                aria-pressed={isSelected}
                 onClick={() => onSelectCategory(cat)}
-                className={`px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
+                className={`flex shrink-0 snap-start cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
                   isSelected
                     ? 'bg-[#174c80] text-white shadow-sm'
                     : 'border border-blue-100 bg-white text-slate-700 hover:border-blue-300 hover:bg-[#f8fbff]'
